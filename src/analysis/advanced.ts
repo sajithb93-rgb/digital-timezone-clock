@@ -86,16 +86,19 @@ export function runSMCBacktest(c:Candle[],riskR=1){
     if(s.setup.direction==="WAIT"||s.setup.entry==null||s.stop==null)continue;
     const entry=s.setup.entry,stop=s.stop,target=s.targets[0];
     if(target==null||!Number.isFinite(entry)||!Number.isFinite(stop)||!Number.isFinite(target))continue;
+    const entryPrice:number=entry;
+    const stopPrice:number=stop;
+    const targetPrice:number=target;
     trades++;
     let result=0;
     for(let j=i;j<Math.min(c.length,i+30);j++){
       const x=c[j];
       if(s.setup.direction==="BUY"){
-        if(x.low<=stop){result=-riskR;break}
-        if(x.high>=target){result=riskR;break}
+        if(x.low<=stopPrice){result=-riskR;break}
+        if(x.high>=targetPrice){result=riskR;break}
       }else{
-        if(x.high>=stop){result=-riskR;break}
-        if(x.low<=target){result=riskR;break}
+        if(x.high>=stopPrice){result=-riskR;break}
+        if(x.low<=targetPrice){result=riskR;break}
       }
     }
     if(result>0)wins++; else if(result<0)losses++; else { trades--; continue; }
