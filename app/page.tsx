@@ -447,8 +447,6 @@ export default function Home() {
 function ChartAnnotations({ chart, host, candles, smc, elliott, mode, tick }: { chart: any; host: HTMLElement | null; candles: Candle[]; smc: any; elliott: any; mode: Mode; tick: number }) {
   const width = host?.clientWidth || 0;
   const height = host?.clientHeight || 0;
-  // Force annotation recalculation when the host becomes measurable after chart mount.
-  useEffect(() => { if (!host) return; const ro = new ResizeObserver(() => setChartViewportTick(v => v + 1)); ro.observe(host); return () => ro.disconnect(); }, [host]);
   if (!chart || candles.length < 2 || !width || !height) return null;
 
   const ts = chart.timeScale();
