@@ -17,7 +17,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300):Promise<Cand
  const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`);
  if(!r.ok)throw new Error(`Binance returned ${r.status}`);
  const rows=await r.json();
- return rows.map((x:any)=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5]}));
+ return rows.map((x:any)=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5],takerBuyVolume:+x[9]}));
 }
 
 export default function Home(){
@@ -50,7 +50,7 @@ export default function Home(){
   setCandles([]);setAnalysisCandles([]);setConnected(false);setLoading(true);setError("");setDerivatives(null);
   const connect=()=>{if(stop)return;ws=new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
    ws.onopen=()=>setConnected(true);ws.onclose=()=>{setConnected(false);if(!stop)retry=setTimeout(connect,2500)};ws.onerror=()=>setConnected(false);
-   ws.onmessage=e=>{try{const k=JSON.parse(e.data).k;if(!k)return;const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v};setCandles(p=>{const a=[...p],l=a.at(-1);if(l?.time===c.time)a[a.length-1]=c;else a.push(c);return a.length>350?a.slice(-350):a})}catch{}};
+   ws.onmessage=e=>{try{const k=JSON.parse(e.data).k;if(!k)return;const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V};setCandles(p=>{const a=[...p],l=a.at(-1);if(l?.time===c.time)a[a.length-1]=c;else a.push(c);return a.length>350?a.slice(-350):a})}catch{}};
   };
   fetchKlines(symbol,interval,350).then(data=>{if(stop)return;setCandles(data);setAnalysisCandles(data);setLoading(false);connect()}).catch(e=>{if(!stop){setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
   return()=>{stop=true;if(retry)clearTimeout(retry);ws?.close()};
