@@ -80,9 +80,11 @@ export function detectRegime(c:Candle[]):Regime{
 }
 
 export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBreakdown{
-  const structure=s.events.at(-1)?15:0;
-  const liquidity=s.sweeps.length?15:0;
-  const zones=(s.fvgs.some((x:any)=>!x.filled)?7:0)+(s.orderBlocks.some((x:any)=>!x.mitigated)?8:0);
+  const lastIndex=Math.max(0,s.pivots?.at(-1)?.index??0);
+  const recent=(index:number)=>index>=Math.max(0,lastIndex-20);
+  const structure=s.events.some((x:any)=>recent(x.index))?15:0;
+  const liquidity=s.sweeps.some((x:any)=>recent(x.index))?15:0;
+  const zones=(s.fvgs.some((x:any)=>!x.filled&&recent(x.to))?7:0)+(s.orderBlocks.some((x:any)=>!x.mitigated&&recent(x.index))?8:0);
   const location=(s.premiumDiscount!=="Equilibrium"?10:3);
   const momentum=s.displacement>=.7?15:5;
   const volume=Math.min(10,Math.round(Math.max(0,flow.volumeRatio-0.7)*6));
@@ -90,7 +92,7 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
   return{structure,liquidity,zones,location,momentum,volume,total};
 }
 
-export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null,constraints:RiskConstraints={}) {
+export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null,constraints:RiskConstraints={},direction:"BUY"|"SELL"|"WAIT"="WAIT") {
   const validAccount=Number.isFinite(account)&&account>0;
   const validRisk=Number.isFinite(riskPercent)&&riskPercent>0;
   const validEntry=typeof entry==="number"&&Number.isFinite(entry)&&entry>0;
@@ -99,6 +101,9 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   const riskAmount=validAccount?account*boundedRisk/100:0;
   if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop){
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid account, risk, entry or stop"};
+  }
+  if((direction==="BUY"&&stop>=entry)||(direction==="SELL"&&stop<=entry)){
+    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Stop is on the wrong side of entry"};
   }
 
   const stopDistance=Math.abs(entry-stop);
@@ -145,15 +150,17 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
  * Conservative candle-based SMC backtest.
  * A setup is counted only after its entry price is touched. If stop and target
  * are both touched in one candle, stop is assumed first. Untouched/expired
- * setups are excluded. Fees/slippage are not modeled; results are gross R.
+ * Untriggered setups are counted once. Positions that remain open at the end
+ * of the dataset are reported separately. Fee/slippage basis points are optional.
  */
 export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,slippageBps=0){
-  let trades=0,wins=0,losses=0,totalR=0,grossR=0,costR=0,grossWinR=0,grossLossR=0,maxEquity=0,equity=0,maxDD=0,expired=0,notTriggered=0;
+  let trades=0,wins=0,losses=0,totalR=0,grossR=0,costR=0,grossWinR=0,grossLossR=0,maxEquity=0,equity=0,maxDD=0,expired=0,notTriggered=0,openAtEnd=0;
   if(!Number.isFinite(riskR)||riskR<=0||!Number.isFinite(maxHoldingCandles)||maxHoldingCandles<1||!Number.isFinite(feeBps)||feeBps<0||!Number.isFinite(slippageBps)||slippageBps<0){
-    return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered};
+    return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered,openAtEnd};
   }
 
-  let lastSignalKey="";
+  const seenSignals=new Set<string>();
+  let nextAvailableIndex=80;
   for(let i=80;i<c.length-3;i++){
     const s=analyzeSMC(c.slice(0,i));
     if(s.setup.direction==="WAIT"||s.setup.entry==null||s.stop==null)continue;
@@ -166,6 +173,9 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     // without creating repeated entries while a setup remains unchanged.
     const eventIndex=s.events.at(-1)?.index??-1;
     const signalKey=[eventIndex,s.setup.direction,entry.toPrecision(12),stop.toPrecision(12),target.toPrecision(12)].join("|");
+    if(seenSignals.has(signalKey))continue;
+    seenSignals.add(signalKey);
+    if(i<nextAvailableIndex)continue;
 
     const riskDistance=Math.abs(entry-stop);
     const rewardR=Math.abs(target-entry)/riskDistance;
@@ -179,8 +189,6 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
       if(c[j].low<=entry&&c[j].high>=entry){entryBar=j;break;}
     }
     if(entryBar<0){notTriggered++;continue;}
-    if(signalKey===lastSignalKey)continue;
-    lastSignalKey=signalKey;
 
     let result=0,exitPrice=entry,closed=false;
     const tradeEnd=Math.min(c.length,entryBar+maxBars+1);
@@ -194,7 +202,8 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     }
 
     if(!closed){
-      // Time expiry is a modeled exit, not an omitted trade.
+      // Do not mark an unfinished dataset tail as an expiry.
+      if(tradeEnd>=c.length){openAtEnd++;nextAvailableIndex=c.length;continue;}
       const exitIndex=tradeEnd-1;
       if(exitIndex<entryBar)continue;
       exitPrice=c[exitIndex].close;
@@ -210,6 +219,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     costR+=tradeCostR;
     totalR+=netResult;
     trades++;
+    nextAvailableIndex=Math.max(nextAvailableIndex,tradeEnd);
     if(netResult>0){wins++;grossWinR+=netResult;}else{losses++;grossLossR+=Math.abs(netResult);}
     equity+=netResult;maxEquity=Math.max(maxEquity,equity);maxDD=Math.max(maxDD,maxEquity-equity);
   }
@@ -218,6 +228,6 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     trades,wins,losses,winRate:trades?wins/trades*100:0,totalR,grossR,costR,
     maxDrawdownR:maxDD,
     profitFactor:grossLossR?grossWinR/grossLossR:(grossWinR>0?Infinity:0),
-    expired,notTriggered
+    expired,notTriggered,openAtEnd
   };
 }
