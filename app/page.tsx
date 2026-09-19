@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";\nimport type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { CandlestickSeries, createChart } from "lightweight-charts";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 
 type Mode = "smc" | "elliott" | "combined";
-type BinanceSymbol = { symbol:string;baseAsset:string;quoteAsset:string };\ntype Derivatives = { openInterest:string; fundingRate:string; change24h:string } | null;
+type BinanceSymbol = { symbol:string;baseAsset:string;quoteAsset:string };
+type Derivatives = { openInterest:string; fundingRate:string; change24h:string } | null;
 const intervals = ["1m","5m","15m","1h","4h","1d"] as const;
 const mtfIntervals = ["4h","1h","15m","5m"];
 
@@ -27,7 +29,8 @@ export default function Home(){
  const [mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false);
  const [loading,setLoading]=useState(true);
- const [error,setError]=useState("");\n const [derivatives,setDerivatives]=useState<Derivatives>(null);
+ const [error,setError]=useState("");
+ const [derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false);
  const [viewportTick,setViewportTick]=useState(0);
  const [layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true});
@@ -175,7 +178,9 @@ export default function Home(){
 
     <div className="panel-card mtf-card"><div className="section-title">MULTI-TIMEFRAME CONTEXT</div>{mtf.frames.map(f=><div className="mtf-row" key={f.interval}><span>{f.interval}</span><b className={f.trend==="Bullish"?"positive":f.trend==="Bearish"?"negative":""}>{f.trend}</b><small>{f.structure} · {f.score}</small></div>)}</div>
 
-    <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES SNAPSHOT</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(undefined,{maximumFractionDigits:2}):"—"}</b><small>Futures</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h rate</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&Number(derivatives.change24h)>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>\n\n <div className="panel-card feed-card"><div className="section-title">SYSTEM STATUS</div><div className="status-line"><span>REST API</span><b className="positive">CONNECTED</b></div><div className="status-line"><span>WebSocket</span><b className={connected?"positive":"negative"}>{connected?"LIVE":"RECONNECTING"}</b></div><div className="status-line"><span>Analysis engine</span><b className="positive">READY</b></div><div className="status-line"><span>Execution</span><b>DISABLED</b></div></div>
+    <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES SNAPSHOT</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(undefined,{maximumFractionDigits:2}):"—"}</b><small>Futures</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h rate</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&Number(derivatives.change24h)>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
+
+ <div className="panel-card feed-card"><div className="section-title">SYSTEM STATUS</div><div className="status-line"><span>REST API</span><b className="positive">CONNECTED</b></div><div className="status-line"><span>WebSocket</span><b className={connected?"positive":"negative"}>{connected?"LIVE":"RECONNECTING"}</b></div><div className="status-line"><span>Analysis engine</span><b className="positive">READY</b></div><div className="status-line"><span>Execution</span><b>DISABLED</b></div></div>
    </aside>
   </section>
 
