@@ -32,6 +32,7 @@ export default function Home(){
  const [derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false);
  const [viewportTick,setViewportTick]=useState(0);
+ const candlesRef=useRef<Candle[]>([]);
  const [layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true});
 
  const chartRef=useRef<HTMLDivElement>(null);
@@ -65,6 +66,7 @@ export default function Home(){
  },[symbol]);
 
  useEffect(()=>{
+  candlesRef.current=[];
   let ws:WebSocket|undefined,stop=false,retry:ReturnType<typeof setTimeout>|undefined;
   setCandles([]);setConnected(false);setLoading(true);setError("");
   const connect=()=>{
@@ -77,7 +79,7 @@ export default function Home(){
     try{
      const k=JSON.parse(e.data).k;if(!k)return;
      const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v};
-     setCandles(p=>{const a=[...p],i=a.findIndex(x=>x.time===c.time);if(i>=0)a[i]=c;else a.push(c);return a.slice(-250)});
+     setCandles(p=>{const a=[...p];const last=a[a.length-1];if(last?.time===c.time){a[a.length-1]=c;return a}a.push(c);return a.length>250?a.slice(-250):a});
     }catch{}
    };
   };
@@ -124,6 +126,13 @@ export default function Home(){
   if(!chartReady||!series||candles.length<2)return;
   series.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));
   chartObj.current?.timeScale().fitContent();
+ },[chartReady,symbol,interval]);
+
+ useEffect(()=>{
+  const series=seriesRef.current;
+  const latest=candles.at(-1);
+  if(!chartReady||!series||!latest)return;
+  series.update({time:Math.floor(latest.time/1000) as any,open:latest.open,high:latest.high,low:latest.low,close:latest.close});
  },[candles,chartReady]);
 
  useEffect(()=>{
