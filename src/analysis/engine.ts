@@ -118,7 +118,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.5?priorHigh.price:zone.high):null;
  const stop=zone?(direction==="bullish"&&structuralLow!==null?structuralLow-a*.15:direction==="bearish"&&structuralHigh!==null?structuralHigh+a*.15:null):null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
- const targets=entry!==null&&risk?[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x):[];
+ const structuralTargets=direction==="bullish"?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>entry).sort((a,b)=>a-b):direction==="bearish"?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<entry).sort((a,b)=>b-a):[];
+ const uniqueTargets=structuralTargets.filter((p,i,a)=>i===0||Math.abs(p-a[i-1])>Math.max(a*.05,.0000001));
+ const targets=entry!==null&&risk?(uniqueTargets.length?uniqueTargets.slice(0,4):[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x)):[];
  const confirmations:string[]=[];
  if(direction&&events.at(-1)?.direction===direction)confirmations.push("Structure aligned");
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
@@ -126,7 +128,8 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  if(fvg)confirmations.push("Unfilled fair value gap");
  if(direction==="bullish"&&pd==="Discount"||direction==="bearish"&&pd==="Premium")confirmations.push("Premium/discount aligned");
  if(Math.abs(last.close-last.open)>=a*.5)confirmations.push("Displacement");
- const score=clamp(35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0));
+ const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
+ const score=zone&&direction?clamp(rawScore):0;
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
  const setup:Setup={direction:direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT",entry,stop,targets,rr,confidence:score,confirmations};
  return{trend,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
