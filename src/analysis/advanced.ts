@@ -10,6 +10,14 @@ export type FlowSnapshot = {
   pressure:"BUYERS"|"SELLERS"|"BALANCED";
 };
 
+export type RiskConstraints = {
+  minQty?:number;
+  maxQty?:number;
+  stepSize?:number;
+  minNotional?:number;
+  maxNotional?:number;
+};
+
 export type Regime = {
   regime:"TRENDING UP"|"TRENDING DOWN"|"RANGING"|"HIGH VOLATILITY"|"TRANSITION";
   strength:number;
@@ -82,20 +90,48 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
   return{structure,liquidity,zones,location,momentum,volume,total};
 }
 
-export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null){
+export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null,constraints:RiskConstraints={}) {
   const validAccount=Number.isFinite(account)&&account>0;
   const validRisk=Number.isFinite(riskPercent)&&riskPercent>0;
   const validEntry=typeof entry==="number"&&Number.isFinite(entry)&&entry>0;
   const validStop=typeof stop==="number"&&Number.isFinite(stop)&&stop>0;
-  // Enforce a hard 10% ceiling even if the UI input constraints are bypassed.
   const boundedRisk=validRisk?Math.min(riskPercent,10):0;
   const riskAmount=validAccount?account*boundedRisk/100:0;
   if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop){
-    return{riskAmount,positionSize:0,stopDistance:0};
+    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid account, risk, entry or stop"};
   }
+
   const stopDistance=Math.abs(entry-stop);
-  if(!Number.isFinite(stopDistance)||stopDistance<=0)return{riskAmount,positionSize:0,stopDistance:0};
-  return{riskAmount,positionSize:riskAmount/stopDistance,stopDistance};
+  if(!Number.isFinite(stopDistance)||stopDistance<=0){
+    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid stop distance"};
+  }
+
+  const desiredPositionSize=riskAmount/stopDistance;
+  if(!Number.isFinite(desiredPositionSize)||desiredPositionSize<=0){
+    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance,valid:false,reason:"Position size is zero"};
+  }
+
+  let positionSize=desiredPositionSize;
+  const {minQty=0,maxQty=Infinity,stepSize=0,minNotional=0,maxNotional=Infinity}=constraints;
+  if(Number.isFinite(maxQty)&&maxQty>0)positionSize=Math.min(positionSize,maxQty);
+  if(Number.isFinite(stepSize)&&stepSize>0)positionSize=Math.floor((positionSize/stepSize)+1e-12)*stepSize;
+  if(positionSize<Math.max(0,minQty)){
+    return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Below exchange minimum quantity"};
+  }
+
+  const notional=entry*positionSize;
+  if(Number.isFinite(minNotional)&&minNotional>0&&notional<minNotional){
+    return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Below exchange minimum notional"};
+  }
+  if(Number.isFinite(maxNotional)&&maxNotional>0&&notional>maxNotional){
+    positionSize=Math.min(positionSize,maxNotional/entry);
+    if(Number.isFinite(stepSize)&&stepSize>0)positionSize=Math.floor((positionSize/stepSize)+1e-12)*stepSize;
+  }
+  if(positionSize<=0||!Number.isFinite(positionSize)){
+    return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Exchange size constraints leave no valid quantity"};
+  }
+
+  return{riskAmount,desiredPositionSize,positionSize,stopDistance,valid:true,reason:"OK"};
 }
 
 /**
