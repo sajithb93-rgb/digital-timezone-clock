@@ -31,8 +31,16 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
   if(!c.length)return{buyVolume:0,sellVolume:0,delta:0,deltaRatio:0,cumulativeDelta:0,volumeRatio:0,pressure:"BALANCED"};
   let buy=0,sell=0,cum=0;
   for(const x of c){
+    // Binance klines expose taker-buy base-asset volume. When present, use it
+    // directly and derive taker-sell volume as total volume minus taker buys.
+    if(Number.isFinite(x.takerBuyVolume)){
+      const b=Math.max(0,Math.min(x.volume,x.takerBuyVolume!));
+      const s=Math.max(0,x.volume-b);
+      buy+=b;sell+=s;cum+=b-s;
+      continue;
+    }
+    // Fallback for Candle inputs that do not include exchange taker-buy data.
     const range=Math.max(x.high-x.low,1e-12);
-    // Candle-body-derived estimate only; this is not exchange aggressor-side volume.
     const bodyBias=Math.max(-1,Math.min(1,(x.close-x.open)/range));
     const buyShare=.5+bodyBias*.25;
     const b=x.volume*buyShare,s=x.volume-b;
