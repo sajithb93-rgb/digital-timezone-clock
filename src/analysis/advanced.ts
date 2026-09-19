@@ -80,7 +80,7 @@ export function detectRegime(c:Candle[]):Regime{
 }
 
 export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBreakdown{
-  const lastIndex=Math.max(0,s.pivots?.at(-1)?.index??0);
+  const lastIndex=Math.max(0,s.asOf??0);
   const recent=(index:number)=>index>=Math.max(0,lastIndex-20);
   const structure=s.events.some((x:any)=>recent(x.index))?15:0;
   const liquidity=s.sweeps.some((x:any)=>recent(x.index))?15:0;
