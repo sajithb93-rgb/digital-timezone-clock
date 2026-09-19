@@ -8,7 +8,7 @@ export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean
 export type Zone={low:number;high:number;type:"entry"|"stop"|"target"};
 export type Setup={direction:"BUY"|"SELL"|"WAIT";entry:number|null;stop:number|null;targets:number[];rr:number|null;confidence:number;confirmations:string[]};
 export type SMCResult={
- trend:"Bullish"|"Bearish"|"Neutral"; pivots:Pivot[]; internalPivots:Pivot[]; events:StructureEvent[];
+ trend:"Bullish"|"Bearish"|"Neutral"; asOf:number; pivots:Pivot[]; internalPivots:Pivot[]; events:StructureEvent[];
  fvgs:FVG[]; orderBlocks:OB[]; breakers:Breaker[]; liquidityHighs:Pivot[]; liquidityLows:Pivot[]; equalHighs:Pivot[]; equalLows:Pivot[];
  sweeps:Sweep[]; premiumDiscount:"Premium"|"Discount"|"Equilibrium"; premiumDiscountRange:{high:number;low:number;mid:number};
  vwap:number; volumeRatio:number; displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
@@ -79,7 +79,7 @@ function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{return obs.filter(o=>o.miti
 function equalLevels(ps:Pivot[],tol:number){const out:Pivot[]=[];for(let i=0;i<ps.length;i++)if(ps.slice(0,i).some(x=>Math.abs(x.price-ps[i].price)<=tol))out.push(ps[i]);return out}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
- const empty:SMCResult={trend:"Neutral",pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
+ const empty:SMCResult={trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
  if(c.length<25)return empty;
  const a=atr(c),ps=labelPivots(pivots(c,3)),internal=labelPivots(pivots(c,1)),events:StructureEvent[]=[];let structure:"bullish"|"bearish"|null=null;let activeH:Pivot|null=null,activeL:Pivot|null=null;
  const confirmedHighs=ps.filter(p=>p.type==="H").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
@@ -139,7 +139,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
  const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0;
  const setup:Setup={direction:usable?(direction==="bullish"?"BUY":"SELL"):"WAIT",entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable?score:0,confirmations:usable?confirmations:[]};
- return{trend,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
+ return{trend,asOf:c.length-1,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
 }
 
 function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
@@ -190,7 +190,7 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
  const rows=frames.map(f=>{const available=f.candles.length>=25;const s=available?analyzeSMC(f.candles):null;return{interval:f.interval,trend:s?.trend??"Neutral",score:s?.score??0,structure:s?.events.at(-1)?.type??(available?"No event":"UNAVAILABLE"),available};});
- const usable=rows.filter(r=>r.available); const totalWeight=usable.reduce((sum,_,i)=>sum+(i<2?1.4:1),0);
- const weighted=usable.reduce((sum,r,i)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*(i<2?1.4:1),0)/Math.max(1,totalWeight);
+ const usable=rows.filter(r=>r.available); const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1; const totalWeight=usable.reduce((sum,r)=>sum+weight(r),0);
+ const weighted=usable.reduce((sum,r)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*weight(r),0)/Math.max(1,totalWeight);
  return{trend:usable.length?(weighted>12?"Bullish":weighted<-12?"Bearish":"Neutral"):"Neutral",score:usable.length?clamp(50+weighted/2):0,frames:rows};
 }
