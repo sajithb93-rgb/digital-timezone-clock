@@ -155,7 +155,7 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
  */
 export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,slippageBps=0){
   let trades=0,wins=0,losses=0,totalR=0,grossR=0,costR=0,grossWinR=0,grossLossR=0,maxEquity=0,equity=0,maxDD=0,expired=0,notTriggered=0,openAtEnd=0;
-  if(!Number.isFinite(riskR)||riskR<=0||!Number.isFinite(maxHoldingCandles)||maxHoldingCandles<1||!Number.isFinite(feeBps)||feeBps<0||!Number.isFinite(slippageBps)||slippageBps<0){
+  if(!Number.isFinite(riskR)||riskR<=0||!Number.isFinite(maxHoldingCandles)||maxHoldingCandles<1||!Number.isFinite(feeBps)||feeBps<0||feeBps>10000||!Number.isFinite(slippageBps)||slippageBps<0||slippageBps>10000){
     return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered,openAtEnd};
   }
 
@@ -171,7 +171,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
 
     // One trade per distinct generated setup; evaluate each historical bar without fixed sampling.
     const eventIndex=s.events.at(-1)?.index??-1;
-    const signalKey=[eventIndex,s.setup.direction,entry.toPrecision(12),stop.toPrecision(12),target.toPrecision(12)].join("|");
+    const signalKey=[eventIndex,s.setup.direction,entry.toPrecision(12),stop.toPrecision(12)].join("|");
     if(seenSignals.has(signalKey)||i<nextAvailableIndex)continue;
 
     const riskDistance=Math.abs(entry-stop);
@@ -185,7 +185,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     for(let j=i;j<scanEnd;j++){
       if(c[j].low<=entry&&c[j].high>=entry){entryBar=j;break;}
     }
-    if(entryBar<0){continue;}
+    if(entryBar<0){seenSignals.add(signalKey);notTriggered++;continue;}
     seenSignals.add(signalKey);
 
     let result=0,exitPrice=entry,closed=false,exitIndex=-1;
