@@ -161,7 +161,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
 
   const seenSignals=new Set<string>();
   let nextAvailableIndex=80;
-  for(let i=80;i<c.length-3;i++){
+  for(let i=80;i<c.length;i++){
     const s=analyzeSMC(c.slice(0,i));
     if(s.setup.direction==="WAIT"||s.setup.entry==null||s.stop==null)continue;
     const entry=s.setup.entry,stop=s.stop,target=s.targets[0];
@@ -169,8 +169,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     const isBuy=s.setup.direction==="BUY";
     if((isBuy&&(stop>=entry||target<=entry))||(!isBuy&&(stop<=entry||target>=entry)))continue;
 
-    // One trade per distinct generated setup; this removes the old every-3-bars sampling bias
-    // without creating repeated entries while a setup remains unchanged.
+    // One trade per distinct generated setup; evaluate each historical bar without fixed sampling.
     const eventIndex=s.events.at(-1)?.index??-1;
     const signalKey=[eventIndex,s.setup.direction,entry.toPrecision(12),stop.toPrecision(12),target.toPrecision(12)].join("|");
     if(seenSignals.has(signalKey)||i<nextAvailableIndex)continue;
