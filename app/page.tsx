@@ -237,93 +237,6 @@ export default function Home() {
     });
     waveSeriesRef.current = [];
 
-    if (mode !== "elliott") {
-      smc.events.slice(-6).forEach((e) =>
-        overlayRef.current.push(
-          series.createPriceLine({
-            price: e.price,
-            color: e.direction === "bullish" ? "#36d399" : "#f06b78",
-            lineWidth: 1 as any,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: e.type,
-          })
-        )
-      );
-
-      smc.orderBlocks.slice(-4).forEach((o) => {
-        overlayRef.current.push(
-          series.createPriceLine({
-            price: o.low,
-            color: o.type === "bullish" ? "#36d399" : "#f06b78",
-            lineWidth: 1 as any,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: "OB",
-          })
-        );
-        overlayRef.current.push(
-          series.createPriceLine({
-            price: o.high,
-            color: o.type === "bullish" ? "#36d399" : "#f06b78",
-            lineWidth: 1 as any,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: false,
-            title: "",
-          })
-        );
-      });
-
-      smc.fvgs.slice(-4).forEach((x) => {
-        overlayRef.current.push(
-          series.createPriceLine({
-            price: x.low,
-            color: "#5ea7ff",
-            lineWidth: 1 as any,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: x.filled ? "FVG ✓" : "FVG",
-          })
-        );
-        overlayRef.current.push(
-          series.createPriceLine({
-            price: x.high,
-            color: "#5ea7ff",
-            lineWidth: 1 as any,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: false,
-            title: "",
-          })
-        );
-      });
-
-      smc.liquidityHighs.slice(-3).forEach((p) =>
-        overlayRef.current.push(
-          series.createPriceLine({
-            price: p.price,
-            color: "#e1b85a",
-            lineWidth: 1 as any,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: "LQH",
-          })
-        )
-      );
-
-      smc.liquidityLows.slice(-3).forEach((p) =>
-        overlayRef.current.push(
-          series.createPriceLine({
-            price: p.price,
-            color: "#e1b85a",
-            lineWidth: 1 as any,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: "LQL",
-          })
-        )
-      );
-    }
-
     if (mode !== "smc" && elliott.primary) {
       const ls = chart.addSeries(LineSeries, {
         lineWidth: 2,
@@ -340,26 +253,6 @@ export default function Home() {
       waveSeriesRef.current.push(ls);
     }
 
-    if (markersRef.current) {
-      try {
-        markersRef.current.setMarkers([]);
-      } catch {}
-    }
-
-    const markers = smc.sweeps
-      .filter((s) => candles[s.index])
-      .map((s) => ({
-        time: Math.floor(candles[s.index].time / 1000) as any,
-        position: s.type === "low" ? "belowBar" : "aboveBar",
-        color: "#e1b85a",
-        shape: s.type === "low" ? "arrowUp" : "arrowDown",
-        text: "SWEEP",
-      }));
-
-    try {
-      if (!markersRef.current) markersRef.current = createSeriesMarkers(series, markers as any);
-      else markersRef.current.setMarkers(markers as any);
-    } catch {}
   }, [candles, mode, smc, elliott]);
 
   useEffect(() => {
@@ -552,118 +445,155 @@ export default function Home() {
 }
 
 function ChartAnnotations({ chart, candles, smc, elliott, mode, tick }: { chart: any; candles: Candle[]; smc: any; elliott: any; mode: Mode; tick: number }) {
-  const wrap = chart?.containerElement?.() as HTMLElement | undefined;
-  const width = wrap?.clientWidth || 0;
-  const height = wrap?.clientHeight || 0;
-  if (!chart || !candles.length || !width || !height) return null;
+  const host = chart?.containerElement?.() as HTMLElement | undefined;
+  const width = host?.clientWidth || 0;
+  const height = host?.clientHeight || 0;
+  if (!chart || candles.length < 2 || !width || !height) return null;
 
   const ts = chart.timeScale();
   const series = chart.priceScale("right");
-  const xOf = (index: number) => ts.timeToCoordinate(Math.floor(candles[index]?.time / 1000) as any);
+  const xOf = (index: number) => index >= 0 && index < candles.length ? ts.timeToCoordinate(Math.floor(candles[index].time / 1000) as any) : null;
   const yOf = (price: number) => series.priceToCoordinate(price);
   const lastIndex = candles.length - 1;
   const xLast = xOf(lastIndex) ?? width;
   const x0 = Math.max(0, xOf(0) ?? 0);
 
   const label = (x: number | null, y: number | null, text: string, cls: string) =>
-    x == null || y == null ? null : <g><rect x={x - 4} y={y - 13} width={Math.max(30, text.length * 6 + 8)} height="16" rx="3" className={cls}/><text x={x} y={y - 2} className="chart-label">{text}</text></g>;
+    x == null || y == null ? null : <g>
+      <rect x={x - 4} y={y - 14} width={Math.max(34, text.length * 6.2 + 10)} height="18" rx="4" className={cls}/>
+      <text x={x + 1} y={y - 2} className="chart-label">{text}</text>
+    </g>;
 
-  const zone = (low: number, high: number, start: number | undefined, cls: string, title: string) => {
-    const a = Math.max(0, start ?? Math.max(0, lastIndex - 40));
-    const x1 = xOf(a) ?? x0;
-    const x2 = xLast;
+  const zone = (low: number, high: number, start: number | undefined, end: number | undefined, cls: string, title: string) => {
+    const a = Math.max(0, Math.min(lastIndex, start ?? Math.max(0, lastIndex - 40)));
+    const b = Math.max(a, Math.min(lastIndex, end ?? lastIndex));
+    const xa = xOf(a) ?? x0, xb = xOf(b) ?? xLast;
     const y1 = yOf(high), y2 = yOf(low);
     if (y1 == null || y2 == null) return null;
-    return <g><rect x={Math.min(x1,x2)} y={Math.min(y1,y2)} width={Math.abs(x2-x1)} height={Math.abs(y2-y1)} className={cls}/>{label(Math.min(x1,x2)+6, Math.min(y1,y2)+18, title, cls+"-label")}</g>;
+    const left = Math.min(xa, xb), top = Math.min(y1, y2);
+    return <g>
+      <rect x={left} y={top} width={Math.max(2, Math.abs(xb-xa))} height={Math.max(2, Math.abs(y2-y1))} className={cls}/>
+      {label(left + 6, top + 18, title, cls + "-label")}
+    </g>;
   };
 
-  const eventLines = mode !== "elliott" ? smc.events.slice(-8).map((e: any, i: number) => {
-    const idx = e.index ?? e.at ?? lastIndex;
-    const x = xOf(idx);
-    const y = yOf(e.price);
+  const smcVisible = mode !== "elliott";
+  const eventLines = smcVisible ? smc.events.slice(-8).map((e: any, i: number) => {
+    const idx = e.index;
+    const x = xOf(idx), y = yOf(e.price);
     if (x == null || y == null) return null;
-    return <g key={"event"+i}><line x1={x} x2={x} y1={0} y2={height} className={e.type === "CHOCH" ? "choch-line" : "bos-line"}/>{label(x + 6, y, e.type, e.type === "CHOCH" ? "choch-label" : "bos-label")}</g>;
+    const bullish = e.direction === "bullish";
+    const cls = e.type === "CHOCH" ? "choch-line" : "bos-line";
+    const arrowY = bullish ? Math.max(22, y - 26) : Math.min(height - 24, y + 26);
+    const d = bullish
+      ? `M ${x-7} ${arrowY+7} L ${x} ${arrowY} L ${x+7} ${arrowY+7}`
+      : `M ${x-7} ${arrowY-7} L ${x} ${arrowY} L ${x+7} ${arrowY-7}`;
+    return <g key={"event"+i}>
+      <line x1={x} x2={x} y1={Math.min(y,arrowY)} y2={Math.max(y,arrowY)} className={cls}/>
+      <path d={d} className={e.type === "CHOCH" ? "choch-arrow" : "bos-arrow"}/>
+      {label(x + 9, arrowY, `${e.type} · ${bullish ? "BULL" : "BEAR"}`, e.type === "CHOCH" ? "choch-label" : "bos-label")}
+    </g>;
   }) : null;
 
-  const pivotLabels = mode !== "elliott" ? smc.pivots.slice(-12).map((p: any, i: number) => {
+  const pivotLabels = smcVisible ? smc.pivots.slice(-12).map((p: any, i: number) => {
     const x = xOf(p.index), y = yOf(p.price);
     return x == null || y == null ? null : <g key={"pivot"+i}>{label(x, y, p.label, "pivot-label")}</g>;
   }) : null;
 
-  const obZones = mode !== "elliott" ? smc.orderBlocks.slice(-4).map((o: any, i: number) =>
-    zone(o.low, o.high, o.index ?? o.startIndex, o.type === "bullish" ? "ob-bull" : "ob-bear", "OB")
+  const obZones = smcVisible ? smc.orderBlocks.slice(-5).map((o: any, i: number) =>
+    zone(o.low, o.high, o.index, lastIndex, o.type === "bullish" ? "ob-bull" : "ob-bear", o.type === "bullish" ? "BULL OB" : "BEAR OB")
   ) : null;
 
-  const fvgZones = mode !== "elliott" ? smc.fvgs.slice(-5).map((z: any, i: number) =>
-    zone(z.low, z.high, z.index ?? z.startIndex ?? z.createdAt, "fvg-zone", z.filled ? "FVG ✓" : "FVG")
+  const fvgZones = smcVisible ? smc.fvgs.slice(-6).map((z: any, i: number) =>
+    zone(z.low, z.high, z.from, z.to ?? lastIndex, z.type === "bullish" ? "fvg-bull" : "fvg-bear", z.filled ? "FVG ✓" : "FVG")
   ) : null;
 
-  const fib = mode !== "smc" ? (() => {
-    const pts = elliott.primary?.points || [];
-    if (pts.length < 2) return null;
-    const a = pts[0], b = pts[pts.length - 1];
-    const hi = Math.max(a.price, b.price), lo = Math.min(a.price, b.price), range = hi - lo;
-    if (!range) return null;
-    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-    const extensions = [1.272, 1.618, 2, 2.618];
-    const start = Math.max(0, Math.min(a.index, b.index));
-    const x1 = xOf(start) ?? x0;
-    const x2 = xLast;
-    return <g>
-      {levels.map((r) => {
-        const price = b.price + (a.price - b.price) * r;
-        const y = yOf(price);
-        if (y == null) return null;
-        return <g key={"fib"+r}><line x1={x1} x2={x2} y1={y} y2={y} className="fib-line"/>
-          {label(x2 - 58, y, `${(r*100).toFixed(1)}% ${price.toFixed(2)}`, "fib-label")}</g>;
-      })}
-      {extensions.map((r) => {
-        const price = b.price + (a.price - b.price) * r;
-        const y = yOf(price);
-        if (y == null) return null;
-        return <g key={"fibext"+r}><line x1={x1} x2={x2} y1={y} y2={y} className="fib-ext-line"/>
-          {label(x2 - 62, y, `${r.toFixed(3)} EXT ${price.toFixed(2)}`, "fib-ext-label")}</g>;
-      })}
-      <rect x={x1} y={yOf(hi) ?? 0} width={Math.max(0,x2-x1)} height={Math.abs((yOf(hi)??0)-(yOf(lo)??0))} className="fib-range"/>
-      <rect x={x1} y={Math.min(yOf(hi*0 + (hi-range*0.618)) ?? 0,yOf(hi-range*0.5) ?? 0)} width={Math.max(0,x2-x1)} height={Math.abs((yOf(hi-range*0.5)??0)-(yOf(hi-range*0.618)??0))} className="fib-golden-zone"/>
-    </g>;
-  })() : null;
-
-  const liq = mode !== "elliott" ? [
-    ...smc.liquidityHighs.slice(-4).map((p: any) => ({...p, t:"EQH/LQH"})),
-    ...smc.liquidityLows.slice(-4).map((p: any) => ({...p, t:"EQL/LQL"}))
+  const liq = smcVisible ? [
+    ...smc.liquidityHighs.slice(-4).map((p: any) => ({...p, t:"LQ HIGH"})),
+    ...smc.liquidityLows.slice(-4).map((p: any) => ({...p, t:"LQ LOW"}))
   ].map((p: any, i: number) => {
     const x1 = xOf(p.index ?? Math.max(0,lastIndex-80)) ?? x0;
     const y = yOf(p.price);
-    return y == null ? null : <g key={"liq"+i}><line x1={x1} x2={xLast} y1={y} y2={y} className="liquidity-line"/>{label(x1+6,y,p.t,"liquidity-label")}</g>;
+    return y == null ? null : <g key={"liq"+i}>
+      <line x1={x1} x2={xLast} y1={y} y2={y} className="liquidity-line"/>
+      {label(x1 + 6, y, p.t, "liquidity-label")}
+    </g>;
   }) : null;
 
-  const sweeps = mode !== "elliott" ? smc.sweeps.slice(-8).map((s: any, i: number) => {
-    const x=xOf(s.index), y=yOf(s.price ?? (s.type==="low"?candles[s.index]?.low:candles[s.index]?.high));
-    return x==null||y==null?null:<g key={"sweep"+i}><path d={s.type==="low" ? `M ${x-7} ${y+9} L ${x} ${y} L ${x+7} ${y+9}` : `M ${x-7} ${y-9} L ${x} ${y} L ${x+7} ${y-9}`} className="sweep-mark"/>{label(x+7,y,"SWEEP","sweep-label")}</g>;
+  const sweeps = smcVisible ? smc.sweeps.slice(-8).map((s: any, i: number) => {
+    const x=xOf(s.index), y=yOf(s.price);
+    if(x==null||y==null)return null;
+    const high = s.type === "high";
+    const tipY = high ? y - 22 : y + 22;
+    const d = high
+      ? `M ${x-8} ${tipY-7} L ${x} ${tipY} L ${x+8} ${tipY-7}`
+      : `M ${x-8} ${tipY+7} L ${x} ${tipY} L ${x+8} ${tipY+7}`;
+    return <g key={"sweep"+i}>
+      <line x1={x} x2={x} y1={y} y2={tipY} className="sweep-mark"/>
+      <path d={d} className="sweep-arrow"/>
+      {label(x + 9, tipY, high ? "HIGH SWEEP" : "LOW SWEEP", "sweep-label")}
+    </g>;
   }) : null;
 
-  const tradeLevels = mode !== "elliott" ? (() => {
+  const tradeLevels = smcVisible ? (() => {
     const out:any[]=[];
-    if (smc.entryZone) {
-      out.push(zone(smc.entryZone.low, smc.entryZone.high, Math.max(0,lastIndex-20), "entry-zone", "ENTRY"));
-    }
+    if (smc.entryZone) out.push(zone(smc.entryZone.low, smc.entryZone.high, Math.max(0,lastIndex-20), lastIndex, "entry-zone", "ENTRY ZONE"));
     if (smc.stop != null) {
-      const y=yOf(smc.stop); if(y!=null) out.push(<g key="sl"><line x1={x0} x2={xLast} y1={y} y2={y} className="sl-line"/>{label(xLast-52,y,"SL","sl-label")}</g>);
+      const y=yOf(smc.stop);
+      if(y!=null) out.push(<g key="sl"><line x1={x0} x2={xLast} y1={y} y2={y} className="sl-line"/>{label(xLast-55,y,`SL ${smc.stop.toFixed(2)}`,"sl-label")}</g>);
     }
-    (smc.targets||[]).slice(0,4).forEach((p:number,i:number)=>{const y=yOf(p);if(y!=null)out.push(<g key={"tp"+i}><line x1={xLast-80} x2={xLast} y1={y} y2={y} className="tp-line"/>{label(xLast-42,y,`TP${i+1}`,"tp-label")}</g>)});
+    (smc.targets||[]).slice(0,4).forEach((p:number,i:number)=>{
+      const y=yOf(p); if(y!=null) out.push(<g key={"tp"+i}><line x1={xLast-120} x2={xLast} y1={y} y2={y} className="tp-line"/>{label(xLast-92,y,`TP${i+1} ${p.toFixed(2)}`,"tp-label")}</g>);
+    });
     return out;
   })() : null;
 
   const wave = mode !== "smc" && elliott.primary?.points?.map((p:any,i:number) => {
     const x=xOf(p.index), y=yOf(p.price); if(x==null||y==null)return null;
     const next=elliott.primary.points[i+1]; const nx=next?xOf(next.index):null, ny=next?yOf(next.price):null;
-    return <g key={"wave"+i}>{nx!=null&&ny!=null?<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>:<></>}{label(x,y,p.label,"wave-label")}</g>;
+    return <g key={"wave"+i}>{nx!=null&&ny!=null?<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>:null}{label(x,y,p.label,"wave-label")}</g>;
   });
 
-  return <svg key={tick} className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-    {fvgZones}{obZones}{fib}{liq}{eventLines}{pivotLabels}{sweeps}{tradeLevels}{wave}
-  </svg>;
+  const direction = smc.trend;
+  const setup = smc.entryZone && smc.stop != null && smc.targets?.length
+    ? (direction === "Bullish" ? "BUY" : direction === "Bearish" ? "SELL" : "WAIT")
+    : "WAIT";
+  const entryMid = smc.entryZone ? (smc.entryZone.low + smc.entryZone.high) / 2 : null;
+  const rr = entryMid != null && smc.stop != null && smc.targets?.[0] != null
+    ? Math.abs(smc.targets[0]-entryMid)/Math.abs(entryMid-smc.stop) : null;
+
+  return <div className="chart-overlay-wrap">
+    <svg key={tick} className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      {fvgZones}{obZones}{fibOverlay(chart,candles,elliott,mode,xOf,yOf,x0,xLast,label)}{liq}{eventLines}{pivotLabels}{sweeps}{tradeLevels}{wave}
+    </svg>
+    {smcVisible && <div className={`setup-panel ${setup.toLowerCase()}`}>
+      <div className="setup-head"><span>SMC SETUP</span><strong>{setup}</strong></div>
+      <div className="setup-grid">
+        <span>Trend<b>{smc.trend}</b></span>
+        <span>Score<b>{smc.score}/100</b></span>
+        <span>Entry<b>{entryMid != null ? entryMid.toFixed(4) : "—"}</b></span>
+        <span>SL<b>{smc.stop != null ? smc.stop.toFixed(4) : "—"}</b></span>
+        <span>TP1<b>{smc.targets?.[0]?.toFixed(4) || "—"}</b></span>
+        <span>R:R<b>{rr ? rr.toFixed(2)+":1" : "—"}</b></span>
+      </div>
+      <div className="setup-foot">{smc.events.at(-1)?.type || "NO STRUCTURE"} · {smc.sweeps.length ? "LIQUIDITY SWEPT" : "NO SWEEP"}</div>
+    </div>}
+  </div>;
+}
+
+function fibOverlay(chart:any,candles:Candle[],elliott:any,mode:Mode,xOf:any,yOf:any,x0:number,xLast:number,label:any) {
+  if (mode === "smc") return null;
+  const pts = elliott.primary?.points || [];
+  if (pts.length < 2) return null;
+  const a=pts[0], b=pts[pts.length-1], hi=Math.max(a.price,b.price), lo=Math.min(a.price,b.price), range=hi-lo;
+  if(!range)return null;
+  const levels=[0,.236,.382,.5,.618,.786,1], exts=[1.272,1.618,2,2.618];
+  const x1=xOf(Math.max(0,Math.min(a.index,b.index)))??x0;
+  return <g>
+    {levels.map((r:number)=><g key={"fib"+r}>{(()=>{const price=b.price+(a.price-b.price)*r,y=yOf(price);return y==null?null:<><line x1={x1} x2={xLast} y1={y} y2={y} className="fib-line"/>{label(xLast-70,y,`${(r*100).toFixed(1)}% ${price.toFixed(2)}`,"fib-label")}</>})()}</g>)}
+    {exts.map((r:number)=><g key={"ext"+r}>{(()=>{const price=b.price+(a.price-b.price)*r,y=yOf(price);return y==null?null:<><line x1={x1} x2={xLast} y1={y} y2={y} className="fib-ext-line"/>{label(xLast-78,y,`${r.toFixed(3)} EXT ${price.toFixed(2)}`,"fib-ext-label")}</>})()}</g>)}
+    <rect x={x1} y={Math.min(yOf(hi-range*.5)??0,yOf(hi-range*.618)??0)} width={Math.max(0,xLast-x1)} height={Math.abs((yOf(hi-range*.5)??0)-(yOf(hi-range*.618)??0))} className="fib-golden-zone"/>
+  </g>;
 }
 
 function MetricCard({ title, children }: { title: string; children: React.ReactNode }) {
