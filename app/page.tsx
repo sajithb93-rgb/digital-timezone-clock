@@ -26,7 +26,7 @@ export default function Home(){
  const [connected,setConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]);
- const chartRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null);
+ const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
  const elliott=useMemo(()=>analyzeElliott(analysisCandles),[analysisCandles]);
@@ -92,7 +92,7 @@ export default function Home(){
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap"><div className="chartarea" ref={chartRef}/>{chartReady&&<ChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chartarea" ref={chartRef}/>{chartReady&&<ChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span><span className="chart-tip">Live Binance spot data · overlays are analytical</span></div>
    </div>
 
@@ -129,7 +129,7 @@ export default function Home(){
 function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;mode:Mode;tick:number;layers:any}){
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
- const ts=chart.timeScale(),lastIndex=candles.length-1,xOf=(i:number)=>{if(i<0||i>=candles.length)return null;try{const logical=ts.logicalToCoordinate?.(i);if(logical!=null)return logical;return ts.timeToCoordinate?.(Math.floor(candles[i].time/1000) as any)??null}catch{return null}},yOf=(p:number)=>{try{return series.priceToCoordinate(p)}catch{return null}};
+ const ts=chart.timeScale(),lastIndex=candles.length-1,xOf=(i:number)=>{if(i<0||i>=candles.length)return null;try{const x=ts.timeToCoordinate?.(Math.floor(candles[i].time/1000) as any);if(x!=null)return x;const logical=ts.logicalToCoordinate?.(i);return logical??null}catch{return null}},yOf=(p:number)=>{try{const y=series.priceToCoordinate(p);return y??null}catch{return null}};
  const xLast=xOf(lastIndex)??width,x0=0;
  const text=(x:number|null,y:number|null,s:string,cls:string)=>x==null||y==null?null:<g><rect x={x-3} y={y-13} width={Math.max(32,s.length*5.9+8)} height="17" rx="3" className="label-bg"/><text x={x+1} y={y-1} className={`chart-label ${cls}`}>{s}</text></g>;
  const zone=(low:number,high:number,start:number,end:number,cls:string,title:string)=>{const xa=xOf(start)??x0,xb=xOf(end)??xLast,y1=yOf(high),y2=yOf(low);if(y1==null||y2==null)return null;return <g><rect x={Math.min(xa,xb)} y={Math.min(y1,y2)} width={Math.max(2,Math.abs(xb-xa))} height={Math.max(2,Math.abs(y2-y1))} className={cls}/>{text(Math.min(xa,xb)+4,Math.min(y1,y2)+16,title,cls+"-label")}</g>};
