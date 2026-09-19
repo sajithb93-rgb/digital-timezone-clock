@@ -38,7 +38,7 @@ export default function Home(){
  const combined=Math.round((smc.score+elliott.score+mtf.score)/3);
 
  useEffect(()=>{let stop=false;fetch("https://api.binance.com/api/v3/exchangeInfo").then(r=>r.json()).then(d=>{if(!stop)setPairs((d.symbols||[]).filter((x:any)=>x.status==="TRADING").map((x:any)=>({symbol:x.symbol,baseAsset:x.baseAsset,quoteAsset:x.quoteAsset})))}).catch(()=>{});return()=>{stop=true}},[]);
- useEffect(()=>{let stop=false;fetch("https://api.binance.com/api/v3/ticker/24hr").then(r=>r.json()).then((d:any[])=>{if(stop)return;setScanner(d.filter(x=>x.symbol.endsWith("USDT")&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:+x.priceChangePercent,quoteVolume:+x.quoteVolume})).sort((a,b)=>Math.abs(b.priceChangePercent)-Math.abs(a.priceChangePercent)).slice(0,8))}).catch(()=>{});return()=>{stop=true}},[]);
+ useEffect(()=>{let stop=false;const load=()=>fetch("https://api.binance.com/api/v3/ticker/24hr").then(r=>r.json()).then((d:any[])=>{if(stop||!Array.isArray(d))return;setScanner(d.filter(x=>typeof x.symbol==="string"&&x.symbol.endsWith("USDT")&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:Number(x.priceChangePercent),quoteVolume:Number(x.quoteVolume)})).filter(x=>Number.isFinite(x.priceChangePercent)&&Number.isFinite(x.quoteVolume)).sort((a,b)=>Math.abs(b.priceChangePercent)-Math.abs(a.priceChangePercent)).slice(0,8))}).catch(()=>{});load();const id=window.setInterval(load,30000);return()=>{stop=true;clearInterval(id)}},[]);
  useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:await fetchKlines(symbol,tf,180)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol]);
 
  useEffect(()=>{
@@ -72,7 +72,7 @@ export default function Home(){
 
  const filtered=pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch)).slice(0,500);
  const reset=()=>chartObj.current?.timeScale().fitContent(),toggle=(k:keyof typeof layers)=>setLayers(v=>({...v,[k]:!v[k]}));
- const runBacktest=()=>setBacktest(runSMCBacktest(analysisCandles));
+ const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest(runSMCBacktest(analysisCandles));else setBacktest(null)};
  const fmt=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
 
  return <main className="app-shell">
@@ -103,7 +103,7 @@ export default function Home(){
 
    <div className="advanced-grid">
     <div className="panel-card"><div className="section-title">RISK & POSITION PLANNER</div><div className="input-grid"><label>Account<input type="number" value={account} onChange={e=>setAccount(+e.target.value)}/></label><label>Risk %<input type="number" min=".1" max="10" step=".1" value={riskPercent} onChange={e=>setRiskPercent(+e.target.value)}/></label></div><div className="risk-output"><Row k="Risk amount" v={"$"+risk.riskAmount.toFixed(2)}/><Row k="Stop distance" v={fmt(risk.stopDistance)}/><Row k="Position size" v={fmt(risk.positionSize)}/><Row k="Setup R:R" v={smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}/></div><div className="risk-note">Position size is based on the selected account risk and entry/stop distance; leverage is not a profit guarantee.</div></div>
-    <div className="panel-card"><div className="section-title">HISTORICAL SMC CHECK</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. This is a simple historical check, not a guarantee of future performance.</p><button className="primary-action" onClick={runBacktest}>RUN BACKTEST</button>{backtest&&<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/></div>}</div>
+    <div className="panel-card"><div className="section-title">HISTORICAL SMC CHECK</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. This is a simple historical check, not a guarantee of future performance.</p><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/></div>}</div>
    </div>
   </div>
 
