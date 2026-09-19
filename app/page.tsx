@@ -92,7 +92,9 @@ export default function Home(){
   import("lightweight-charts").then(({createChart,CandlestickSeries})=>{
    if(disposed||!chartRef.current)return;
    const chart=createChart(host,{
-   autoSize:true,height:500,
+   width:Math.max(320,host.clientWidth||900),
+   height:Math.max(360,host.clientHeight||500),
+   autoSize:false,
    layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},
    grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},
    rightPriceScale:{borderColor:"#26303f",scaleMargins:{top:.08,bottom:.08}},
@@ -105,18 +107,31 @@ export default function Home(){
   chartObj.current=chart;seriesRef.current=series;setChartReady(true);
   const onViewport=()=>setViewportTick(v=>v+1);
   chart.timeScale().subscribeVisibleLogicalRangeChange(onViewport);
-  const ro=new ResizeObserver(()=>setViewportTick(v=>v+1));ro.observe(host);
+  const ro=new ResizeObserver(()=>{
+   const width=Math.max(320,host.clientWidth||900);
+   const height=Math.max(360,host.clientHeight||500);
+   chart.resize(width,height);
+   setViewportTick(v=>v+1);
+  });
+  ro.observe(host);
    return()=>{ro.disconnect();try{chart.timeScale().unsubscribeVisibleLogicalRangeChange(onViewport)}catch{};chart.remove();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
   }).catch(e=>{if(!disposed)setError(e instanceof Error?e.message:"Chart library failed to load")});
   return()=>{disposed=true;chartObj.current?.remove?.();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
  },[]);
 
  useEffect(()=>{
-  const series=seriesRef.current;if(!series||candles.length<2)return;
+  const series=seriesRef.current;
+  if(!chartReady||!series||candles.length<2)return;
   series.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));
- },[candles]);
+  chartObj.current?.timeScale().fitContent();
+ },[candles,chartReady]);
 
- useEffect(()=>{if(chartObj.current&&candles.length)chartObj.current.timeScale().fitContent()},[symbol,interval]);
+ useEffect(()=>{
+  if(chartObj.current&&chartReady&&candles.length){
+   chartObj.current.timeScale().fitContent();
+   setViewportTick(v=>v+1);
+  }
+ },[symbol,interval,chartReady,candles.length]);
 
  const filtered=pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch)).slice(0,500);
  const resetChart=()=>chartObj.current?.timeScale().fitContent();
