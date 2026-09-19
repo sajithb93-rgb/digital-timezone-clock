@@ -11,7 +11,7 @@ export type SMCResult={
  trend:"Bullish"|"Bearish"|"Neutral"; pivots:Pivot[]; internalPivots:Pivot[]; events:StructureEvent[];
  fvgs:FVG[]; orderBlocks:OB[]; breakers:Breaker[]; liquidityHighs:Pivot[]; liquidityLows:Pivot[]; equalHighs:Pivot[]; equalLows:Pivot[];
  sweeps:Sweep[]; premiumDiscount:"Premium"|"Discount"|"Equilibrium"; premiumDiscountRange:{high:number;low:number;mid:number};
- displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
+ vwap:number; volumeRatio:number; displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
 };
 export type WavePoint={index:number;price:number;label:string};
 export type WaveCount={points:WavePoint[];kind:"Impulse"|"Correction";direction:"bullish"|"bearish";invalidation:number;targets:number[];quality:number;rules:string[]};
