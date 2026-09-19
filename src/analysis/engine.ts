@@ -79,7 +79,17 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  for(const p of [...liquidityHighs.slice(-6),...liquidityLows.slice(-6)]){
   for(let j=p.index+1;j<c.length;j++){const hit=p.type==="H"?c[j].high>p.price&&c[j].close<p.price:c[j].low<p.price&&c[j].close>p.price;if(hit){sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(c,j,a)>=.7});break}}
  }
- const r=range(c),mid=(r.hi+r.lo)/2,last=c[c.length-1],volBase=c.slice(-21,-1).reduce((s,x)=>s+x.volume,0)/Math.max(1,c.slice(-21,-1).length),volumeRatio=last.volume/Math.max(volBase,.0000001),vwap=c.slice(-60).reduce((s,x)=>s+x.close*x.volume,0)/Math.max(c.slice(-60).reduce((s,x)=>s+x.volume,0),.0000001),trend=last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral",pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
+  const r=range(c);
+  const mid=(r.hi+r.lo)/2;
+  const last=c[c.length-1];
+  const recentVolumes=c.slice(-21,-1);
+  const volBase=recentVolumes.reduce((s,x)=>s+x.volume,0)/Math.max(1,recentVolumes.length);
+  const volumeRatio=last.volume/Math.max(volBase,.0000001);
+  const recentCandles=c.slice(-60);
+  const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
+  const vwap=recentCandles.reduce((s,x)=>s+x.close*x.volume,0)/Math.max(totalVolume,.0000001);
+  const trend=last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
+  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
  const direction=trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null;
  const ob=direction?[...obs].reverse().find(x=>x.type===direction&&!x.mitigated):undefined;
  const fvg=direction?[...fvgs].reverse().find(x=>x.type===direction&&!x.filled):undefined;
