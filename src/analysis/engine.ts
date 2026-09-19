@@ -164,10 +164,10 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
   if(ps.length===6){
    const bull=ps[0].type==="L"&&ps[1].type==="H";
    const points=ps.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)}));
-   primary={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation:ps[0].price,targets:[ps[5].price],quality:35,rules:["Fallback pivot-sequence candidate; strict Elliott rules not confirmed"]};
+   alternative={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation:ps[0].price,targets:[ps[5].price],quality:35,rules:["Fallback pivot-sequence candidate; strict Elliott rules not confirmed"]};
   }
  }
- if(!primary)return{primary:null,alternative:null,correction,fib:null,fibLevels:[],channel:null,phase:correction?"Correction candidate":"No candidate",score:correction?.quality??0,confidence:correction?.quality??0};
+ if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"Correction candidate":"No strict impulse candidate",score:correction?.quality??0,confidence:correction?.quality??0};
  const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]),a=p[0],b=p[3],slope=(b-a)/Math.max(primary.points[3].index-primary.points[0].index,1);
  const hi=Math.max(p[0],p[5]),lo=Math.min(p[0],p[5]),range=hi-lo,dir=primary.direction==="bullish"?1:-1;
  const fibLevels=[["0%",p[5]],["23.6%",p[5]+(p[0]-p[5])*.236],["38.2%",p[5]+(p[0]-p[5])*.382],["50%",p[5]+(p[0]-p[5])*.5],["61.8%",p[5]+(p[0]-p[5])*.618],["78.6%",p[5]+(p[0]-p[5])*.786],["100%",p[0]],["127.2%",p[5]+dir*range*.272],["161.8%",p[5]+dir*range*.618],["261.8%",p[5]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
