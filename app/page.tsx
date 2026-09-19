@@ -350,7 +350,7 @@ export default function Home() {
             </div>
             <div className="chart-wrap">
               <div className="chartarea" ref={chartRef} />
-              <ChartAnnotations chart={chartObj.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={chartViewportTick} />
+              <ChartAnnotations chart={chartObj.current} host={chartRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={chartViewportTick} />
               {loading && <div className="chart-loading"><span />Loading market data…</div>}
             </div>
             <div className="chart-footer">
@@ -444,8 +444,7 @@ export default function Home() {
   );
 }
 
-function ChartAnnotations({ chart, candles, smc, elliott, mode, tick }: { chart: any; candles: Candle[]; smc: any; elliott: any; mode: Mode; tick: number }) {
-  const host = chart?.containerElement?.() as HTMLElement | undefined;
+function ChartAnnotations({ chart, host, candles, smc, elliott, mode, tick }: { chart: any; host: HTMLElement | null; candles: Candle[]; smc: any; elliott: any; mode: Mode; tick: number }) {
   const width = host?.clientWidth || 0;
   const height = host?.clientHeight || 0;
   if (!chart || candles.length < 2 || !width || !height) return null;
