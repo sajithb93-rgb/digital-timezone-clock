@@ -215,12 +215,13 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layer
  const yOf=(p:number)=>series.priceToCoordinate(p);
  const xLast=xOf(lastIndex)??width,x0=Math.max(0,xOf(0)??0);
  const label=(x:number|null,y:number|null,text:string,cls:string)=>x==null||y==null?null:<g><rect x={x-4} y={y-14} width={Math.max(36,text.length*6.1+10)} height="18" rx="4" className={cls}/><text x={x+1} y={y-2} className="chart-label">{text}</text></g>;
+ const marker=(x:number|null,y:number|null,text:string,cls:string,up=true)=>x==null||y==null?null:<g className="chart-marker"><circle cx={x} cy={y} r="4.5" className={cls}/><text x={x+8} y={y+(up?-9:17)} className="marker-text">{text}</text></g>;
  const zone=(low:number,high:number,start?:number,end?:number,cls="fvg-bull",title="ZONE")=>{const a=Math.max(0,Math.min(lastIndex,start??lastIndex-40)),b=Math.max(a,Math.min(lastIndex,end??lastIndex)),xa=xOf(a)??x0,xb=xOf(b)??xLast,y1=yOf(high),y2=yOf(low);if(y1==null||y2==null)return null;return <g><rect x={Math.min(xa,xb)} y={Math.min(y1,y2)} width={Math.max(2,Math.abs(xb-xa))} height={Math.max(2,Math.abs(y2-y1))} className={cls}/>{label(Math.min(xa,xb)+5,Math.min(y1,y2)+18,title,cls+"-label")}</g>};
 
  const smcVisible=mode!=="elliott";
  const structures=smcVisible&&layers.structure?<>
-  {smc.events.slice(-10).map((e:any,i:number)=>{const x=xOf(e.index),y=yOf(e.price);if(x==null||y==null)return null;const bull=e.direction==="bullish",ay=bull?Math.max(22,y-25):Math.min(height-22,y+25),d=bull?`M ${x-7} ${ay+7} L ${x} ${ay} L ${x+7} ${ay+7}`:`M ${x-7} ${ay-7} L ${x} ${ay} L ${x+7} ${ay-7}`;return <g key={"e"+i}><line x1={x} x2={x} y1={Math.min(y,ay)} y2={Math.max(y,ay)} className={e.type==="CHOCH"?"choch-line":"bos-line"}/><path d={d} className={e.type==="CHOCH"?"choch-arrow":"bos-arrow"}/>{label(x+8,ay,e.type+" · "+(bull?"BULL":"BEAR"),e.type==="CHOCH"?"choch-label":"bos-label")}</g>})}
-  {smc.pivots.slice(-14).map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price);return x==null||y==null?null:<g key={"p"+i}>{label(x,y,p.label||"", "pivot-label")}</g>})}
+  {smc.events.slice(-10).map((e:any,i:number)=>{const x=xOf(e.index),y=yOf(e.price);if(x==null||y==null)return null;const bull=e.direction==="bullish",ay=bull?Math.max(22,y-25):Math.min(height-22,y+25),d=bull?`M ${x-7} ${ay+7} L ${x} ${ay} L ${x+7} ${ay+7}`:`M ${x-7} ${ay-7} L ${x} ${ay} L ${x+7} ${ay-7}`;return <g key={"e"+i}><line x1={x} x2={x} y1={Math.min(y,ay)} y2={Math.max(y,ay)} className={e.type==="CHOCH"?"choch-line":"bos-line"}/><path d={d} className={e.type==="CHOCH"?"choch-arrow":"bos-arrow"}/>{marker(x,y,e.type,e.type==="CHOCH"?"marker-choch":"marker-bos",bull)}{label(x+8,ay,e.type+" · "+(bull?"BULL":"BEAR"),e.type==="CHOCH"?"choch-label":"bos-label")}</g>})}
+  {smc.pivots.slice(-14).map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price);return x==null||y==null?null:<g key={"p"+i}>{marker(x,y,p.label||"SWING","marker-pivot",p.label?.includes("H")??true)}</g>})}
  </>:null;
 
  const zones=smcVisible&&layers.zones?<>
@@ -231,7 +232,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layer
 
  const liquidity=smcVisible&&layers.liquidity?<>
   {[...smc.liquidityHighs.slice(-4).map((p:any)=>({...p,t:"EQH / LIQ HIGH"})),...smc.liquidityLows.slice(-4).map((p:any)=>({...p,t:"EQL / LIQ LOW"}))].map((p:any,i:number)=>{const x=xOf(p.index)??x0,y=yOf(p.price);return y==null?null:<g key={"l"+i}><line x1={x} x2={xLast} y1={y} y2={y} className="liquidity-line"/>{label(x+5,y,p.t,"liquidity-label")}</g>})}
-  {smc.sweeps.slice(-8).map((s:any,i:number)=>{const x=xOf(s.index),y=yOf(s.price);if(x==null||y==null)return null;const high=s.type==="high",ty=high?y-22:y+22,d=high?`M ${x-8} ${ty-7} L ${x} ${ty} L ${x+8} ${ty-7}`:`M ${x-8} ${ty+7} L ${x} ${ty} L ${x+8} ${ty+7}`;return <g key={"s"+i}><line x1={x} x2={x} y1={y} y2={ty} className="sweep-mark"/><path d={d} className="sweep-arrow"/>{label(x+8,ty,high?"HIGH SWEEP":"LOW SWEEP","sweep-label")}</g>})}
+  {smc.sweeps.slice(-8).map((s:any,i:number)=>{const x=xOf(s.index),y=yOf(s.price);if(x==null||y==null)return null;const high=s.type==="high",ty=high?y-22:y+22,d=high?`M ${x-8} ${ty-7} L ${x} ${ty} L ${x+8} ${ty-7}`:`M ${x-8} ${ty+7} L ${x} ${ty} L ${x+8} ${ty+7}`;return <g key={"s"+i}><line x1={x} x2={x} y1={y} y2={ty} className="sweep-mark"/><path d={d} className="sweep-arrow"/>{marker(x,y,high?"SWEEP H":"SWEEP L","marker-sweep",!high)}{label(x+8,ty,high?"HIGH SWEEP":"LOW SWEEP","sweep-label")}</g>})}
  </>:null;
 
  const trade=smcVisible&&layers.trade&&smc.entryZone?<>
