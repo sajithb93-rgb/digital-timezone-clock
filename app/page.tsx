@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { CandlestickSeries, createChart } from "lightweight-charts";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 
 type Mode = "smc" | "elliott" | "combined";
@@ -87,9 +86,12 @@ export default function Home(){
  },[symbol,interval]);
 
  useEffect(()=>{
+  let disposed=false;
   if(!chartRef.current)return;
   const host=chartRef.current;
-  const chart=createChart(host,{
+  import("lightweight-charts").then(({createChart,CandlestickSeries})=>{
+   if(disposed||!chartRef.current)return;
+   const chart=createChart(host,{
    autoSize:true,height:500,
    layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},
    grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},
@@ -104,7 +106,9 @@ export default function Home(){
   const onViewport=()=>setViewportTick(v=>v+1);
   chart.timeScale().subscribeVisibleLogicalRangeChange(onViewport);
   const ro=new ResizeObserver(()=>setViewportTick(v=>v+1));ro.observe(host);
-  return()=>{ro.disconnect();try{chart.timeScale().unsubscribeVisibleLogicalRangeChange(onViewport)}catch{};chart.remove();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
+   return()=>{ro.disconnect();try{chart.timeScale().unsubscribeVisibleLogicalRangeChange(onViewport)}catch{};chart.remove();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
+  }).catch(e=>{if(!disposed)setError(e instanceof Error?e.message:"Chart library failed to load")});
+  return()=>{disposed=true;chartObj.current?.remove?.();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
  },[]);
 
  useEffect(()=>{
