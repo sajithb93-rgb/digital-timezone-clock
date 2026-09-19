@@ -32,6 +32,7 @@ export default function Home() {
   const overlayRef = useRef<any[]>([]);
   const waveSeriesRef = useRef<any[]>([]);
   const markersRef = useRef<any>(null);
+  const [chartViewportTick, setChartViewportTick] = useState(0);
 
   const smc = useMemo(() => analyzeSMC(candles), [candles]);
   const elliott = useMemo(() => analyzeElliott(candles), [candles]);
@@ -184,6 +185,8 @@ export default function Home() {
 
     chartObj.current = chart;
     seriesRef.current = series;
+    const onViewportChange = () => setChartViewportTick((v) => v + 1);
+    chart.timeScale().subscribeVisibleLogicalRangeChange(onViewportChange);
 
     return () => {
       overlayRef.current.forEach((x) => {
@@ -198,6 +201,7 @@ export default function Home() {
       });
       overlayRef.current = [];
       waveSeriesRef.current = [];
+      try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(onViewportChange); } catch {}
       chart.remove();
       chartObj.current = null;
       seriesRef.current = null;
@@ -453,6 +457,7 @@ export default function Home() {
             </div>
             <div className="chart-wrap">
               <div className="chartarea" ref={chartRef} />
+              <ChartAnnotations chart={chartObj.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={chartViewportTick} />
               {loading && <div className="chart-loading"><span />Loading market data…</div>}
             </div>
             <div className="chart-footer">
@@ -544,6 +549,90 @@ export default function Home() {
       </footer>
     </main>
   );
+}
+
+function ChartAnnotations({ chart, candles, smc, elliott, mode, tick }: { chart: any; candles: Candle[]; smc: any; elliott: any; mode: Mode; tick: number }) {
+  const wrap = chart?.containerElement?.() as HTMLElement | undefined;
+  const width = wrap?.clientWidth || 0;
+  const height = wrap?.clientHeight || 0;
+  if (!chart || !candles.length || !width || !height) return null;
+
+  const ts = chart.timeScale();
+  const series = chart.priceScale("right");
+  const xOf = (index: number) => ts.timeToCoordinate(Math.floor(candles[index]?.time / 1000) as any);
+  const yOf = (price: number) => series.priceToCoordinate(price);
+  const lastIndex = candles.length - 1;
+  const xLast = xOf(lastIndex) ?? width;
+  const x0 = Math.max(0, xOf(0) ?? 0);
+
+  const label = (x: number | null, y: number | null, text: string, cls: string) =>
+    x == null || y == null ? null : <g><rect x={x - 4} y={y - 13} width={Math.max(30, text.length * 6 + 8)} height="16" rx="3" className={cls}/><text x={x} y={y - 2} className="chart-label">{text}</text></g>;
+
+  const zone = (low: number, high: number, start: number | undefined, cls: string, title: string) => {
+    const a = Math.max(0, start ?? Math.max(0, lastIndex - 40));
+    const x1 = xOf(a) ?? x0;
+    const x2 = xLast;
+    const y1 = yOf(high), y2 = yOf(low);
+    if (y1 == null || y2 == null) return null;
+    return <g><rect x={Math.min(x1,x2)} y={Math.min(y1,y2)} width={Math.abs(x2-x1)} height={Math.abs(y2-y1)} className={cls}/>{label(Math.min(x1,x2)+6, Math.min(y1,y2)+18, title, cls+"-label")}</g>;
+  };
+
+  const eventLines = mode !== "elliott" ? smc.events.slice(-8).map((e: any, i: number) => {
+    const idx = e.index ?? e.at ?? lastIndex;
+    const x = xOf(idx);
+    const y = yOf(e.price);
+    if (x == null || y == null) return null;
+    return <g key={"event"+i}><line x1={x} x2={x} y1={0} y2={height} className={e.type === "CHOCH" ? "choch-line" : "bos-line"}/>{label(x + 6, y, e.type, e.type === "CHOCH" ? "choch-label" : "bos-label")}</g>;
+  }) : null;
+
+  const pivotLabels = mode !== "elliott" ? smc.pivots.slice(-12).map((p: any, i: number) => {
+    const x = xOf(p.index), y = yOf(p.price);
+    return x == null || y == null ? null : <g key={"pivot"+i}>{label(x, y, p.label, "pivot-label")}</g>;
+  }) : null;
+
+  const obZones = mode !== "elliott" ? smc.orderBlocks.slice(-4).map((o: any, i: number) =>
+    zone(o.low, o.high, o.index ?? o.startIndex, o.type === "bullish" ? "ob-bull" : "ob-bear", "OB")
+  ) : null;
+
+  const fvgZones = mode !== "elliott" ? smc.fvgs.slice(-5).map((z: any, i: number) =>
+    zone(z.low, z.high, z.index ?? z.startIndex ?? z.createdAt, "fvg-zone", z.filled ? "FVG ✓" : "FVG")
+  ) : null;
+
+  const liq = mode !== "elliott" ? [
+    ...smc.liquidityHighs.slice(-4).map((p: any) => ({...p, t:"EQH/LQH"})),
+    ...smc.liquidityLows.slice(-4).map((p: any) => ({...p, t:"EQL/LQL"}))
+  ].map((p: any, i: number) => {
+    const x1 = xOf(p.index ?? Math.max(0,lastIndex-80)) ?? x0;
+    const y = yOf(p.price);
+    return y == null ? null : <g key={"liq"+i}><line x1={x1} x2={xLast} y1={y} y2={y} className="liquidity-line"/>{label(x1+6,y,p.t,"liquidity-label")}</g>;
+  }) : null;
+
+  const sweeps = mode !== "elliott" ? smc.sweeps.slice(-8).map((s: any, i: number) => {
+    const x=xOf(s.index), y=yOf(s.price ?? (s.type==="low"?candles[s.index]?.low:candles[s.index]?.high));
+    return x==null||y==null?null:<g key={"sweep"+i}><path d={s.type==="low" ? `M ${x-7} ${y+9} L ${x} ${y} L ${x+7} ${y+9}` : `M ${x-7} ${y-9} L ${x} ${y} L ${x+7} ${y-9}`} className="sweep-mark"/>{label(x+7,y,"SWEEP","sweep-label")}</g>;
+  }) : null;
+
+  const tradeLevels = mode !== "elliott" ? (() => {
+    const out:any[]=[];
+    if (smc.entryZone) {
+      out.push(zone(smc.entryZone.low, smc.entryZone.high, Math.max(0,lastIndex-20), "entry-zone", "ENTRY"));
+    }
+    if (smc.stop != null) {
+      const y=yOf(smc.stop); if(y!=null) out.push(<g key="sl"><line x1={x0} x2={xLast} y1={y} y2={y} className="sl-line"/>{label(xLast-52,y,"SL","sl-label")}</g>);
+    }
+    (smc.targets||[]).slice(0,4).forEach((p:number,i:number)=>{const y=yOf(p);if(y!=null)out.push(<g key={"tp"+i}><line x1={xLast-80} x2={xLast} y1={y} y2={y} className="tp-line"/>{label(xLast-42,y,`TP${i+1}`,"tp-label")}</g>)});
+    return out;
+  })() : null;
+
+  const wave = mode !== "smc" && elliott.primary?.points?.map((p:any,i:number) => {
+    const x=xOf(p.index), y=yOf(p.price); if(x==null||y==null)return null;
+    const next=elliott.primary.points[i+1]; const nx=next?xOf(next.index):null, ny=next?yOf(next.price):null;
+    return <g key={"wave"+i}>{nx!=null&&ny!=null?<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>:<></>}{label(x,y,p.label,"wave-label")}</g>;
+  });
+
+  return <svg key={tick} className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+    {fvgZones}{obZones}{liq}{eventLines}{pivotLabels}{sweeps}{tradeLevels}{wave}
+  </svg>;
 }
 
 function MetricCard({ title, children }: { title: string; children: React.ReactNode }) {
