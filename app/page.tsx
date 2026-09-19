@@ -125,7 +125,8 @@ export default function Home(){
 }
 
 function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;mode:Mode;tick:number;layers:any}){
- const width=host?.clientWidth||0,height=host?.clientHeight||0;if(!chart||!series||candles.length<2||!width||!height)return null;
+ const width=host?.clientWidth||0,height=host?.clientHeight||0;
+ if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
  const ts=chart.timeScale(),lastIndex=candles.length-1,xOf=(i:number)=>i>=0&&i<candles.length?ts.timeToCoordinate(Math.floor(candles[i].time/1000) as any):null,yOf=(p:number)=>series.priceToCoordinate(p);
  const xLast=xOf(lastIndex)??width,x0=Math.max(0,xOf(0)??0);
  const text=(x:number|null,y:number|null,s:string,cls:string)=>x==null||y==null?null:<g><rect x={x-3} y={y-13} width={Math.max(32,s.length*5.9+8)} height="17" rx="3" className={cls}/><text x={x+1} y={y-1} className="chart-label">{s}</text></g>;
