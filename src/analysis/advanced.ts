@@ -127,6 +127,13 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
     positionSize=Math.min(positionSize,maxNotional/entry);
     if(Number.isFinite(stepSize)&&stepSize>0)positionSize=Math.floor((positionSize/stepSize)+1e-12)*stepSize;
   }
+  const finalNotional=entry*positionSize;
+  if(positionSize<Math.max(0,minQty)){
+    return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Maximum notional cap leaves quantity below exchange minimum"};
+  }
+  if(Number.isFinite(minNotional)&&minNotional>0&&finalNotional<minNotional){
+    return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Maximum notional cap leaves notional below exchange minimum"};
+  }
   if(positionSize<=0||!Number.isFinite(positionSize)){
     return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Exchange size constraints leave no valid quantity"};
   }
