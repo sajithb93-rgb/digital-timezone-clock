@@ -20,6 +20,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300):Promise<Cand
 
 export default function Home(){
  const [mode,setMode]=useState<Mode>("smc"),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m");
+ const [theme,setTheme]=useState<"tradingview"|"cyber">("tradingview");
 
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
@@ -76,10 +77,11 @@ export default function Home(){
  const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest(runSMCBacktest(analysisCandles));else setBacktest(null)};
  const fmt=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
 
- return <main className="app-shell">
+ return <main className={`app-shell theme-${theme}`}>
+  <div className="terminal-chrome"><span>QUANTSTRUCTURE</span><i/> <b>MARKET ANALYSIS</b><em>LIVE</em></div>
   <header className="topbar"><div className="brand-block"><div className="brand">QUANT<span>STRUCTURE</span></div><div className="subtitle">Advanced SMC · Elliott · Order Flow · Risk Analytics</div></div>
    <div className="market-selector"><div className="selector-search"><span>⌕</span><input value={pairSearch} onChange={e=>setPairSearch(e.target.value.toUpperCase())} placeholder="Search symbol"/></div><select value={quoteFilter} onChange={e=>setQuoteFilter(e.target.value)}><option>USDT</option><option>USDC</option><option>BTC</option><option>FDUSD</option><option>ALL</option></select><select value={symbol} onChange={e=>setSymbol(e.target.value)}>{filtered.length?filtered.map(p=><option key={p.symbol}>{p.symbol}</option>):<option>{symbol}</option>}</select></div>
-   <div className="top-status"><span className="data-status"><i className={connected?"pulse live-dot":"live-dot"}/>{connected?"LIVE DATA":"CONNECTING"}</span><span className="source-badge">BINANCE</span></div>
+   <div className="top-status"><div className="theme-switch" aria-label="Theme"><button className={theme==="tradingview"?"active":""} onClick={()=>setTheme("tradingview")}>TV DARK</button><button className={theme==="cyber"?"active":""} onClick={()=>setTheme("cyber")}>CYBER</button></div><span className="data-status"><i className={connected?"pulse live-dot":"live-dot"}/>{connected?"LIVE DATA":"CONNECTING"}</span><span className="source-badge">BINANCE</span></div>
   </header>
 
   <section className="controlbar"><div className="instrument"><strong>{symbol}</strong><span>{interval}</span>{last&&<b>{fmt(last.close)}</b>}{last&&<em className={priceChange>=0?"positive":"negative"}>{priceChange>=0?"+":""}{priceChange.toFixed(2)}%</em>}</div>
@@ -92,7 +94,7 @@ export default function Home(){
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap" ref={chartWrapRef}><div className="chartarea" ref={chartRef}/>{chartReady&&<ChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail"><button title="Crosshair">⌖</button><button title="Trend line">╱</button><button title="Horizontal line">━</button><button title="Rectangle">□</button><button title="Fibonacci">F</button><span/><button title="Long setup">↗</button><button title="Short setup">↘</button></div><div className="chartarea" ref={chartRef}/>{chartReady&&<ChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span><span className="chart-tip">Live Binance spot data · overlays are analytical</span></div>
    </div>
 
