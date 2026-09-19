@@ -598,6 +598,27 @@ function ChartAnnotations({ chart, candles, smc, elliott, mode, tick }: { chart:
     zone(z.low, z.high, z.index ?? z.startIndex ?? z.createdAt, "fvg-zone", z.filled ? "FVG ✓" : "FVG")
   ) : null;
 
+  const fib = mode !== "smc" ? (() => {
+    const pts = elliott.primary?.points || [];
+    if (pts.length < 2) return null;
+    const a = pts[0], b = pts[pts.length - 1];
+    const hi = Math.max(a.price, b.price), lo = Math.min(a.price, b.price), range = hi - lo;
+    if (!range) return null;
+    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+    const start = Math.max(0, Math.min(a.index, b.index));
+    const x1 = xOf(start) ?? x0;
+    const x2 = xLast;
+    return <g>
+      {levels.map((r) => {
+        const price = b.price + (a.price - b.price) * r;
+        const y = yOf(price);
+        if (y == null) return null;
+        return <g key={"fib"+r}><line x1={x1} x2={x2} y1={y} y2={y} className="fib-line"/>
+          {label(x2 - 58, y, `${(r*100).toFixed(1)}% ${price.toFixed(2)}`, "fib-label")}</g>;
+      })}
+    </g>;
+  })() : null;
+
   const liq = mode !== "elliott" ? [
     ...smc.liquidityHighs.slice(-4).map((p: any) => ({...p, t:"EQH/LQH"})),
     ...smc.liquidityLows.slice(-4).map((p: any) => ({...p, t:"EQL/LQL"}))
@@ -631,7 +652,7 @@ function ChartAnnotations({ chart, candles, smc, elliott, mode, tick }: { chart:
   });
 
   return <svg key={tick} className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-    {fvgZones}{obZones}{liq}{eventLines}{pivotLabels}{sweeps}{tradeLevels}{wave}
+    {fvgZones}{obZones}{fib}{liq}{eventLines}{pivotLabels}{sweeps}{tradeLevels}{wave}
   </svg>;
 }
 
