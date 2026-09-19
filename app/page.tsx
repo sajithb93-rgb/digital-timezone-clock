@@ -17,7 +17,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300):Promise<Cand
  const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`);
  if(!r.ok)throw new Error(`Binance returned ${r.status}`);
  const rows=await r.json();
- return rows.map((x:any)=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5],takerBuyVolume:+x[9]}));
+ return rows.map((x:any)=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5],takerBuyVolume:+x[9],closed:+x[6] <= Date.now()}));
 }
 
 export default function Home(){
@@ -28,7 +28,7 @@ export default function Home(){
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true});
- const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]);
+ const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]);
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
@@ -50,13 +50,13 @@ export default function Home(){
   setCandles([]);setAnalysisCandles([]);setConnected(false);setRestConnected(false);setBacktest(null);setLoading(true);setError("");setDerivatives(null);
   const connect=()=>{if(stop)return;ws=new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
    ws.onopen=()=>setConnected(true);ws.onclose=()=>{setConnected(false);if(!stop)retry=setTimeout(connect,2500)};ws.onerror=()=>setConnected(false);
-   ws.onmessage=e=>{try{const k=JSON.parse(e.data).k;if(!k)return;const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V};setCandles(p=>{const a=[...p],l=a.at(-1);if(l?.time===c.time)a[a.length-1]=c;else a.push(c);return a.length>350?a.slice(-350):a})}catch{}};
+   ws.onmessage=e=>{try{const k=JSON.parse(e.data).k;if(!k)return;const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V,closed:!!k.x};setCandles(p=>{const a=[...p],l=a.at(-1);if(l?.time===c.time)a[a.length-1]=c;else a.push(c);return a.length>350?a.slice(-350):a})}catch{}};
   };
-  fetchKlines(symbol,interval,350).then(data=>{if(stop)return;setRestConnected(true);setCandles(data);setAnalysisCandles(data);setLoading(false);connect()}).catch(e=>{if(!stop){setRestConnected(false);setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
+  fetchKlines(symbol,interval,350).then(data=>{if(stop)return;setRestConnected(true);setCandles(data);setAnalysisCandles(data.filter(x=>x.closed!==false));setLoading(false);connect()}).catch(e=>{if(!stop){setRestConnected(false);setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
   return()=>{stop=true;if(retry)clearTimeout(retry);ws?.close()};
  },[symbol,interval]);
 
- useEffect(()=>{if(!candles.length)return;const id=window.setTimeout(()=>setAnalysisCandles(candles),750);return()=>window.clearTimeout(id)},[candles]);
+ useEffect(()=>{if(!candles.length)return;const id=window.setTimeout(()=>setAnalysisCandles(candles.filter(x=>x.closed!==false)),750);return()=>window.clearTimeout(id)},[candles]);
 
  useEffect(()=>{let stop=false;const load=async()=>{try{const [oi,pi,t]=await Promise.all([fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`),fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`),fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`)]);if(!oi.ok||!pi.ok||!t.ok)throw new Error();const [o,p,tt]=await Promise.all([oi.json(),pi.json(),t.json()]);if(!stop)setDerivatives({openInterest:o.openInterest,fundingRate:p.lastFundingRate,change24h:tt.priceChangePercent})}catch{if(!stop)setDerivatives(null)}};load();const id=window.setInterval(load,15000);return()=>{stop=true;clearInterval(id)}},[symbol]);
 
@@ -106,7 +106,7 @@ export default function Home(){
 
  const filtered=pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch)).slice(0,500);
  const reset=()=>{const c=chartObj.current;if(!c||!candles.length)return;c.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},toggle=(k:keyof typeof layers)=>setLayers(v=>({...v,[k]:!v[k]}));
- const lastAnalysisTime=analysisCandles.at(-1)?.time??0; const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest({...runSMCBacktest(analysisCandles,1,30,feeBps,slippageBps),symbol,interval,asOf:lastAnalysisTime,feeBps,slippageBps});else setBacktest(null)}; const backtestStale=!!backtest&&(backtest.symbol!==symbol||backtest.interval!==interval||backtest.asOf!==lastAnalysisTime||backtest.feeBps!==feeBps||backtest.slippageBps!==slippageBps);
+ const lastAnalysisTime=analysisCandles.at(-1)?.time??0; const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest({...runSMCBacktest(analysisCandles,riskR,maxHoldingCandles,feeBps,slippageBps),symbol,interval,asOf:lastAnalysisTime,riskR,maxHoldingCandles,feeBps,slippageBps});else setBacktest(null)}; const backtestStale=!!backtest&&(backtest.symbol!==symbol||backtest.interval!==interval||backtest.asOf!==lastAnalysisTime||backtest.riskR!==riskR||backtest.maxHoldingCandles!==maxHoldingCandles||backtest.feeBps!==feeBps||backtest.slippageBps!==slippageBps);
  const fmt=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
 
  return <main className={`app-shell theme-${theme}`}>
@@ -132,13 +132,13 @@ export default function Home(){
 
    <details className="more-tools"><summary>Market details <span>Regime · Flow · Confluence</span></summary><div className="metric-grid">
     <MetricCard title="MARKET REGIME"><Row k="State" v={regime.regime}/><Row k="Strength" v={regime.strength+"/100"}/><Row k="Range" v={regime.rangePercent.toFixed(2)+"%"}/><Row k="ATR" v={fmt(regime.atr)}/></MetricCard>
-    <MetricCard title="ORDER FLOW PROXY"><Row k="Pressure" v={flow.pressure}/><Row k="Delta" v={fmt(flow.delta)}/><Row k="Delta ratio" v={(flow.deltaRatio*100).toFixed(2)+"%"}/><Row k="Volume ratio" v={flow.volumeRatio.toFixed(2)+"×"}/></MetricCard>
+    <MetricCard title="KLINE TAKER FLOW"><Row k="Pressure" v={flow.pressure}/><Row k="Window delta" v={fmt(flow.delta)}/><Row k="Window delta ratio" v={(flow.deltaRatio*100).toFixed(2)+"%"}/><Row k="Volume ratio" v={flow.volumeRatio.toFixed(2)+"×"}/></MetricCard>
     <MetricCard title="CONFLUENCE"><ScoreRow label="Structure" value={conf.structure}/><ScoreRow label="Liquidity" value={conf.liquidity}/><ScoreRow label="Zones" value={conf.zones}/><ScoreRow label="Total" value={conf.total}/></MetricCard>
    </div>
 
    <div className="advanced-grid">
     <div className="panel-card"><div className="section-title">RISK PLANNER</div><div className="input-grid"><label>Account<input type="number" value={account} onChange={e=>setAccount(+e.target.value)}/></label><label>Risk %<input type="number" min=".1" max="10" step=".1" value={riskPercent} onChange={e=>setRiskPercent(+e.target.value)}/></label></div><div className="risk-output"><Row k="Risk amount" v={"$"+risk.riskAmount.toFixed(2)}/><Row k="Stop distance" v={fmt(risk.stopDistance)}/><Row k="Position size" v={risk.positionSize?fmt(risk.positionSize):"—"}/><Row k="Setup R:R" v={smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}/></div>{risk.reason!=="OK"&&<p className="muted-copy">Sizing check: {risk.reason}. Exchange quantity/notional filters are applied when available.</p>}<div className="risk-note">Position size is based on the selected account risk and entry/stop distance; leverage is not a profit guarantee.</div></div>
-    <div className="panel-card"><div className="section-title">SMC BACKTEST</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. Costs are per-side basis points; this remains a historical check, not a guarantee of future performance.</p><div className="input-grid"><label>Fee bps / side<input type="number" min="0" step=".1" value={feeBps} onChange={e=>setFeeBps(Math.max(0,+e.target.value||0))}/></label><label>Slippage bps / side<input type="number" min="0" step=".1" value={slippageBps} onChange={e=>setSlippageBps(Math.max(0,+e.target.value||0))}/></label></div><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<>{<p className="muted-copy">{backtestStale?"RESULT OUTDATED — RUN AGAIN":"RESULT UP TO DATE"} · {backtest.symbol} · {backtest.interval}</p>}<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/><Stat k="Open at end" v={backtest.openAtEnd}/></div></>}</div>
+    <div className="panel-card"><div className="section-title">SMC BACKTEST</div><p className="muted-copy">Uses closed candles only. Costs are per-side basis points; this remains a historical check, not a guarantee of future performance.</p><div className="input-grid"><label>Risk R / trade<input type="number" min=".1" step=".1" value={riskR} onChange={e=>setRiskR(Math.max(.1,+e.target.value||.1))}/></label><label>Max holding bars<input type="number" min="1" step="1" value={maxHoldingCandles} onChange={e=>setMaxHoldingCandles(Math.max(1,Math.floor(+e.target.value||1)))}/></label></div><div className="input-grid"><label>Fee bps / side<input type="number" min="0" step=".1" value={feeBps} onChange={e=>setFeeBps(Math.max(0,+e.target.value||0))}/></label><label>Slippage bps / side<input type="number" min="0" step=".1" value={slippageBps} onChange={e=>setSlippageBps(Math.max(0,+e.target.value||0))}/></label></div><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<>{<p className="muted-copy">{backtestStale?"RESULT OUTDATED — RUN AGAIN":"RESULT UP TO DATE"} · {backtest.symbol} · {backtest.interval}</p>}<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/><Stat k="Open at end" v={backtest.openAtEnd}/></div></>}</div>
    </div>
    </details>
   </div>
