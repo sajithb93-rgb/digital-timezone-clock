@@ -62,7 +62,7 @@ function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{return obs.filter(o=>o.miti
 function equalLevels(ps:Pivot[],tol:number){const out:Pivot[]=[];for(let i=0;i<ps.length;i++)if(ps.slice(0,i).some(x=>Math.abs(x.price-ps[i].price)<=tol))out.push(ps[i]);return out}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
- const empty:SMCResult={trend:"Neutral",pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
+ const empty:SMCResult={trend:"Neutral",pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
  if(c.length<25)return empty;
  const a=atr(c),ps=labelPivots(pivots(c,3)),internal=labelPivots(pivots(c,1)),events:StructureEvent[]=[];let structure:"bullish"|"bearish"|null=null;let brokenH=-1,brokenL=-1;
  for(let i=0;i<c.length;i++){
@@ -79,7 +79,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  for(const p of [...liquidityHighs.slice(-6),...liquidityLows.slice(-6)]){
   for(let j=p.index+1;j<c.length;j++){const hit=p.type==="H"?c[j].high>p.price&&c[j].close<p.price:c[j].low<p.price&&c[j].close>p.price;if(hit){sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(c,j,a)>=.7});break}}
  }
- const r=range(c),mid=(r.hi+r.lo)/2,last=c[c.length-1],trend:last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral",pd:last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
+ const r=range(c),mid=(r.hi+r.lo)/2,last=c[c.length-1],volBase=c.slice(-21,-1).reduce((s,x)=>s+x.volume,0)/Math.max(1,c.slice(-21,-1).length),volumeRatio=last.volume/Math.max(volBase,.0000001),vwap=c.slice(-60).reduce((s,x)=>s+x.close*x.volume,0)/Math.max(c.slice(-60).reduce((s,x)=>s+x.volume,0),.0000001),trend:last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral",pd:last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
  const direction=trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null;
  const ob=direction?[...obs].reverse().find(x=>x.type===direction&&!x.mitigated):undefined;
  const fvg=direction?[...fvgs].reverse().find(x=>x.type===direction&&!x.filled):undefined;
@@ -99,7 +99,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const score=clamp(35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0));
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
  const setup:Setup={direction:direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT",entry,stop,targets,rr,confidence:score,confirmations};
- return{trend,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
+ return{trend,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
 }
 
 function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
