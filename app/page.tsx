@@ -605,6 +605,7 @@ function ChartAnnotations({ chart, candles, smc, elliott, mode, tick }: { chart:
     const hi = Math.max(a.price, b.price), lo = Math.min(a.price, b.price), range = hi - lo;
     if (!range) return null;
     const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+    const extensions = [1.272, 1.618, 2, 2.618];
     const start = Math.max(0, Math.min(a.index, b.index));
     const x1 = xOf(start) ?? x0;
     const x2 = xLast;
@@ -616,6 +617,15 @@ function ChartAnnotations({ chart, candles, smc, elliott, mode, tick }: { chart:
         return <g key={"fib"+r}><line x1={x1} x2={x2} y1={y} y2={y} className="fib-line"/>
           {label(x2 - 58, y, `${(r*100).toFixed(1)}% ${price.toFixed(2)}`, "fib-label")}</g>;
       })}
+      {extensions.map((r) => {
+        const price = b.price + (a.price - b.price) * r;
+        const y = yOf(price);
+        if (y == null) return null;
+        return <g key={"fibext"+r}><line x1={x1} x2={x2} y1={y} y2={y} className="fib-ext-line"/>
+          {label(x2 - 62, y, `${r.toFixed(3)} EXT ${price.toFixed(2)}`, "fib-ext-label")}</g>;
+      })}
+      <rect x={x1} y={yOf(hi) ?? 0} width={Math.max(0,x2-x1)} height={Math.abs((yOf(hi)??0)-(yOf(lo)??0))} className="fib-range"/>
+      <rect x={x1} y={Math.min(yOf(hi*0 + (hi-range*0.618)) ?? 0,yOf(hi-range*0.5) ?? 0)} width={Math.max(0,x2-x1)} height={Math.abs((yOf(hi-range*0.5)??0)-(yOf(hi-range*0.618)??0))} className="fib-golden-zone"/>
     </g>;
   })() : null;
 
