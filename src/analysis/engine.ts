@@ -112,7 +112,11 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const sweep=direction==="bullish"?sweeps.slice().reverse().find(s=>s.type==="low"):direction==="bearish"?sweeps.slice().reverse().find(s=>s.type==="high"):undefined;
  const zone=ob?{low:ob.low,high:ob.high,type:"entry" as const}:fvg?{low:fvg.low,high:fvg.high,type:"entry" as const}:null;
  const entry=zone?(zone.low+zone.high)/2:null;
- const stop=zone?(direction==="bullish"?Math.min(zone.low,r.lo)-a*.15:Math.max(zone.high,r.hi)+a*.15):null;
+ const priorLow=[...lows].reverse().find(p=>p.index<c.length-1&&p.price<zone!.low);
+ const priorHigh=[...highs].reverse().find(p=>p.index<c.length-1&&p.price>zone!.high);
+ const structuralLow=priorLow&&zone!.low-priorLow.price<=a*1.5?priorLow.price:zone?.low;
+ const structuralHigh=priorHigh&&priorHigh.price-zone!.high<=a*1.5?priorHigh.price:zone?.high;
+ const stop=zone?(direction==="bullish"?structuralLow!-a*.15:structuralHigh!+a*.15):null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
  const targets=entry!==null&&risk?[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x):[];
  const confirmations:string[]=[];
