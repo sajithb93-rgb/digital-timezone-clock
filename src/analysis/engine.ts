@@ -112,9 +112,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
  const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
- const ob=direction?[...obs].reverse().find(x=>x.type===direction&&!x.mitigated):undefined;
- const fvg=direction?[...fvgs].reverse().find(x=>x.type===direction&&!x.filled):undefined;
- const sweep=direction==="bullish"?sweeps.slice().reverse().find(s=>s.type==="low"):direction==="bearish"?sweeps.slice().reverse().find(s=>s.type==="high"):undefined;
+ const ob=rawDirection?[...obs].reverse().find(x=>x.type===rawDirection&&!x.mitigated):undefined;
+ const fvg=rawDirection?[...fvgs].reverse().find(x=>x.type===rawDirection&&!x.filled):undefined;
+ const sweep=rawDirection==="bullish"?sweeps.slice().reverse().find(s=>s.type==="low"):rawDirection==="bearish"?sweeps.slice().reverse().find(s=>s.type==="high"):undefined;
  const zone=rawDirection?(ob?{low:ob.low,high:ob.high,type:"entry" as const}:fvg?{low:fvg.low,high:fvg.high,type:"entry" as const}:null):null;
  const direction=zone?rawDirection:null;
  const entry=zone?(zone.low+zone.high)/2:null;
