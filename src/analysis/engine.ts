@@ -21,7 +21,8 @@ export type ElliottResult={
  fibLevels:{label:string;price:number}[]; channel:{a:number;b:number}|null;
  phase:string;score:number;confidence:number;
 };
-export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;frames:{interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string}[]};
+export type MTFFrame={interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string;available:boolean};
+export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;frames:MTFFrame[]};
 
 function trueRange(c:Candle[],i:number){if(i===0)return c[i].high-c[i].low;return Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close))}
 function atr(c:Candle[],n=14){return atrAt(c,c.length-1,n)}
@@ -168,9 +169,10 @@ function correctionCandidates(c:Candle[]):WaveCount[]{
 }
 export function analyzeElliott(c:Candle[]):ElliottResult{
  if(c.length<30)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Insufficient data",score:0,confidence:0};
- const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality);
- let primary=all[0]??null;
- let alternative=all[1]??null;
+ const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>{const ai=a.points.at(-1)?.index??-1,bi=b.points.at(-1)?.index??-1;return bi-ai||b.quality-a.quality;});
+ const qualified=all.filter(x=>x.quality>=60);
+ let primary=qualified[0]??null;
+ let alternative=all.find(x=>x!==primary)??null;
  const correction=correctionCandidates(c)[0]??null;
  if(!primary){
   const ps=pivots(c,2).slice(-6);
@@ -180,12 +182,15 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
    alternative={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation:ps[0].price,targets:[ps[5].price],quality:35,rules:["Fallback pivot-sequence candidate; strict Elliott rules not confirmed"]};
   }
  }
- if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"Correction candidate":"No strict impulse candidate",score:correction?.quality??0,confidence:correction?.quality??0};
+ if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"Correction candidate":"No strict impulse candidate",score:0,confidence:0};
  const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]),a=p[0],b=p[3],slope=(b-a)/Math.max(primary.points[3].index-primary.points[0].index,1);
  const hi=Math.max(p[0],p[5]),lo=Math.min(p[0],p[5]),range=hi-lo,dir=primary.direction==="bullish"?1:-1;
  const fibLevels=[["0%",p[5]],["23.6%",p[5]+(p[0]-p[5])*.236],["38.2%",p[5]+(p[0]-p[5])*.382],["50%",p[5]+(p[0]-p[5])*.5],["61.8%",p[5]+(p[0]-p[5])*.618],["78.6%",p[5]+(p[0]-p[5])*.786],["100%",p[0]],["127.2%",p[5]+dir*range*.272],["161.8%",p[5]+dir*range*.618],["261.8%",p[5]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
- return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel:{a,b:a+slope*(primary.points[5].index-primary.points[0].index)},phase:primary.quality>=78?"Impulse candidate · high rule conformance":primary.quality>=60?"Impulse candidate · moderate conformance":"Impulse candidate · low conformance",score:primary.quality,confidence:primary.quality};
+ return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel:{a,b:a+slope*(primary.points[5].index-primary.points[0].index)},phase:primary.quality>=78?"Impulse candidate · high rule conformance":primary.quality>=60?"Impulse candidate · moderate rule conformance":"Impulse candidate · low rule conformance",score:primary.quality,confidence:primary.quality};
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
- const rows=frames.map(f=>{const s=analyzeSMC(f.candles);return{interval:f.interval,trend:s.trend,score:s.score,structure:s.events.at(-1)?.type??"No event"}});const weighted=rows.reduce((sum,r,i)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*(i<2?1.4:1),0)/Math.max(1,rows.reduce((sum,r,i)=>sum+(i<2?1.4:1),0));return{trend:weighted>12?"Bullish":weighted<-12?"Bearish":"Neutral",score:clamp(50+weighted/2),frames:rows};
+ const rows=frames.map(f=>{const available=f.candles.length>=25;const s=available?analyzeSMC(f.candles):null;return{interval:f.interval,trend:s?.trend??"Neutral",score:s?.score??0,structure:s?.events.at(-1)?.type??(available?"No event":"UNAVAILABLE"),available};});
+ const usable=rows.filter(r=>r.available); const totalWeight=usable.reduce((sum,_,i)=>sum+(i<2?1.4:1),0);
+ const weighted=usable.reduce((sum,r,i)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*(i<2?1.4:1),0)/Math.max(1,totalWeight);
+ return{trend:usable.length?(weighted>12?"Bullish":weighted<-12?"Bearish":"Neutral"):"Neutral",score:usable.length?clamp(50+weighted/2):0,frames:rows};
 }
