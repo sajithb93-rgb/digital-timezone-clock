@@ -5,6 +5,7 @@ import "./globals.css";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
+import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 
 type Mode="smc"|"elliott"|"combined";
 type BinanceSymbol={symbol:string;baseAsset:string;quoteAsset:string;minQty:number;maxQty:number;stepSize:number;minNotional:number;maxNotional:number};
@@ -23,6 +24,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300):Promise<Cand
 export default function Home(){
  const [mode,setMode]=useState<Mode>("smc"),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m");
  const [theme,setTheme]=useState<"tradingview"|"cyber">("tradingview");
+ const [newsEvents,setNewsEvents]=useState<NewsEvent[]>([]),[newsNow,setNewsNow]=useState(Date.now()),[newsLoading,setNewsLoading]=useState(true);
 
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
@@ -39,7 +41,10 @@ export default function Home(){
  const conf=useMemo(()=>confluence(smc,flow,regime),[smc,flow,regime]);
  const last=candles.at(-1),prev=candles.at(-2),priceChange=last&&prev?(last.close-prev.close)/prev.close*100:0;
  const selectedPair=pairs.find(p=>p.symbol===symbol); const risk=useMemo(()=>riskPlan(account,riskPercent,smc.setup.entry,smc.stop,selectedPair,smc.setup.direction),[account,riskPercent,smc.setup.entry,smc.stop,selectedPair,smc.setup.direction]);
+ const newsRisk:NewsRisk=useMemo(()=>getNewsRisk(newsEvents,newsNow,30),[newsEvents,newsNow]);
  const combinedParts=[smc.score,elliott.score,mtf.score].filter(v=>v>0); const combined=combinedParts.length?Math.round(combinedParts.reduce((s,v)=>s+v,0)/combinedParts.length):0;
+
+ useEffect(()=>{ const controller=new AbortController(); const load=async()=>{setNewsLoading(true);try{setNewsEvents(await fetchNewsEvents(controller.signal))}catch{setNewsEvents([])}finally{if(!controller.signal.aborted)setNewsLoading(false)}}; load(); const refresh=window.setInterval(load,10*60*1000); const clock=window.setInterval(()=>setNewsNow(Date.now()),30*1000); return()=>{controller.abort();clearInterval(refresh);clearInterval(clock)}; },[]);
 
  useEffect(()=>{let stop=false;fetch("https://api.binance.com/api/v3/exchangeInfo").then(r=>r.json()).then(d=>{if(!stop)setPairs((d.symbols||[]).filter((x:any)=>x.status==="TRADING").map((x:any)=>{const filters=x.filters||[];const lot=filters.find((f:any)=>f.filterType==="LOT_SIZE")||filters.find((f:any)=>f.filterType==="MARKET_LOT_SIZE")||{};const notional=filters.find((f:any)=>f.filterType==="NOTIONAL")||filters.find((f:any)=>f.filterType==="MIN_NOTIONAL")||{};return{symbol:x.symbol,baseAsset:x.baseAsset,quoteAsset:x.quoteAsset,minQty:Number(lot.minQty)||0,maxQty:Number(lot.maxQty)||Infinity,stepSize:Number(lot.stepSize)||0,minNotional:Number(notional.minNotional)||Number(notional.notional)||0,maxNotional:Number(notional.maxNotional)||Infinity}}))}).catch(()=>{});return()=>{stop=true}},[]);
  useEffect(()=>{let stop=false;const load=()=>fetch("https://api.binance.com/api/v3/ticker/24hr").then(r=>r.json()).then((d:any[])=>{if(stop||!Array.isArray(d))return;setScanner(d.filter(x=>typeof x.symbol==="string"&&x.symbol.endsWith("USDT")&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:Number(x.priceChangePercent),quoteVolume:Number(x.quoteVolume)})).filter(x=>Number.isFinite(x.priceChangePercent)&&Number.isFinite(x.quoteVolume)).sort((a,b)=>Math.abs(b.priceChangePercent)-Math.abs(a.priceChangePercent)).slice(0,8))}).catch(()=>{});load();const id=window.setInterval(load,30000);return()=>{stop=true;clearInterval(id)}},[]);
@@ -123,6 +128,7 @@ export default function Home(){
 
   <section className="toolbar"><div className="toolbar-title">CHART</div>{([["structure","STRUCTURE"],["zones","FVG / OB"],["liquidity","LIQUIDITY"],["trade","SETUP LEVELS"]] as const).map(([k,l])=><button className={layers[k]?"layer-on":""} onClick={()=>toggle(k)} key={k}><i/>{l}</button>)}<button onClick={reset}>RESET VIEW</button><span className="toolbar-note">Closed-candle analysis only</span></section>
   {error&&<div className="alert">{error}</div>}
+  <div className={`news-filter news-${newsRisk.level.toLowerCase()}`}><div><span className="news-kicker">NEWS FILTER</span><strong>{newsRisk.level}</strong><span className="news-message">{newsLoading?"Checking calendar…":newsRisk.message}</span></div><b>{newsRisk.blocked?"TRADING BLOCKED":"TRADING ALLOWED"}</b></div>
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
@@ -145,7 +151,7 @@ export default function Home(){
 
   <aside className="analysis-column">
    <div className="panel-card analysis-card"><div className="panel-header compact"><div><span className="eyebrow">ENGINE OUTPUT</span><h2>{mode==="smc"?"SMC ANALYSIS":mode==="elliott"?"ELLIOTT WAVE":"COMBINED ANALYSIS"}</h2></div><span className="mode-badge">{mode.toUpperCase()}</span></div>
-    {(mode==="smc"||mode==="combined")&&<div className="section-block"><div className="section-title">SMART MONEY CONCEPT</div><Row k="Trend" v={smc.trend}/><Row k="Premium / Discount" v={smc.premiumDiscount}/><Row k="BOS / CHOCH" v={smc.events.at(-1)?.type||"None"}/><Row k="FVG / OB" v={smc.fvgs.filter(x=>!x.filled).length+" / "+smc.orderBlocks.filter(x=>!x.mitigated).length}/><Row k="Setup" v={smc.setup.direction}/><Row k="Confluence" v={conf.total+"/100"}/>{smc.setup.confirmations.length>0&&<div className="confirmation-list">{smc.setup.confirmations.slice(0,7).map(x=><div key={x}>✓ {x}</div>)}</div>}</div>}
+    {(mode==="smc"||mode==="combined")&&<div className="section-block"><div className="section-title">SMART MONEY CONCEPT</div>{newsRisk.blocked&&<div className="news-signal-warning">⚠ HIGH-IMPACT NEWS WINDOW — signal remains analytical; confirm after the news window before executing.</div>}<Row k="Trend" v={smc.trend}/><Row k="Premium / Discount" v={smc.premiumDiscount}/><Row k="BOS / CHOCH" v={smc.events.at(-1)?.type||"None"}/><Row k="FVG / OB" v={smc.fvgs.filter(x=>!x.filled).length+" / "+smc.orderBlocks.filter(x=>!x.mitigated).length}/><Row k="Setup" v={smc.setup.direction}/><Row k="Confluence" v={conf.total+"/100"}/>{smc.setup.confirmations.length>0&&<div className="confirmation-list">{smc.setup.confirmations.slice(0,7).map(x=><div key={x}>✓ {x}</div>)}</div>}</div>}
     {(mode==="elliott"||mode==="combined")&&<div className="section-block"><div className="section-title">ELLIOTT WAVE</div><Row k="Phase" v={elliott.phase}/><Row k="Primary" v={elliott.primary?elliott.primary.points.map(p=>p.label).join(" → "):"No candidate"}/><Row k="Direction" v={elliott.primary?.direction||"—"}/><Row k="Alternative" v={elliott.alternative?"Available":"None"}/><Row k="ABC" v={elliott.correction?"Candidate":"None"}/><Row k="Rule conformance" v={elliott.confidence+"/100"}/><Row k="Invalidation" v={fmt(elliott.primary?.invalidation)}/></div>}
     {mode==="combined"&&<div className="confluence-box"><div><span>INDEPENDENT CONFLUENCE</span><strong>{combined}<small>/100</small></strong></div><p>SMC, Elliott and MTF remain separate evidence streams. Combined is a heuristic summary, not a calibrated probability.</p></div>}
    </div>
