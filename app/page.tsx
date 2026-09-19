@@ -1,5 +1,7 @@
 "use client";
 
+import "./globals.css";
+
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
