@@ -51,10 +51,25 @@ function findFvgs(c:Candle[],a:number):FVG[]{
 }
 function findOrderBlocks(c:Candle[],a:number):OB[]{
  const out:OB[]=[];
- for(let i=1;i<c.length-2;i++){
-  const d=displacementAt(c,i+1,a);
-  if(c[i].close<c[i].open&&c[i+1].close>c[i].high&&d>=.7){let m:number|undefined;for(let j=i+1;j<c.length;j++)if(c[j].low<=c[i].open){m=j;break}out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:d})}
-  if(c[i].close>c[i].open&&c[i+1].close<c[i].low&&d>=.7){let m:number|undefined;for(let j=i+1;j<c.length;j++)if(c[j].high>=c[i].open){m=j;break}out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:d})}
+ for(let i=1;i<c.length-3;i++){
+  const bullishBase=c[i].close<c[i].open;
+  const bearishBase=c[i].close>c[i].open;
+  let bullBreak=-1,bearBreak=-1,bullStrength=0,bearStrength=0;
+  for(let k=1;k<=3&&i+k<c.length;k++){
+   const d=displacementAt(c,i+k,a);
+   if(bullishBase&&c[i+k].close>c[i].high&&d>=.55){bullBreak=i+k;bullStrength=d;break}
+   if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
+  }
+  if(bullBreak>0){
+   let m:number|undefined;
+   for(let j=bullBreak+1;j<c.length;j++)if(c[j].low<=c[i].open){m=j;break}
+   out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
+  }
+  if(bearBreak>0){
+   let m:number|undefined;
+   for(let j=bearBreak+1;j<c.length;j++)if(c[j].high>=c[i].open){m=j;break}
+   out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
+  }
  }
  return out;
 }
@@ -88,9 +103,10 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   const recentCandles=c.slice(-60);
   const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
   const vwap=recentCandles.reduce((s,x)=>s+x.close*x.volume,0)/Math.max(totalVolume,.0000001);
-  const trend=last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
-  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
- const direction=trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null;
+  const structureDirection=events.at(-1)?.direction??null;
+ const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
+ const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
+ const direction=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
  const ob=direction?[...obs].reverse().find(x=>x.type===direction&&!x.mitigated):undefined;
  const fvg=direction?[...fvgs].reverse().find(x=>x.type===direction&&!x.filled):undefined;
  const sweep=direction==="bullish"?sweeps.slice().reverse().find(s=>s.type==="low"):direction==="bearish"?sweeps.slice().reverse().find(s=>s.type==="high"):undefined;
@@ -139,7 +155,18 @@ function correctionCandidates(c:Candle[]):WaveCount[]{
 }
 export function analyzeElliott(c:Candle[]):ElliottResult{
  if(c.length<30)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Insufficient data",score:0,confidence:0};
- const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality),primary=all[0]??null,alternative=all[1]??null,correction=correctionCandidates(c)[0]??null;
+ const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality);
+ let primary=all[0]??null;
+ const alternative=all[1]??null;
+ const correction=correctionCandidates(c)[0]??null;
+ if(!primary){
+  const ps=pivots(c,2).slice(-6);
+  if(ps.length===6){
+   const bull=ps[0].type==="L"&&ps[1].type==="H";
+   const points=ps.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)}));
+   primary={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation:ps[0].price,targets:[ps[5].price],quality:35,rules:["Fallback pivot-sequence candidate; strict Elliott rules not confirmed"]};
+  }
+ }
  if(!primary)return{primary:null,alternative:null,correction,fib:null,fibLevels:[],channel:null,phase:correction?"Correction candidate":"No candidate",score:correction?.quality??0,confidence:correction?.quality??0};
  const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]),a=p[0],b=p[3],slope=(b-a)/Math.max(primary.points[3].index-primary.points[0].index,1);
  const hi=Math.max(p[0],p[5]),lo=Math.min(p[0],p[5]),range=hi-lo,dir=primary.direction==="bullish"?1:-1;
