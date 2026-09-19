@@ -112,3 +112,7 @@ body{background-image:radial-gradient(circle at 50% -30%,rgba(62,106,139,.16),tr
  .chart-wrap{height:440px}.chart-footer{overflow:auto}.chart-tip{margin-left:0}
  .setup-panel{width:178px;transform:none}.metric-grid{grid-template-columns:1fr}.advanced-grid{grid-template-columns:1fr}
 }
+
+
+/* Analysis overlay fixes */
+.chart-overlay .label-bg{fill:rgba(5,10,16,.82);stroke:rgba(74,96,120,.45);stroke-width:.7}.chart-overlay .chart-label{paint-order:stroke;stroke:#050a10;stroke-width:2.5px;stroke-linejoin:round}.chart-overlay .fvg-bull-label,.chart-overlay .ob-bull-label,.chart-overlay .entry-zone-label{fill:rgba(50,230,161,.95)}.chart-overlay .fvg-bear-label,.chart-overlay .ob-bear-label,.chart-overlay .sl-label{fill:rgba(255,95,115,.95)}.chart-overlay .liquidity-label,.chart-overlay .sweep-label{fill:rgba(240,189,91,.95)}.chart-overlay .tp-label{fill:rgba(92,169,255,.95)}.chart-overlay .wave-label,.chart-overlay .fib-label{fill:rgba(185,140,255,.95)}
