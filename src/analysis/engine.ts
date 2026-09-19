@@ -23,7 +23,7 @@ export type ElliottResult={
 };
 export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;frames:{interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string}[]};
 
-function trueRange(c:Candle,i:number){if(i===0)return c[i].high-c[i].low;return Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close))}
+function trueRange(c:Candle[],i:number){if(i===0)return c[i].high-c[i].low;return Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close))}
 function atr(c:Candle[],n=14){if(!c.length)return 0;const start=Math.max(0,c.length-n);return c.slice(start).reduce((v,_,i)=>v+trueRange(c,start+i),0)/Math.max(1,c.length-start)}
 function pivots(c:Candle[],w=3):Pivot[]{
  const out:Pivot[]=[];
@@ -58,7 +58,7 @@ function findOrderBlocks(c:Candle[],a:number):OB[]{
  }
  return out;
 }
-function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{return obs.filter(o=>o.mitigated&&o.mitigationIndex!==undefined).map(o=>({index:o.mitigationIndex!,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true})).filter(b=>{const k=c.slice(b.index+1);return b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high)})}
+function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{return obs.filter(o=>o.mitigated&&o.mitigationIndex!==undefined).map((o):Breaker=>({index:o.mitigationIndex!,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true})).filter(b=>{const k=c.slice(b.index+1);return b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high)})}
 function equalLevels(ps:Pivot[],tol:number){const out:Pivot[]=[];for(let i=0;i<ps.length;i++)if(ps.slice(0,i).some(x=>Math.abs(x.price-ps[i].price)<=tol))out.push(ps[i]);return out}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
