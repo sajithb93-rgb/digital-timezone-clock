@@ -190,27 +190,28 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     }
     if(entryBar<0){notTriggered++;continue;}
 
-    let result=0,exitPrice=entry,closed=false;
+    let result=0,exitPrice=entry,closed=false,exitIndex=-1;
     const tradeEnd=Math.min(c.length,entryBar+maxBars+1);
     for(let j=entryBar;j<tradeEnd;j++){
       const x=c[j];
       const stopHit=isBuy?x.low<=stop:x.high>=stop;
       const targetHit=isBuy?x.high>=target:x.low<=target;
       // Conservative intrabar ordering when both are touched is stop first.
-      if(stopHit){result=-riskR;exitPrice=stop;closed=true;break;}
-      if(targetHit){result=rewardR*riskR;exitPrice=target;closed=true;break;}
+      if(stopHit){result=-riskR;exitPrice=stop;closed=true;exitIndex=j;break;}
+      if(targetHit){result=rewardR*riskR;exitPrice=target;closed=true;exitIndex=j;break;}
     }
 
     if(!closed){
       // Do not mark an unfinished dataset tail as an expiry.
       if(tradeEnd>=c.length){openAtEnd++;nextAvailableIndex=c.length;continue;}
-      const exitIndex=tradeEnd-1;
+      exitIndex=tradeEnd-1;
       if(exitIndex<entryBar)continue;
       exitPrice=c[exitIndex].close;
       const moveR=(isBuy?exitPrice-entry:entry-exitPrice)/riskDistance;
       result=moveR*riskR;
       expired++;
     }
+    nextAvailableIndex=Math.max(nextAvailableIndex,exitIndex+1);
 
     const costPrice=(entry+Math.max(exitPrice,1e-12))*(feeBps+slippageBps)/10000;
     const tradeCostR=costPrice/riskDistance;
@@ -219,7 +220,6 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     costR+=tradeCostR;
     totalR+=netResult;
     trades++;
-    nextAvailableIndex=Math.max(nextAvailableIndex,tradeEnd);
     if(netResult>0){wins++;grossWinR+=netResult;}else{losses++;grossLossR+=Math.abs(netResult);}
     equity+=netResult;maxEquity=Math.max(maxEquity,equity);maxDD=Math.max(maxDD,maxEquity-equity);
   }
