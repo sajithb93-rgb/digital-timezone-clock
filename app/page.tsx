@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";\nimport type { ReactNode } from "react";
 import { CandlestickSeries, createChart } from "lightweight-charts";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 
@@ -196,7 +196,7 @@ function ChartAnnotations({chart,host,candles,smc,elliott,mode,tick,layers}:{cha
  const smcVisible=mode!=="elliott";
  const structures=smcVisible&&layers.structure?<>
   {smc.events.slice(-10).map((e:any,i:number)=>{const x=xOf(e.index),y=yOf(e.price);if(x==null||y==null)return null;const bull=e.direction==="bullish",ay=bull?Math.max(22,y-25):Math.min(height-22,y+25),d=bull?`M ${x-7} ${ay+7} L ${x} ${ay} L ${x+7} ${ay+7}`:`M ${x-7} ${ay-7} L ${x} ${ay} L ${x+7} ${ay-7}`;return <g key={"e"+i}><line x1={x} x2={x} y1={Math.min(y,ay)} y2={Math.max(y,ay)} className={e.type==="CHOCH"?"choch-line":"bos-line"}/><path d={d} className={e.type==="CHOCH"?"choch-arrow":"bos-arrow"}/>{label(x+8,ay,e.type+" · "+(bull?"BULL":"BEAR"),e.type==="CHOCH"?"choch-label":"bos-label")}</g>})}
-  {smc.pivots.slice(-14).map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price);return x==null||y==null?null?<g/>:<g key={"p"+i}>{label(x,y,p.label||"", "pivot-label")}</g>})}
+  {smc.pivots.slice(-14).map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price);return x==null||y==null?null:<g key={"p"+i}>{label(x,y,p.label||"", "pivot-label")}</g>})}
  </>:null;
 
  const zones=smcVisible&&layers.zones?<>
@@ -224,6 +224,6 @@ function ChartAnnotations({chart,host,candles,smc,elliott,mode,tick,layers}:{cha
  return <div className="chart-overlay-wrap"><svg key={tick} className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">{zones}{structures}{liquidity}{trade}{wave}{fib}</svg>{smcVisible&&<div className={`setup-panel ${setup.toLowerCase()}`}><div className="setup-head"><span>SMC SETUP</span><strong>{setup}</strong></div><div className="setup-grid"><span>Trend<b>{smc.trend}</b></span><span>Confidence<b>{smc.setup.confidence}/100</b></span><span>Entry<b>{entry!=null?entry.toFixed(4):"—"}</b></span><span>SL<b>{smc.stop!=null?smc.stop.toFixed(4):"—"}</b></span><span>TP1<b>{smc.targets?.[0]?.toFixed(4)||"—"}</b></span><span>R:R<b>{rr!=null?rr.toFixed(2)+":1":"—"}</b></span></div><div className="setup-foot">{smc.setup.confirmations.slice(0,2).join(" · ")||"Waiting for confluence"} </div></div>}</div>;
 }
 
-function MetricCard({title,children}:{title:string;children:React.ReactNode}){return <div className="panel-card metric-card"><div className="section-title">{title}</div>{children}</div>}
+function MetricCard({title,children}:{title:string;children:ReactNode}){return <div className="panel-card metric-card"><div className="section-title">{title}</div>{children}</div>}
 function Row({k,v}:{k:string;v:string}){return <div className="data-row"><span>{k}</span><b>{v}</b></div>}
 function ScoreRow({label,value}:{label:string;value:number}){return <div className="score-row"><div><span>{label}</span><b>{value}<small>/100</small></b></div><div className="score-track"><i style={{width:`${Math.max(0,Math.min(100,value))}%`}}/></div></div>}
