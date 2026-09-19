@@ -129,7 +129,7 @@ export default function Home(){
 function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;mode:Mode;tick:number;layers:any}){
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
- const ts=chart.timeScale(),lastIndex=candles.length-1,xOf=(i:number)=>i>=0&&i<candles.length?ts.timeToCoordinate(Math.floor(candles[i].time/1000) as any):null,yOf=(p:number)=>series.priceToCoordinate(p);
+ const ts=chart.timeScale(),lastIndex=candles.length-1,xOf=(i:number)=>{if(i<0||i>=candles.length)return null;try{const logical=ts.logicalToCoordinate?.(i);if(logical!=null)return logical;return ts.timeToCoordinate?.(Math.floor(candles[i].time/1000) as any)??null}catch{return null}},yOf=(p:number)=>{try{return series.priceToCoordinate(p)}catch{return null}};
  const xLast=xOf(lastIndex)??width,x0=0;
  const text=(x:number|null,y:number|null,s:string,cls:string)=>x==null||y==null?null:<g><rect x={x-3} y={y-13} width={Math.max(32,s.length*5.9+8)} height="17" rx="3" className="label-bg"/><text x={x+1} y={y-1} className={`chart-label ${cls}`}>{s}</text></g>;
  const zone=(low:number,high:number,start:number,end:number,cls:string,title:string)=>{const xa=xOf(start)??x0,xb=xOf(end)??xLast,y1=yOf(high),y2=yOf(low);if(y1==null||y2==null)return null;return <g><rect x={Math.min(xa,xb)} y={Math.min(y1,y2)} width={Math.max(2,Math.abs(xb-xa))} height={Math.max(2,Math.abs(y2-y1))} className={cls}/>{text(Math.min(xa,xb)+4,Math.min(y1,y2)+16,title,cls+"-label")}</g>};
