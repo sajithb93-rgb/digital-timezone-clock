@@ -74,7 +74,7 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
 }
 
 export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null){
-  if(!entry||!stop||entry===stop)return{riskAmount:account*riskPercent/100,positionSize:0,stopDistance:0};
+  if(!Number.isFinite(account)||account<=0||!Number.isFinite(riskPercent)||riskPercent<=0||!Number.isFinite(entry??NaN)||!Number.isFinite(stop??NaN)||entry===stop)return{riskAmount:Math.max(0,account*riskPercent/100),positionSize:0,stopDistance:0};
   const riskAmount=account*riskPercent/100,stopDistance=Math.abs(entry-stop);
   return{riskAmount,positionSize:riskAmount/stopDistance,stopDistance};
 }
@@ -85,7 +85,7 @@ export function runSMCBacktest(c:Candle[],riskR=1){
     const s=analyzeSMC(c.slice(0,i));
     if(s.setup.direction==="WAIT"||s.setup.entry==null||s.stop==null)continue;
     const entry=s.setup.entry,stop=s.stop,target=s.targets[0];
-    if(target==null)continue;
+    if(target==null||!Number.isFinite(entry)||!Number.isFinite(stop)||!Number.isFinite(target))continue;
     trades++;
     let result=0;
     for(let j=i;j<Math.min(c.length,i+30);j++){
@@ -98,7 +98,7 @@ export function runSMCBacktest(c:Candle[],riskR=1){
         if(x.low<=target){result=riskR;break}
       }
     }
-    if(result>0)wins++; else losses++;
+    if(result>0)wins++; else if(result<0)losses++; else { trades--; continue; }
     totalR+=result; equity+=result; maxEquity=Math.max(maxEquity,equity); maxDD=Math.max(maxDD,maxEquity-equity);
   }
   return{trades,wins,losses,winRate:trades?wins/trades*100:0,totalR,maxDrawdownR:maxDD,profitFactor:losses?wins/Math.max(losses,1):0};
