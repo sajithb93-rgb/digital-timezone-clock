@@ -7,7 +7,7 @@ import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
 
 type Mode="smc"|"elliott"|"combined";
-type BinanceSymbol={symbol:string;baseAsset:string;quoteAsset:string};
+type BinanceSymbol={symbol:string;baseAsset:string;quoteAsset:string;minQty:number;maxQty:number;stepSize:number;minNotional:number;maxNotional:number};
 type Derivatives={openInterest:string;fundingRate:string;change24h:string}|null;
 type Ticker={symbol:string,priceChangePercent:number,quoteVolume:number};
 const intervals=["1m","5m","15m","1h","4h","1d"] as const;
@@ -38,10 +38,10 @@ export default function Home(){
  const regime=useMemo(()=>detectRegime(analysisCandles),[analysisCandles]);
  const conf=useMemo(()=>confluence(smc,flow,regime),[smc,flow,regime]);
  const last=candles.at(-1),prev=candles.at(-2),priceChange=last&&prev?(last.close-prev.close)/prev.close*100:0;
- const risk=useMemo(()=>riskPlan(account,riskPercent,smc.setup.entry,smc.stop),[account,riskPercent,smc.setup.entry,smc.stop]);
+ const selectedPair=pairs.find(p=>p.symbol===symbol); const risk=useMemo(()=>riskPlan(account,riskPercent,smc.setup.entry,smc.stop,selectedPair),[account,riskPercent,smc.setup.entry,smc.stop,selectedPair]);
  const combined=Math.round((smc.score+elliott.score+mtf.score)/3);
 
- useEffect(()=>{let stop=false;fetch("https://api.binance.com/api/v3/exchangeInfo").then(r=>r.json()).then(d=>{if(!stop)setPairs((d.symbols||[]).filter((x:any)=>x.status==="TRADING").map((x:any)=>({symbol:x.symbol,baseAsset:x.baseAsset,quoteAsset:x.quoteAsset})))}).catch(()=>{});return()=>{stop=true}},[]);
+ useEffect(()=>{let stop=false;fetch("https://api.binance.com/api/v3/exchangeInfo").then(r=>r.json()).then(d=>{if(!stop)setPairs((d.symbols||[]).filter((x:any)=>x.status==="TRADING").map((x:any)=>{const filters=x.filters||[];const lot=filters.find((f:any)=>f.filterType==="LOT_SIZE")||filters.find((f:any)=>f.filterType==="MARKET_LOT_SIZE")||{};const notional=filters.find((f:any)=>f.filterType==="NOTIONAL")||filters.find((f:any)=>f.filterType==="MIN_NOTIONAL")||{};return{symbol:x.symbol,baseAsset:x.baseAsset,quoteAsset:x.quoteAsset,minQty:Number(lot.minQty)||0,maxQty:Number(lot.maxQty)||Infinity,stepSize:Number(lot.stepSize)||0,minNotional:Number(notional.minNotional)||Number(notional.notional)||0,maxNotional:Number(notional.maxNotional)||Infinity}}))}).catch(()=>{});return()=>{stop=true}},[]);
  useEffect(()=>{let stop=false;const load=()=>fetch("https://api.binance.com/api/v3/ticker/24hr").then(r=>r.json()).then((d:any[])=>{if(stop||!Array.isArray(d))return;setScanner(d.filter(x=>typeof x.symbol==="string"&&x.symbol.endsWith("USDT")&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:Number(x.priceChangePercent),quoteVolume:Number(x.quoteVolume)})).filter(x=>Number.isFinite(x.priceChangePercent)&&Number.isFinite(x.quoteVolume)).sort((a,b)=>Math.abs(b.priceChangePercent)-Math.abs(a.priceChangePercent)).slice(0,8))}).catch(()=>{});load();const id=window.setInterval(load,30000);return()=>{stop=true;clearInterval(id)}},[]);
  useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:await fetchKlines(symbol,tf,180)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol]);
 
@@ -137,7 +137,7 @@ export default function Home(){
    </div>
 
    <div className="advanced-grid">
-    <div className="panel-card"><div className="section-title">RISK PLANNER</div><div className="input-grid"><label>Account<input type="number" value={account} onChange={e=>setAccount(+e.target.value)}/></label><label>Risk %<input type="number" min=".1" max="10" step=".1" value={riskPercent} onChange={e=>setRiskPercent(+e.target.value)}/></label></div><div className="risk-output"><Row k="Risk amount" v={"$"+risk.riskAmount.toFixed(2)}/><Row k="Stop distance" v={fmt(risk.stopDistance)}/><Row k="Position size" v={fmt(risk.positionSize)}/><Row k="Setup R:R" v={smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}/></div><div className="risk-note">Position size is based on the selected account risk and entry/stop distance; leverage is not a profit guarantee.</div></div>
+    <div className="panel-card"><div className="section-title">RISK PLANNER</div><div className="input-grid"><label>Account<input type="number" value={account} onChange={e=>setAccount(+e.target.value)}/></label><label>Risk %<input type="number" min=".1" max="10" step=".1" value={riskPercent} onChange={e=>setRiskPercent(+e.target.value)}/></label></div><div className="risk-output"><Row k="Risk amount" v={"$"+risk.riskAmount.toFixed(2)}/><Row k="Stop distance" v={fmt(risk.stopDistance)}/><Row k="Position size" v={risk.positionSize?fmt(risk.positionSize):"—"}/><Row k="Setup R:R" v={smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}/></div>{risk.reason!=="OK"&&<p className="muted-copy">Sizing check: {risk.reason}. Exchange quantity/notional filters are applied when available.</p>}<div className="risk-note">Position size is based on the selected account risk and entry/stop distance; leverage is not a profit guarantee.</div></div>
     <div className="panel-card"><div className="section-title">SMC BACKTEST</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. This is a historical check, not a guarantee of future performance.</p><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<>{<p className="muted-copy">{backtestStale?"RESULT OUTDATED — RUN AGAIN":"RESULT UP TO DATE"} · {backtest.symbol} · {backtest.interval}</p>}<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/></div></>}</div>
    </div>
    </details>
