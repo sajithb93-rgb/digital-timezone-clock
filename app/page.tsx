@@ -153,7 +153,7 @@ export default function Home(){
      <div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={resetChart}>RESET VIEW</button></div></div>
      <div className="chart-wrap">
       <div className="chartarea" ref={chartRef}/>
-      {chartReady&&<ChartAnnotations chart={chartObj.current} host={chartRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>}
+      {chartReady&&<ChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>}
       {loading&&<div className="chart-loading"><span/>Loading market data…</div>}
      </div>
      <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span><span className="chart-tip">Wheel/pinch: zoom · drag: pan</span></div>
@@ -192,12 +192,12 @@ export default function Home(){
  </main>;
 }
 
-function ChartAnnotations({chart,host,candles,smc,elliott,mode,tick,layers}:{chart:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;mode:Mode;tick:number;layers:{structure:boolean;zones:boolean;liquidity:boolean;trade:boolean}}){
+function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;mode:Mode;tick:number;layers:{structure:boolean;zones:boolean;liquidity:boolean;trade:boolean}}){
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
- if(!chart||candles.length<2||!width||!height)return null;
- const ts=chart.timeScale(),ps=chart.priceScale("right"),lastIndex=candles.length-1;
+ if(!chart||!series||candles.length<2||!width||!height)return null;
+ const ts=chart.timeScale(),lastIndex=candles.length-1;
  const xOf=(i:number)=>i>=0&&i<candles.length?ts.timeToCoordinate(Math.floor(candles[i].time/1000) as any):null;
- const yOf=(p:number)=>ps.priceToCoordinate(p);
+ const yOf=(p:number)=>series.priceToCoordinate(p);
  const xLast=xOf(lastIndex)??width,x0=Math.max(0,xOf(0)??0);
  const label=(x:number|null,y:number|null,text:string,cls:string)=>x==null||y==null?null:<g><rect x={x-4} y={y-14} width={Math.max(36,text.length*6.1+10)} height="18" rx="4" className={cls}/><text x={x+1} y={y-2} className="chart-label">{text}</text></g>;
  const zone=(low:number,high:number,start?:number,end?:number,cls="fvg-bull",title="ZONE")=>{const a=Math.max(0,Math.min(lastIndex,start??lastIndex-40)),b=Math.max(a,Math.min(lastIndex,end??lastIndex)),xa=xOf(a)??x0,xb=xOf(b)??xLast,y1=yOf(high),y2=yOf(low);if(y1==null||y2==null)return null;return <g><rect x={Math.min(xa,xb)} y={Math.min(y1,y2)} width={Math.max(2,Math.abs(xb-xa))} height={Math.max(2,Math.abs(y2-y1))} className={cls}/>{label(Math.min(xa,xb)+5,Math.min(y1,y2)+18,title,cls+"-label")}</g>};
