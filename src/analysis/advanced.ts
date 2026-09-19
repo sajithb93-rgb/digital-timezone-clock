@@ -32,6 +32,7 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
   let buy=0,sell=0,cum=0;
   for(const x of c){
     const range=Math.max(x.high-x.low,1e-12);
+    // Candle-body-derived estimate only; this is not exchange aggressor-side volume.
     const bodyBias=Math.max(-1,Math.min(1,(x.close-x.open)/range));
     const buyShare=.5+bodyBias*.25;
     const b=x.volume*buyShare,s=x.volume-b;
@@ -76,43 +77,62 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
 export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null){
   const validAccount=Number.isFinite(account)&&account>0;
   const validRisk=Number.isFinite(riskPercent)&&riskPercent>0;
-  const validEntry=typeof entry==="number"&&Number.isFinite(entry);
-  const validStop=typeof stop==="number"&&Number.isFinite(stop);
+  const validEntry=typeof entry==="number"&&Number.isFinite(entry)&&entry>0;
+  const validStop=typeof stop==="number"&&Number.isFinite(stop)&&stop>0;
+  // Enforce a hard 10% ceiling even if the UI input constraints are bypassed.
+  const boundedRisk=validRisk?Math.min(riskPercent,10):0;
+  const riskAmount=validAccount?account*boundedRisk/100:0;
   if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop){
-    const riskAmount=validAccount&&validRisk?account*riskPercent/100:0;
     return{riskAmount,positionSize:0,stopDistance:0};
   }
-  const entryPrice=entry as number;
-  const stopPrice=stop as number;
-  const riskAmount=account*riskPercent/100;
-  const stopDistance=Math.abs(entryPrice-stopPrice);
+  const stopDistance=Math.abs(entry-stop);
+  if(!Number.isFinite(stopDistance)||stopDistance<=0)return{riskAmount,positionSize:0,stopDistance:0};
   return{riskAmount,positionSize:riskAmount/stopDistance,stopDistance};
 }
 
-export function runSMCBacktest(c:Candle[],riskR=1){
-  let trades=0,wins=0,losses=0,totalR=0,maxEquity=0,equity=0,maxDD=0;
+/**
+ * Conservative candle-based SMC backtest.
+ * A setup is counted only after its entry price is touched. If stop and target
+ * are both touched in one candle, stop is assumed first. Untouched/expired
+ * setups are excluded. Fees/slippage are not modeled; results are gross R.
+ */
+export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30){
+  let trades=0,wins=0,losses=0,totalR=0,grossWinR=0,grossLossR=0,maxEquity=0,equity=0,maxDD=0,expired=0,notTriggered=0;
+  if(!Number.isFinite(riskR)||riskR<=0||!Number.isFinite(maxHoldingCandles)||maxHoldingCandles<1){
+    return{trades,wins,losses,winRate:0,totalR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered};
+  }
   for(let i=80;i<c.length-3;i+=3){
     const s=analyzeSMC(c.slice(0,i));
     if(s.setup.direction==="WAIT"||s.setup.entry==null||s.stop==null)continue;
     const entry=s.setup.entry,stop=s.stop,target=s.targets[0];
-    if(target==null||!Number.isFinite(entry)||!Number.isFinite(stop)||!Number.isFinite(target))continue;
-    const entryPrice:number=entry;
-    const stopPrice:number=stop;
-    const targetPrice:number=target;
-    trades++;
-    let result=0;
-    for(let j=i;j<Math.min(c.length,i+30);j++){
-      const x=c[j];
-      if(s.setup.direction==="BUY"){
-        if(x.low<=stopPrice){result=-riskR;break}
-        if(x.high>=targetPrice){result=riskR;break}
-      }else{
-        if(x.high>=stopPrice){result=-riskR;break}
-        if(x.low<=targetPrice){result=riskR;break}
-      }
+    if(target==null||![entry,stop,target].every(Number.isFinite)||entry<=0||stop<=0||target<=0)continue;
+    const isBuy=s.setup.direction==="BUY";
+    // Reject geometrically invalid setups instead of silently testing them.
+    if((isBuy&&(stop>=entry||target<=entry))||(!isBuy&&(stop<=entry||target>=entry)))continue;
+    const riskDistance=Math.abs(entry-stop);
+    const rewardR=Math.abs(target-entry)/riskDistance;
+    if(!Number.isFinite(rewardR)||rewardR<=0)continue;
+
+    let entryBar=-1;
+    const horizon=Math.min(c.length,i+maxHoldingCandles);
+    for(let j=i;j<horizon;j++){
+      if(c[j].low<=entry&&c[j].high>=entry){entryBar=j;break;}
     }
-    if(result>0)wins++; else if(result<0)losses++; else { trades--; continue; }
-    totalR+=result; equity+=result; maxEquity=Math.max(maxEquity,equity); maxDD=Math.max(maxDD,maxEquity-equity);
+    if(entryBar<0){notTriggered++;continue;}
+
+    let result=0,closed=false;
+    for(let j=entryBar;j<horizon;j++){
+      const x=c[j];
+      const stopHit=isBuy?x.low<=stop:x.high>=stop;
+      const targetHit=isBuy?x.high>=target:x.low<=target;
+      // Conservative ordering, including entry candle ambiguity.
+      if(stopHit){result=-riskR;closed=true;break;}
+      if(targetHit){result=rewardR*riskR;closed=true;break;}
+    }
+    if(!closed){expired++;continue;}
+    trades++;
+    if(result>0){wins++;grossWinR+=result;}else{losses++;grossLossR+=Math.abs(result);}
+    totalR+=result;equity+=result;maxEquity=Math.max(maxEquity,equity);maxDD=Math.max(maxDD,maxEquity-equity);
   }
-  return{trades,wins,losses,winRate:trades?wins/trades*100:0,totalR,maxDrawdownR:maxDD,profitFactor:losses?wins/Math.max(losses,1):0};
+  return{trades,wins,losses,winRate:trades?wins/trades*100:0,totalR,maxDrawdownR:maxDD,profitFactor:grossLossR?grossWinR/grossLossR:(grossWinR>0?Infinity:0),expired,notTriggered};
 }
