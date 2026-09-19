@@ -22,6 +22,7 @@ export default function Home(){
  const [symbol,setSymbol]=useState("BTCUSDT");
  const [interval,setInterval]=useState<(typeof intervals)[number]>("15m");
  const [candles,setCandles]=useState<Candle[]>([]);
+ const [analysisCandles,setAnalysisCandles]=useState<Candle[]>([]);
  const [pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState("");
  const [quoteFilter,setQuoteFilter]=useState("USDT");
@@ -39,8 +40,8 @@ export default function Home(){
  const chartObj=useRef<any>(null);
  const seriesRef=useRef<any>(null);
 
- const smc=useMemo(()=>analyzeSMC(candles),[candles]);
- const elliott=useMemo(()=>analyzeElliott(candles),[candles]);
+ const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
+ const elliott=useMemo(()=>analyzeElliott(analysisCandles),[analysisCandles]);
  const mtf=useMemo(()=>analyzeMTF(mtfCandles),[mtfCandles]);
  const combined=Math.round((smc.score+elliott.score)/2);
  const last=candles.at(-1),previous=candles.at(-2);
@@ -68,7 +69,7 @@ export default function Home(){
  useEffect(()=>{
   candlesRef.current=[];
   let ws:WebSocket|undefined,stop=false,retry:ReturnType<typeof setTimeout>|undefined;
-  setCandles([]);setConnected(false);setLoading(true);setError("");
+  setCandles([]);setAnalysisCandles([]);setConnected(false);setLoading(true);setError("");
   const connect=()=>{
    if(stop)return;
    ws=new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
@@ -83,9 +84,16 @@ export default function Home(){
     }catch{}
    };
   };
-  fetchKlines(symbol,interval,250).then(data=>{if(stop)return;setCandles(data);setLoading(false);connect()}).catch(e=>{if(!stop){setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
+  fetchKlines(symbol,interval,250).then(data=>{if(stop)return;setCandles(data);setAnalysisCandles(data);setLoading(false);connect()}).catch(e=>{if(!stop){setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
   return()=>{stop=true;if(retry)clearTimeout(retry);ws?.close()};
  },[symbol,interval]);
+
+ // Analysis is intentionally throttled: the chart stays tick-by-tick while the heavier SMC/Elliott engines run at most once per 750ms.
+ useEffect(()=>{
+  if(!candles.length)return;
+  const id=window.setTimeout(()=>setAnalysisCandles(candles),750);
+  return()=>window.clearTimeout(id);
+ },[candles]);
 
  useEffect(()=>{
   let disposed=false;
