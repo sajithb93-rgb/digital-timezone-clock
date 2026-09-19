@@ -20,7 +20,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300):Promise<Cand
 
 export default function Home(){
  const [mode,setMode]=useState<Mode>("smc"),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m");
- const [theme,setTheme]=useState<"midnight"|"cyber">("midnight");
+
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
@@ -68,7 +68,7 @@ export default function Home(){
   }).catch(e=>{if(!disposed)setError(e instanceof Error?e.message:"Chart library failed")});
   return()=>{disposed=true;chartObj.current?.remove?.();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
  },[]);
- useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval]);
+ useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval,candles.length]);
  useEffect(()=>{const s=seriesRef.current,l=candles.at(-1);if(!chartReady||!s||!l)return;s.update({time:Math.floor(l.time/1000) as any,open:l.open,high:l.high,low:l.low,close:l.close})},[candles,chartReady]);
 
  const filtered=pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch)).slice(0,500);
@@ -76,10 +76,10 @@ export default function Home(){
  const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest(runSMCBacktest(analysisCandles));else setBacktest(null)};
  const fmt=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
 
- return <main className={`app-shell theme-${theme}`}>
+ return <main className="app-shell">
   <header className="topbar"><div className="brand-block"><div className="brand">QUANT<span>STRUCTURE</span></div><div className="subtitle">Advanced SMC · Elliott · Order Flow · Risk Analytics</div></div>
    <div className="market-selector"><div className="selector-search"><span>⌕</span><input value={pairSearch} onChange={e=>setPairSearch(e.target.value.toUpperCase())} placeholder="Search symbol"/></div><select value={quoteFilter} onChange={e=>setQuoteFilter(e.target.value)}><option>USDT</option><option>USDC</option><option>BTC</option><option>FDUSD</option><option>ALL</option></select><select value={symbol} onChange={e=>setSymbol(e.target.value)}>{filtered.length?filtered.map(p=><option key={p.symbol}>{p.symbol}</option>):<option>{symbol}</option>}</select></div>
-   <div className="theme-switch"><button className={theme==="midnight"?"active":""} onClick={()=>setTheme("midnight")}>MIDNIGHT</button><button className={theme==="cyber"?"active":""} onClick={()=>setTheme("cyber")}>CYBER</button></div><div className="top-status"><span className="data-status"><i className={connected?"pulse live-dot":"live-dot"}/>{connected?"LIVE DATA":"CONNECTING"}</span><span className="source-badge">BINANCE</span></div>
+   <div className="top-status"><span className="data-status"><i className={connected?"pulse live-dot":"live-dot"}/>{connected?"LIVE DATA":"CONNECTING"}</span><span className="source-badge">BINANCE</span></div>
   </header>
 
   <section className="controlbar"><div className="instrument"><strong>{symbol}</strong><span>{interval}</span>{last&&<b>{fmt(last.close)}</b>}{last&&<em className={priceChange>=0?"positive":"negative"}>{priceChange>=0?"+":""}{priceChange.toFixed(2)}%</em>}</div>
@@ -87,24 +87,24 @@ export default function Home(){
    <div className="analysis-tabs">{([["smc","SMC"],["elliott","ELLIOTT WAVE"],["combined","COMBINED"]] as const).map(([k,l])=><button className={mode===k?"active":""} onClick={()=>setMode(k)} key={k}>{l}</button>)}</div>
   </section>
 
-  <section className="toolbar"><div className="toolbar-title">LAYERS</div>{([["structure","STRUCTURE"],["zones","FVG / OB"],["liquidity","LIQUIDITY"],["trade","SETUP LEVELS"]] as const).map(([k,l])=><button className={layers[k]?"layer-on":""} onClick={()=>toggle(k)} key={k}><i/>{l}</button>)}<button onClick={reset}>RESET VIEW</button><span className="toolbar-note">Analysis only · no order execution</span></section>
+  <section className="toolbar"><div className="toolbar-title">CHART</div>{([["structure","STRUCTURE"],["zones","FVG / OB"],["liquidity","LIQUIDITY"],["trade","SETUP LEVELS"]] as const).map(([k,l])=><button className={layers[k]?"layer-on":""} onClick={()=>toggle(k)} key={k}><i/>{l}</button>)}<button onClick={reset}>RESET VIEW</button><span className="toolbar-note">Analysis only</span></section>
   {error&&<div className="alert">{error}</div>}
 
   <section className="terminal-grid"><div className="chart-column">
-   <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">LIVE PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
+   <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
     <div className="chart-wrap"><div className="chartarea" ref={chartRef}/>{chartReady&&<ChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span><span className="chart-tip">Live Binance spot data · overlays are analytical</span></div>
    </div>
 
-   <div className="metric-grid">
+   <details className="more-tools"><summary>Market details <span>Regime · Flow · Confluence</span></summary><div className="metric-grid">
     <MetricCard title="MARKET REGIME"><Row k="State" v={regime.regime}/><Row k="Strength" v={regime.strength+"/100"}/><Row k="Range" v={regime.rangePercent.toFixed(2)+"%"}/><Row k="ATR" v={fmt(regime.atr)}/></MetricCard>
     <MetricCard title="ORDER FLOW PROXY"><Row k="Pressure" v={flow.pressure}/><Row k="Delta" v={fmt(flow.delta)}/><Row k="Delta ratio" v={(flow.deltaRatio*100).toFixed(2)+"%"}/><Row k="Volume ratio" v={flow.volumeRatio.toFixed(2)+"×"}/></MetricCard>
     <MetricCard title="CONFLUENCE"><ScoreRow label="Structure" value={conf.structure}/><ScoreRow label="Liquidity" value={conf.liquidity}/><ScoreRow label="Zones" value={conf.zones}/><ScoreRow label="Total" value={conf.total}/></MetricCard>
    </div>
 
    <div className="advanced-grid">
-    <div className="panel-card"><div className="section-title">RISK & POSITION PLANNER</div><div className="input-grid"><label>Account<input type="number" value={account} onChange={e=>setAccount(+e.target.value)}/></label><label>Risk %<input type="number" min=".1" max="10" step=".1" value={riskPercent} onChange={e=>setRiskPercent(+e.target.value)}/></label></div><div className="risk-output"><Row k="Risk amount" v={"$"+risk.riskAmount.toFixed(2)}/><Row k="Stop distance" v={fmt(risk.stopDistance)}/><Row k="Position size" v={fmt(risk.positionSize)}/><Row k="Setup R:R" v={smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}/></div><div className="risk-note">Position size is based on the selected account risk and entry/stop distance; leverage is not a profit guarantee.</div></div>
-    <div className="panel-card"><div className="section-title">HISTORICAL SMC CHECK</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. This is a simple historical check, not a guarantee of future performance.</p><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/></div>}</div>
+    <div className="panel-card"><div className="section-title">RISK PLANNER</div><div className="input-grid"><label>Account<input type="number" value={account} onChange={e=>setAccount(+e.target.value)}/></label><label>Risk %<input type="number" min=".1" max="10" step=".1" value={riskPercent} onChange={e=>setRiskPercent(+e.target.value)}/></label></div><div className="risk-output"><Row k="Risk amount" v={"$"+risk.riskAmount.toFixed(2)}/><Row k="Stop distance" v={fmt(risk.stopDistance)}/><Row k="Position size" v={fmt(risk.positionSize)}/><Row k="Setup R:R" v={smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}/></div><div className="risk-note">Position size is based on the selected account risk and entry/stop distance; leverage is not a profit guarantee.</div></div>
+    <div className="panel-card"><div className="section-title">SMC BACKTEST</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. This is a simple historical check, not a guarantee of future performance.</p><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/></div>}</div>
    </div>
   </div>
 
@@ -115,10 +115,10 @@ export default function Home(){
     {mode==="combined"&&<div className="confluence-box"><div><span>INDEPENDENT CONFLUENCE</span><strong>{combined}<small>/100</small></strong></div><p>SMC, Elliott and MTF remain separate evidence streams. Combined is a summary only.</p></div>}
    </div>
 
-   <div className="panel-card mtf-card"><div className="section-title">MULTI-TIMEFRAME MATRIX</div>{mtf.frames.map(f=><div className="mtf-row" key={f.interval}><span>{f.interval}</span><b className={f.trend==="Bullish"?"positive":f.trend==="Bearish"?"negative":""}>{f.trend}</b><small>{f.structure} · {f.score}/100</small></div>)}</div>
-   <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES SNAPSHOT</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(): "—"}</b><small>USDⓈ-M</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&+derivatives.change24h>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
+   <details className="more-tools side-tools"><summary>More market data <span>MTF · Derivatives · Scanner · Status</span></summary><div className="panel-card mtf-card"><div className="section-title">MULTI-TIMEFRAME</div>{mtf.frames.map(f=><div className="mtf-row" key={f.interval}><span>{f.interval}</span><b className={f.trend==="Bullish"?"positive":f.trend==="Bearish"?"negative":""}>{f.trend}</b><small>{f.structure} · {f.score}/100</small></div>)}</div>
+   <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(): "—"}</b><small>USDⓈ-M</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&+derivatives.change24h>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
 
-   <div className="panel-card mtf-card"><div className="section-title">MARKET SCANNER · 24H</div>{scanner.map(x=><div className="scanner-row" key={x.symbol}><span>{x.symbol}</span><b className={x.priceChangePercent>=0?"positive":"negative"}>{x.priceChangePercent>=0?"+":""}{x.priceChangePercent.toFixed(2)}%</b><small>{(x.quoteVolume/1e6).toFixed(1)}M</small></div>)}</div>
+   <div className="panel-card mtf-card"><div className="section-title">MARKET SCANNER</div>{scanner.map(x=><div className="scanner-row" key={x.symbol}><span>{x.symbol}</span><b className={x.priceChangePercent>=0?"positive":"negative"}>{x.priceChangePercent>=0?"+":""}{x.priceChangePercent.toFixed(2)}%</b><small>{(x.quoteVolume/1e6).toFixed(1)}M</small></div>)}</div>
    <div className="panel-card feed-card"><div className="section-title">SYSTEM STATUS</div><div className="status-line"><span>Spot REST</span><b className="positive">CONNECTED</b></div><div className="status-line"><span>WebSocket</span><b className={connected?"positive":"negative"}>{connected?"LIVE":"RECONNECTING"}</b></div><div className="status-line"><span>SMC / Elliott</span><b className="positive">READY</b></div><div className="status-line"><span>Derivatives</span><b>{derivatives?"LIVE":"N/A"}</b></div><div className="status-line"><span>Execution</span><b>DISABLED</b></div></div>
   </aside></section>
   <footer className="footer"><span>QUANTSTRUCTURE · ADVANCED MARKET ANALYSIS WORKSTATION</span><span>Binance data · order-flow values are kline-derived proxies · analysis only</span></footer>
