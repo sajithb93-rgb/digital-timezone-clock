@@ -26,7 +26,7 @@ export default function Home(){
 
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
- const [connected,setConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
+ const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]);
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null);
@@ -47,12 +47,12 @@ export default function Home(){
 
  useEffect(()=>{
   let ws:WebSocket|undefined,stop=false,retry:ReturnType<typeof setTimeout>|undefined;
-  setCandles([]);setAnalysisCandles([]);setConnected(false);setLoading(true);setError("");setDerivatives(null);
+  setCandles([]);setAnalysisCandles([]);setConnected(false);setRestConnected(false);setBacktest(null);setLoading(true);setError("");setDerivatives(null);
   const connect=()=>{if(stop)return;ws=new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
    ws.onopen=()=>setConnected(true);ws.onclose=()=>{setConnected(false);if(!stop)retry=setTimeout(connect,2500)};ws.onerror=()=>setConnected(false);
    ws.onmessage=e=>{try{const k=JSON.parse(e.data).k;if(!k)return;const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V};setCandles(p=>{const a=[...p],l=a.at(-1);if(l?.time===c.time)a[a.length-1]=c;else a.push(c);return a.length>350?a.slice(-350):a})}catch{}};
   };
-  fetchKlines(symbol,interval,350).then(data=>{if(stop)return;setCandles(data);setAnalysisCandles(data);setLoading(false);connect()}).catch(e=>{if(!stop){setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
+  fetchKlines(symbol,interval,350).then(data=>{if(stop)return;setRestConnected(true);setCandles(data);setAnalysisCandles(data);setLoading(false);connect()}).catch(e=>{if(!stop){setRestConnected(false);setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
   return()=>{stop=true;if(retry)clearTimeout(retry);ws?.close()};
  },[symbol,interval]);
 
@@ -106,7 +106,7 @@ export default function Home(){
 
  const filtered=pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch)).slice(0,500);
  const reset=()=>{const c=chartObj.current;if(!c||!candles.length)return;c.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},toggle=(k:keyof typeof layers)=>setLayers(v=>({...v,[k]:!v[k]}));
- const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest(runSMCBacktest(analysisCandles));else setBacktest(null)};
+ const lastAnalysisTime=analysisCandles.at(-1)?.time??0; const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest({...runSMCBacktest(analysisCandles),symbol,interval,asOf:lastAnalysisTime});else setBacktest(null)}; const backtestStale=!!backtest&&(backtest.symbol!==symbol||backtest.interval!==interval||backtest.asOf!==lastAnalysisTime);
  const fmt=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
 
  return <main className={`app-shell theme-${theme}`}>
@@ -138,7 +138,7 @@ export default function Home(){
 
    <div className="advanced-grid">
     <div className="panel-card"><div className="section-title">RISK PLANNER</div><div className="input-grid"><label>Account<input type="number" value={account} onChange={e=>setAccount(+e.target.value)}/></label><label>Risk %<input type="number" min=".1" max="10" step=".1" value={riskPercent} onChange={e=>setRiskPercent(+e.target.value)}/></label></div><div className="risk-output"><Row k="Risk amount" v={"$"+risk.riskAmount.toFixed(2)}/><Row k="Stop distance" v={fmt(risk.stopDistance)}/><Row k="Position size" v={fmt(risk.positionSize)}/><Row k="Setup R:R" v={smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}/></div><div className="risk-note">Position size is based on the selected account risk and entry/stop distance; leverage is not a profit guarantee.</div></div>
-    <div className="panel-card"><div className="section-title">SMC BACKTEST</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. This is a simple historical check, not a guarantee of future performance.</p><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/></div>}</div>
+    <div className="panel-card"><div className="section-title">SMC BACKTEST</div><p className="muted-copy">Runs the current SMC rules over the loaded candles. This is a historical check, not a guarantee of future performance.</p><button className="primary-action" onClick={runBacktest} disabled={analysisCandles.length<84}>RUN BACKTEST</button>{backtest&&<>{<p className="muted-copy">{backtestStale?"RESULT OUTDATED — RUN AGAIN":"RESULT UP TO DATE"} · {backtest.symbol} · {backtest.interval}</p>}<div className="backtest-grid"><Stat k="Trades" v={backtest.trades}/><Stat k="Win rate" v={backtest.winRate.toFixed(1)+"%"}/><Stat k="Net R" v={backtest.totalR.toFixed(1)}/><Stat k="Profit factor" v={backtest.profitFactor.toFixed(2)}/><Stat k="Max DD" v={backtest.maxDrawdownR.toFixed(1)+"R"}/></div></>}</div>
    </div>
    </details>
   </div>
@@ -154,7 +154,7 @@ export default function Home(){
    <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(): "—"}</b><small>USDⓈ-M</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&+derivatives.change24h>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
 
    <div className="panel-card mtf-card"><div className="section-title">MARKET SCANNER</div>{scanner.map(x=><div className="scanner-row" key={x.symbol}><span>{x.symbol}</span><b className={x.priceChangePercent>=0?"positive":"negative"}>{x.priceChangePercent>=0?"+":""}{x.priceChangePercent.toFixed(2)}%</b><small>{(x.quoteVolume/1e6).toFixed(1)}M</small></div>)}</div>
-   <div className="panel-card feed-card"><div className="section-title">SYSTEM STATUS</div><div className="status-line"><span>Spot REST</span><b className="positive">CONNECTED</b></div><div className="status-line"><span>WebSocket</span><b className={connected?"positive":"negative"}>{connected?"LIVE":"RECONNECTING"}</b></div><div className="status-line"><span>SMC / Elliott</span><b className="positive">READY</b></div><div className="status-line"><span>Derivatives</span><b>{derivatives?"LIVE":"N/A"}</b></div><div className="status-line"><span>Execution</span><b>DISABLED</b></div></div></details>
+   <div className="panel-card feed-card"><div className="section-title">SYSTEM STATUS</div><div className="status-line"><span>Spot REST</span><b className={restConnected?"positive":"negative"}>{restConnected?"CONNECTED":loading?"CONNECTING":"OFFLINE"}</b></div><div className="status-line"><span>WebSocket</span><b className={connected?"positive":"negative"}>{connected?"LIVE":"RECONNECTING"}</b></div><div className="status-line"><span>SMC / Elliott</span><b className={analysisCandles.length>=25?"positive":"negative"}>{analysisCandles.length>=25?"READY":"WAITING"}</b></div><div className="status-line"><span>Derivatives</span><b>{derivatives?"LIVE":"N/A"}</b></div><div className="status-line"><span>Execution</span><b>DISABLED</b></div></div></details>
   </aside></section>
   <footer className="footer"><span>QUANTSTRUCTURE · ADVANCED MARKET ANALYSIS WORKSTATION</span><span>Binance data · order-flow values are kline-derived proxies · analysis only</span></footer>
  </main>;
