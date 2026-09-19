@@ -74,8 +74,18 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
 }
 
 export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null){
-  if(!Number.isFinite(account)||account<=0||!Number.isFinite(riskPercent)||riskPercent<=0||!Number.isFinite(entry??NaN)||!Number.isFinite(stop??NaN)||entry===stop)return{riskAmount:Math.max(0,account*riskPercent/100),positionSize:0,stopDistance:0};
-  const riskAmount=account*riskPercent/100,stopDistance=Math.abs(entry-stop);
+  const validAccount=Number.isFinite(account)&&account>0;
+  const validRisk=Number.isFinite(riskPercent)&&riskPercent>0;
+  const validEntry=typeof entry==="number"&&Number.isFinite(entry);
+  const validStop=typeof stop==="number"&&Number.isFinite(stop);
+  if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop){
+    const riskAmount=validAccount&&validRisk?account*riskPercent/100:0;
+    return{riskAmount,positionSize:0,stopDistance:0};
+  }
+  const entryPrice=entry as number;
+  const stopPrice=stop as number;
+  const riskAmount=account*riskPercent/100;
+  const stopDistance=Math.abs(entryPrice-stopPrice);
   return{riskAmount,positionSize:riskAmount/stopDistance,stopDistance};
 }
 
