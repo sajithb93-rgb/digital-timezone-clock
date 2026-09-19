@@ -20,6 +20,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300):Promise<Cand
 
 export default function Home(){
  const [mode,setMode]=useState<Mode>("smc"),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m");
+ const [theme,setTheme]=useState<"midnight"|"cyber">("midnight");
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
@@ -59,7 +60,7 @@ export default function Home(){
  useEffect(()=>{
   let disposed=false;if(!chartRef.current)return;const host=chartRef.current;
   import("lightweight-charts").then(({createChart,CandlestickSeries})=>{if(disposed||!chartRef.current)return;
-   const chart=createChart(host,{width:Math.max(320,host.clientWidth||900),height:Math.max(360,host.clientHeight||500),autoSize:false,layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},rightPriceScale:{borderColor:"#26303f",scaleMargins:{top:.08,bottom:.08}},timeScale:{borderColor:"#26303f",timeVisible:true,secondsVisible:false,rightOffset:6,barSpacing:8},crosshair:{mode:0},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
+   const chart=createChart(host,{width:Math.max(320,host.clientWidth||900),height:Math.max(360,host.clientHeight||500),autoSize:false,layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},rightPriceScale:{borderColor:"#26303f",scaleMargins:{top:.08,bottom:.08}},timeScale:{borderColor:"#26303f",timeVisible:true,secondsVisible:false,rightOffset:6,barSpacing:11,minBarSpacing:5},crosshair:{mode:0},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
    const series=chart.addSeries(CandlestickSeries,{upColor:"#36d399",downColor:"#f06b78",borderVisible:false,wickUpColor:"#36d399",wickDownColor:"#f06b78",priceLineVisible:true,lastValueVisible:true});
    chartObj.current=chart;seriesRef.current=series;setChartReady(true);const onViewport=()=>setViewportTick(v=>v+1);chart.timeScale().subscribeVisibleLogicalRangeChange(onViewport);
    const ro=new ResizeObserver(()=>{chart.resize(Math.max(320,host.clientWidth||900),Math.max(360,host.clientHeight||500));setViewportTick(v=>v+1)});ro.observe(host);
@@ -67,18 +68,18 @@ export default function Home(){
   }).catch(e=>{if(!disposed)setError(e instanceof Error?e.message:"Chart library failed")});
   return()=>{disposed=true;chartObj.current?.remove?.();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
  },[]);
- useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().fitContent()},[chartReady,symbol,interval]);
+ useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval]);
  useEffect(()=>{const s=seriesRef.current,l=candles.at(-1);if(!chartReady||!s||!l)return;s.update({time:Math.floor(l.time/1000) as any,open:l.open,high:l.high,low:l.low,close:l.close})},[candles,chartReady]);
 
  const filtered=pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch)).slice(0,500);
- const reset=()=>chartObj.current?.timeScale().fitContent(),toggle=(k:keyof typeof layers)=>setLayers(v=>({...v,[k]:!v[k]}));
+ const reset=()=>{const c=chartObj.current;if(!c||!candles.length)return;c.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},toggle=(k:keyof typeof layers)=>setLayers(v=>({...v,[k]:!v[k]}));
  const runBacktest=()=>{if(analysisCandles.length>=84)setBacktest(runSMCBacktest(analysisCandles));else setBacktest(null)};
  const fmt=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
 
- return <main className="app-shell">
+ return <main className={`app-shell theme-${theme}`}>
   <header className="topbar"><div className="brand-block"><div className="brand">QUANT<span>STRUCTURE</span></div><div className="subtitle">Advanced SMC · Elliott · Order Flow · Risk Analytics</div></div>
    <div className="market-selector"><div className="selector-search"><span>⌕</span><input value={pairSearch} onChange={e=>setPairSearch(e.target.value.toUpperCase())} placeholder="Search symbol"/></div><select value={quoteFilter} onChange={e=>setQuoteFilter(e.target.value)}><option>USDT</option><option>USDC</option><option>BTC</option><option>FDUSD</option><option>ALL</option></select><select value={symbol} onChange={e=>setSymbol(e.target.value)}>{filtered.length?filtered.map(p=><option key={p.symbol}>{p.symbol}</option>):<option>{symbol}</option>}</select></div>
-   <div className="top-status"><span className="data-status"><i className={connected?"pulse live-dot":"live-dot"}/>{connected?"LIVE DATA":"CONNECTING"}</span><span className="source-badge">BINANCE</span></div>
+   <div className="theme-switch"><button className={theme==="midnight"?"active":""} onClick={()=>setTheme("midnight")}>MIDNIGHT</button><button className={theme==="cyber"?"active":""} onClick={()=>setTheme("cyber")}>CYBER</button></div><div className="top-status"><span className="data-status"><i className={connected?"pulse live-dot":"live-dot"}/>{connected?"LIVE DATA":"CONNECTING"}</span><span className="source-badge">BINANCE</span></div>
   </header>
 
   <section className="controlbar"><div className="instrument"><strong>{symbol}</strong><span>{interval}</span>{last&&<b>{fmt(last.close)}</b>}{last&&<em className={priceChange>=0?"positive":"negative"}>{priceChange>=0?"+":""}{priceChange.toFixed(2)}%</em>}</div>
@@ -128,7 +129,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layer
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
  const ts=chart.timeScale(),lastIndex=candles.length-1,xOf=(i:number)=>i>=0&&i<candles.length?ts.timeToCoordinate(Math.floor(candles[i].time/1000) as any):null,yOf=(p:number)=>series.priceToCoordinate(p);
- const xLast=xOf(lastIndex)??width,x0=Math.max(0,xOf(0)??0);
+ const xLast=xOf(lastIndex)??width,xFirstVisible=ts.coordinateToLogical?.(0) as number|undefined,x0=Math.max(0,xOf(xFirstVisible!=null?Math.max(0,Math.floor(xFirstVisible)):0)??0);
  const text=(x:number|null,y:number|null,s:string,cls:string)=>x==null||y==null?null:<g><rect x={x-3} y={y-13} width={Math.max(32,s.length*5.9+8)} height="17" rx="3" className={cls}/><text x={x+1} y={y-1} className="chart-label">{s}</text></g>;
  const zone=(low:number,high:number,start:number,end:number,cls:string,title:string)=>{const xa=xOf(start)??x0,xb=xOf(end)??xLast,y1=yOf(high),y2=yOf(low);if(y1==null||y2==null)return null;return <g><rect x={Math.min(xa,xb)} y={Math.min(y1,y2)} width={Math.max(2,Math.abs(xb-xa))} height={Math.max(2,Math.abs(y2-y1))} className={cls}/>{text(Math.min(xa,xb)+4,Math.min(y1,y2)+16,title,cls+"-label")}</g>};
  const structure=layers.structure?<>{smc.events.slice(-8).map((e:any,i:number)=>{const x=xOf(e.index),y=yOf(e.price);return x==null||y==null?null:<g key={"e"+i}><line x1={x} x2={x} y1={y} y2={e.direction==="bullish"?Math.max(18,y-24):Math.min(height-18,y+24)} className={e.type==="CHOCH"?"choch-line":"bos-line"}/>{text(x+6,e.direction==="bullish"?Math.max(18,y-24):Math.min(height-18,y+24),e.type+" "+(e.direction==="bullish"?"BULL":"BEAR"),e.type==="CHOCH"?"choch-label":"bos-label")}</g>})}{smc.pivots.slice(-12).map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price);return x==null||y==null?null:<text key={"p"+i} x={x+3} y={y+(p.type==="H"?-6:12)} className="marker-text">{p.label}</text>})}</>:null;
