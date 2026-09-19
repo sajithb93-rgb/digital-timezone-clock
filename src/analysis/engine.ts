@@ -161,7 +161,7 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
  if(c.length<30)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Insufficient data",score:0,confidence:0};
  const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality);
  let primary=all[0]??null;
- const alternative=all[1]??null;
+ let alternative=all[1]??null;
  const correction=correctionCandidates(c)[0]??null;
  if(!primary){
   const ps=pivots(c,2).slice(-6);
