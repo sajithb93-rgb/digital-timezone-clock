@@ -115,8 +115,6 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     // without creating repeated entries while a setup remains unchanged.
     const eventIndex=s.events.at(-1)?.index??-1;
     const signalKey=[eventIndex,s.setup.direction,entry.toPrecision(12),stop.toPrecision(12),target.toPrecision(12)].join("|");
-    if(signalKey===lastSignalKey)continue;
-    lastSignalKey=signalKey;
 
     const riskDistance=Math.abs(entry-stop);
     const rewardR=Math.abs(target-entry)/riskDistance;
@@ -130,6 +128,8 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
       if(c[j].low<=entry&&c[j].high>=entry){entryBar=j;break;}
     }
     if(entryBar<0){notTriggered++;continue;}
+    if(signalKey===lastSignalKey)continue;
+    lastSignalKey=signalKey;
 
     let result=0,exitPrice=entry,closed=false;
     const tradeEnd=Math.min(c.length,entryBar+maxBars+1);
