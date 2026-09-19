@@ -149,8 +149,8 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
 /**
  * Conservative candle-based SMC backtest.
  * A setup is counted only after its entry price is touched. If stop and target
- * are both touched in one candle, stop is assumed first. Untouched/expired
- * Untriggered setups are counted once. Positions that remain open at the end
+ * are both touched in one candle, stop is assumed first. Untriggered setups
+ * are left pending, while positions that remain open at the end
  * of the dataset are reported separately. Fee/slippage basis points are optional.
  */
 export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,slippageBps=0){
@@ -173,9 +173,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     // without creating repeated entries while a setup remains unchanged.
     const eventIndex=s.events.at(-1)?.index??-1;
     const signalKey=[eventIndex,s.setup.direction,entry.toPrecision(12),stop.toPrecision(12),target.toPrecision(12)].join("|");
-    if(seenSignals.has(signalKey))continue;
-    seenSignals.add(signalKey);
-    if(i<nextAvailableIndex)continue;
+    if(seenSignals.has(signalKey)||i<nextAvailableIndex)continue;
 
     const riskDistance=Math.abs(entry-stop);
     const rewardR=Math.abs(target-entry)/riskDistance;
@@ -188,7 +186,8 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     for(let j=i;j<scanEnd;j++){
       if(c[j].low<=entry&&c[j].high>=entry){entryBar=j;break;}
     }
-    if(entryBar<0){notTriggered++;continue;}
+    if(entryBar<0){continue;}
+    seenSignals.add(signalKey);
 
     let result=0,exitPrice=entry,closed=false,exitIndex=-1;
     const tradeEnd=Math.min(c.length,entryBar+maxBars+1);
@@ -213,9 +212,15 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     }
     nextAvailableIndex=Math.max(nextAvailableIndex,exitIndex+1);
 
-    const costPrice=(entry+Math.max(exitPrice,1e-12))*(feeBps+slippageBps)/10000;
-    const tradeCostR=costPrice/riskDistance;
-    const netResult=result-tradeCostR;
+    const side=isBuy?1:-1;
+    const slip=Math.max(0,slippageBps)/10000;
+    const entryExec=entry*(1+side*slip);
+    const exitExec=Math.max(exitPrice,1e-12)*(1-side*slip);
+    const grossMoveR=(isBuy?exitExec-entryExec:entryExec-exitExec)/riskDistance*riskR;
+    const feeRate=Math.max(0,feeBps)/10000;
+    const tradeCostR=((entryExec+exitExec)*feeRate)/riskDistance;
+    const netResult=grossMoveR-tradeCostR;
+    result=grossMoveR;
     grossR+=result;
     costR+=tradeCostR;
     totalR+=netResult;
