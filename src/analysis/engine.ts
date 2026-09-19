@@ -1,5 +1,5 @@
 export type Candle={time:number;open:number;high:number;low:number;close:number;volume:number};
-export type Pivot={index:number;price:number;type:"H"|"L";label?:string;strength?:number};
+export type Pivot={index:number;price:number;type:"H"|"L";label?:string;strength?:number;confirmedAt?:number};
 export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"bearish";filled:boolean;fillIndex?:number;size?:number};
 export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mitigated:boolean;mitigationIndex?:number;strength?:number};
 export type Breaker={index:number;low:number;high:number;type:"bullish"|"bearish";active:boolean};
@@ -30,8 +30,8 @@ function pivots(c:Candle[],w=3):Pivot[]{
  for(let i=w;i<c.length-w;i++){
   let hi=true,lo=true,score=0;
   for(let j=i-w;j<=i+w;j++){if(j===i)continue;if(c[j].high>=c[i].high)hi=false;if(c[j].low<=c[i].low)lo=false}
-  if(hi){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].high,type:"H",strength:score/(2*w+1)})}
-  if(lo){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].low,type:"L",strength:score/(2*w+1)})}
+  if(hi){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].high,type:"H",strength:score/(2*w+1),confirmedAt:i+w})}
+  if(lo){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].low,type:"L",strength:score/(2*w+1),confirmedAt:i+w})}
  }
  return out.sort((a,b)=>a.index-b.index);
 }
@@ -81,8 +81,8 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  if(c.length<25)return empty;
  const a=atr(c),ps=labelPivots(pivots(c,3)),internal=labelPivots(pivots(c,1)),events:StructureEvent[]=[];let structure:"bullish"|"bearish"|null=null;let brokenH=-1,brokenL=-1;
  for(let i=0;i<c.length;i++){
-  const h=[...ps].reverse().find(p=>p.index<i&&p.type==="H"&&p.index!==brokenH);
-  const l=[...ps].reverse().find(p=>p.index<i&&p.type==="L"&&p.index!==brokenL);
+  const h=[...ps].reverse().find(p=>p.index<i&&p.confirmedAt!==undefined&&p.confirmedAt<=i&&p.type==="H"&&p.index!==brokenH);
+  const l=[...ps].reverse().find(p=>p.index<i&&p.confirmedAt!==undefined&&p.confirmedAt<=i&&p.type==="L"&&p.index!==brokenL);
   const disp=displacementAt(c,i,a)>=.7;
   if(h&&c[i].close>h.price){events.push({index:i,price:h.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});structure="bullish";brokenH=h.index}
   if(l&&c[i].close<l.price){events.push({index:i,price:l.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});structure="bearish";brokenL=l.index}
