@@ -102,7 +102,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   const volumeRatio=last.volume/Math.max(volBase,.0000001);
   const recentCandles=c.slice(-60);
   const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
-  const vwap=recentCandles.reduce((s,x)=>s+x.close*x.volume,0)/Math.max(totalVolume,.0000001);
+  const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
   const structureDirection=events.at(-1)?.direction??null;
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
@@ -112,11 +112,11 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const sweep=direction==="bullish"?sweeps.slice().reverse().find(s=>s.type==="low"):direction==="bearish"?sweeps.slice().reverse().find(s=>s.type==="high"):undefined;
  const zone=ob?{low:ob.low,high:ob.high,type:"entry" as const}:fvg?{low:fvg.low,high:fvg.high,type:"entry" as const}:null;
  const entry=zone?(zone.low+zone.high)/2:null;
- const priorLow=[...lows].reverse().find(p=>p.index<c.length-1&&p.price<zone!.low);
- const priorHigh=[...highs].reverse().find(p=>p.index<c.length-1&&p.price>zone!.high);
- const structuralLow=priorLow&&zone!.low-priorLow.price<=a*1.5?priorLow.price:zone?.low;
- const structuralHigh=priorHigh&&priorHigh.price-zone!.high<=a*1.5?priorHigh.price:zone?.high;
- const stop=zone?(direction==="bullish"?structuralLow!-a*.15:structuralHigh!+a*.15):null;
+ const priorLow=zone?[...lows].reverse().find(p=>p.index<c.length-1&&p.price<zone.low):undefined;
+ const priorHigh=zone?[...highs].reverse().find(p=>p.index<c.length-1&&p.price>zone.high):undefined;
+ const structuralLow=zone?(priorLow&&zone.low-priorLow.price<=a*1.5?priorLow.price:zone.low):null;
+ const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.5?priorHigh.price:zone.high):null;
+ const stop=zone?(direction==="bullish"&&structuralLow!==null?structuralLow-a*.15:direction==="bearish"&&structuralHigh!==null?structuralHigh+a*.15:null):null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
  const targets=entry!==null&&risk?[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x):[];
  const confirmations:string[]=[];
