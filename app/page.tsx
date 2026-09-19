@@ -61,15 +61,45 @@ export default function Home(){
  useEffect(()=>{let stop=false;const load=async()=>{try{const [oi,pi,t]=await Promise.all([fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`),fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`),fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`)]);if(!oi.ok||!pi.ok||!t.ok)throw new Error();const [o,p,tt]=await Promise.all([oi.json(),pi.json(),t.json()]);if(!stop)setDerivatives({openInterest:o.openInterest,fundingRate:p.lastFundingRate,change24h:tt.priceChangePercent})}catch{if(!stop)setDerivatives(null)}};load();const id=window.setInterval(load,15000);return()=>{stop=true;clearInterval(id)}},[symbol]);
 
  useEffect(()=>{
-  let disposed=false;if(!chartRef.current)return;const host=chartRef.current;
-  import("lightweight-charts").then(({createChart,CandlestickSeries})=>{if(disposed||!chartRef.current)return;
-   const chart=createChart(host,{width:Math.max(320,host.clientWidth||900),height:Math.max(360,host.clientHeight||500),autoSize:false,layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},rightPriceScale:{borderColor:"#26303f",scaleMargins:{top:.08,bottom:.08}},timeScale:{borderColor:"#26303f",timeVisible:true,secondsVisible:false,rightOffset:6,barSpacing:11,minBarSpacing:5},crosshair:{mode:0},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
-   const series=chart.addSeries(CandlestickSeries,{upColor:"#36d399",downColor:"#f06b78",borderVisible:false,wickUpColor:"#36d399",wickDownColor:"#f06b78",priceLineVisible:true,lastValueVisible:true});
-   chartObj.current=chart;seriesRef.current=series;setChartReady(true);const onViewport=()=>setViewportTick(v=>v+1);chart.timeScale().subscribeVisibleLogicalRangeChange(onViewport);
-   const ro=new ResizeObserver(()=>{chart.resize(Math.max(320,host.clientWidth||900),Math.max(360,host.clientHeight||500));setViewportTick(v=>v+1)});ro.observe(host);
-   return()=>{ro.disconnect();try{chart.timeScale().unsubscribeVisibleLogicalRangeChange(onViewport)}catch{};chart.remove();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
-  }).catch(e=>{if(!disposed)setError(e instanceof Error?e.message:"Chart library failed")});
-  return()=>{disposed=true;chartObj.current?.remove?.();chartObj.current=null;seriesRef.current=null;setChartReady(false)};
+  let disposed=false;
+  let chart:any=null;
+  let series:any=null;
+  let ro:ResizeObserver|undefined;
+  let onViewport:(()=>void)|undefined;
+  const host=chartRef.current;
+  if(!host)return;
+
+  import("lightweight-charts").then(({createChart,CandlestickSeries})=>{
+   if(disposed||!chartRef.current)return;
+   chart=createChart(host,{width:Math.max(320,host.clientWidth||900),height:Math.max(360,host.clientHeight||500),autoSize:false,layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},rightPriceScale:{borderColor:"#26303f",scaleMargins:{top:.08,bottom:.08}},timeScale:{borderColor:"#26303f",timeVisible:true,secondsVisible:false,rightOffset:6,barSpacing:11,minBarSpacing:5},crosshair:{mode:0},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
+   series=chart.addSeries(CandlestickSeries,{upColor:"#36d399",downColor:"#f06b78",borderVisible:false,wickUpColor:"#36d399",wickDownColor:"#f06b78",priceLineVisible:true,lastValueVisible:true});
+   chartObj.current=chart;
+   seriesRef.current=series;
+   setChartReady(true);
+
+   onViewport=()=>setViewportTick(v=>v+1);
+   chart.timeScale().subscribeVisibleLogicalRangeChange(onViewport);
+   ro=new ResizeObserver(()=>{
+    if(!chart)return;
+    chart.resize(Math.max(320,host.clientWidth||900),Math.max(360,host.clientHeight||500));
+    setViewportTick(v=>v+1);
+   });
+   ro.observe(host);
+  }).catch(e=>{
+   if(!disposed)setError(e instanceof Error?e.message:"Chart library failed");
+  });
+
+  return()=>{
+   disposed=true;
+   ro?.disconnect();
+   if(chart&&onViewport){
+    try{chart.timeScale().unsubscribeVisibleLogicalRangeChange(onViewport)}catch{}
+   }
+   chart?.remove?.();
+   if(chartObj.current===chart)chartObj.current=null;
+   if(seriesRef.current===series)seriesRef.current=null;
+   setChartReady(false);
+  };
  },[]);
  useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval,candles.length]);
  useEffect(()=>{const s=seriesRef.current,l=candles.at(-1);if(!chartReady||!s||!l)return;s.update({time:Math.floor(l.time/1000) as any,open:l.open,high:l.high,low:l.low,close:l.close})},[candles,chartReady]);
