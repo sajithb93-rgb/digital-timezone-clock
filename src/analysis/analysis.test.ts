@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, isSetupActive } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, isSetupActive, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 
 function candles(count:number, start=100):Candle[]{
@@ -54,6 +54,20 @@ describe("analysis regression",()=>{
     ]);
     expect(m.frames.find(x=>x.interval==="1h")?.available).toBe(false);
     expect(m.frames.find(x=>x.interval==="1h")?.structure).toBe("UNAVAILABLE");
+  });
+
+  it("enforces the three strict standard-impulse rules",()=>{
+    expect(validateImpulseWave([100,120,110,150,135,165],true).valid).toBe(true);
+    expect(validateImpulseWave([100,120,99,150,135,165],true).valid).toBe(false);
+    expect(validateImpulseWave([100,120,110,125,115,150],true).valid).toBe(false);
+    expect(validateImpulseWave([100,120,110,150,115,160],true).valid).toBe(false);
+  });
+
+  it("classifies a directional Wave 5 that fails to exceed Wave 3 as a truncation",()=>{
+    const v=validateImpulseWave([100,120,110,150,135,145],true);
+    expect(v.valid).toBe(true);
+    expect(v.w5BeyondW3).toBe(false);
+    expect(v.truncated).toBe(true);
   });
 
   it("never promotes a low-quality Elliott fallback to primary",()=>{
