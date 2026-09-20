@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, isSetupActive } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 
 function candles(count:number, start=100):Candle[]{
@@ -34,6 +34,12 @@ describe("analysis regression",()=>{
     expect(riskPlan(1000,1,100,105,{}, "BUY").valid).toBe(false);
     expect(riskPlan(1000,1,100,95,{}, "SELL").valid).toBe(false);
     expect(riskPlan(1000,1,100,95,{}, "BUY").valid).toBe(true);
+  });
+
+  it("marks an entry zone active only when the latest closed candle overlaps the zone",()=>{
+    const zone={low:100,high:105,type:"entry" as const};
+    expect(isSetupActive(zone,{time:1,open:106,high:108,low:106,close:107,volume:100,closed:true})).toBe(false);
+    expect(isSetupActive(zone,{time:2,open:106,high:107,low:103,close:104,volume:100,closed:true})).toBe(true);
   });
 
   it("does not emit a trade setup without a valid entry zone",()=>{
