@@ -14,7 +14,7 @@ export type SMCResult={
  vwap:number; volumeRatio:number; displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
 };
 export type WavePoint={index:number;price:number;label:string};
-export type WaveCount={points:WavePoint[];kind:"Impulse"|"Correction";direction:"bullish"|"bearish";invalidation:number;entry:number|null;targets:number[];quality:number;rules:string[];truncated?:boolean;strict?:boolean;};
+export type WaveCount={points:WavePoint[];kind:"Impulse"|"Diagonal"|"Correction";direction:"bullish"|"bearish";invalidation:number;entry:number|null;targets:number[];quality:number;rules:string[];truncated?:boolean;strict?:boolean;};
 export type ElliottResult={
  primary:WaveCount|null;alternative:WaveCount|null;correction:WaveCount|null;
  fib:{w2:number;w3:number;w4:number;w5:number}|null;
@@ -245,6 +245,57 @@ function correctionComplexity(c:Candle[],start:number,end:number):number{
  return pivots(c,1).filter(p=>p.index>start&&p.index<end).length;
 }
 
+export type DiagonalValidation={
+ w2Valid:boolean;
+ w3BeyondW1:boolean;
+ w4OverlapsW1:boolean;
+ w4DoesNotPassW2:boolean;
+ w5DirectionValid:boolean;
+ w5BeyondW3:boolean;
+ contracting:boolean;
+ expanding:boolean;
+ valid:boolean;
+};
+
+export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValidation{
+ if(prices.length<6)return{w2Valid:false,w3BeyondW1:false,w4OverlapsW1:false,w4DoesNotPassW2:false,w5DirectionValid:false,w5BeyondW3:false,contracting:false,expanding:false,valid:false};
+ const p=prices,w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);
+ const w2Valid=bull?p[2]>p[0]&&p[2]<p[1]:p[2]<p[0]&&p[2]>p[1];
+ const w3BeyondW1=bull?p[3]>p[1]:p[3]<p[1];
+ const w4OverlapsW1=bull?p[4]<=p[1]&&p[4]>p[2]:p[4]>=p[1]&&p[4]<p[2];
+ const w4DoesNotPassW2=bull?p[4]>p[2]:p[4]<p[2];
+ const w5DirectionValid=bull?p[5]>p[4]:p[5]<p[4];
+ const w5BeyondW3=bull?p[5]>p[3]:p[5]<p[3];
+ const contracting=w3<w1&&w4<w2&&w5<w3;
+ const expanding=w3>w1&&w4>w2&&w5>w3;
+ return{w2Valid,w3BeyondW1,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:w2Valid&&w3BeyondW1&&w4OverlapsW1&&w4DoesNotPassW2&&w5DirectionValid&&w5BeyondW3};
+}
+
+function diagonalCandidates(c:Candle[],bull:boolean):WaveCount[]{
+ const ps=pivots(c,2).slice(-22),out:WaveCount[]=[];
+ if(ps.length<6)return out;
+ for(let s=0;s<=ps.length-6;s++){
+  const q=ps.slice(s,s+6),types=bull?["L","H","L","H","L","H"]:["H","L","H","L","H","L"];
+  if(q.some((p,i)=>p.type!==types[i]))continue;
+  const p=q.map(x=>x.price),v=validateDiagonalWave(p,bull);
+  if(!v.valid)continue;
+  const w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);
+  const shapeScore=v.contracting||v.expanding?20:8;
+  const quality=clamp(55+shapeScore+(Math.abs(w3/w1-1)<=.5?5:0)+(Math.abs(w5/w3-1)<=.5?5:0));
+  const dir=bull?1:-1,risk=Math.abs(p[2]-p[0]);
+  out.push({
+   points:q.map((x,i)=>({index:x.index,price:x.price,label:i===0?"":String(i)})),
+   kind:"Diagonal",direction:bull?"bullish":"bearish",invalidation:p[0],entry:p[2],
+   targets:risk>0?[p[3],p[5],p[5]+dir*Math.max(w1,risk)*1.618]:[p[5]],
+   quality,rules:[
+    "Diagonal candidate: Wave 4 overlaps Wave 1",
+    v.contracting?"Contracting diagonal proportions supported":v.expanding?"Expanding diagonal proportions supported":"Diagonal proportions mixed"
+   ],strict:true
+  });
+ }
+ return out;
+}
+
 function internalImpulseSupport(c:Candle[],start:number,end:number,bull:boolean):number{
  const ps=pivots(c,1).filter(p=>p.index>start&&p.index<end);
  if(ps.length<3)return 0;
@@ -280,7 +331,7 @@ function correctionCandidates(c:Candle[]):WaveCount[]{
 }
 export function analyzeElliott(c:Candle[]):ElliottResult{
  if(c.length<30)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Insufficient data",score:0,confidence:0,setupState:"NONE",setupReason:"Insufficient closed-candle history"};
- const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
+ const all=[...impulseCandidates(c,true),...impulseCandidates(c,false),...diagonalCandidates(c,true),...diagonalCandidates(c,false)].sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
  const qualified=all.filter(x=>x.quality>=60);
  let primary=qualified[0]??null;
  let alternative=qualified.find(x=>x!==primary)??null;
@@ -306,7 +357,8 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
  const i2=primary.points[2].index,i3=primary.points[3].index,i4=primary.points[4].index;
  const channelSlope=(p[4]-p[2])/Math.max(i4-i2,1);
  const channel={a:p[3]-channelSlope*(i3-i2),b:p[3]};
- const phaseBase=primary.quality>=78?"1–5 impulse candidate · high rule conformance":primary.quality>=60?"1–5 impulse candidate · moderate rule conformance":"1–5 impulse candidate · low rule conformance";
+ const kindLabel=primary.kind==="Diagonal"?"diagonal":primary.kind==="Impulse"?"1–5 impulse":"ABC";
+ const phaseBase=primary.quality>=78?kindLabel+" candidate · high rule conformance":primary.quality>=60?kindLabel+" candidate · moderate rule conformance":kindLabel+" candidate · low rule conformance";
  const phase=primary.truncated?phaseBase+" · Wave 5 truncation candidate":phaseBase;
  const lastClose=c.at(-1)?.close??p[5];
  const invalidated=primary.direction==="bullish"?lastClose<=p[0]:lastClose>=p[0];
