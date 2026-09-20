@@ -20,7 +20,7 @@ export type ElliottResult={
  fib:{w2:number;w3:number;w4:number;w5:number}|null;
  fibLevels:{label:string;price:number}[]; channel:{a:number;b:number}|null;
  phase:string;score:number;confidence:number;
- setupState:"HISTORICAL"|"NONE";setupReason:string;
+ setupState:"HISTORICAL"|"INVALIDATED"|"NONE";setupReason:string;
 };
 export type MTFFrame={interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string;available:boolean;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;elliottPhase:string};
 export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;frames:MTFFrame[]};
@@ -280,7 +280,13 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
  const channel={a:p[3]-channelSlope*(i3-i2),b:p[3]};
  const phaseBase=primary.quality>=78?"1–5 impulse candidate · high rule conformance":primary.quality>=60?"1–5 impulse candidate · moderate rule conformance":"1–5 impulse candidate · low rule conformance";
  const phase=primary.truncated?phaseBase+" · Wave 5 truncation candidate":phaseBase;
- return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel,phase,score:primary.quality,confidence:primary.quality,setupState:"HISTORICAL",setupReason:"The primary 1–5 count is already complete; Entry is the historical Wave 2 termination, not a current executable setup"};
+ const lastClose=c.at(-1)?.close??p[5];
+ const invalidated=primary.direction==="bullish"?lastClose<=p[0]:lastClose>=p[0];
+ const setupState=invalidated?"INVALIDATED":"HISTORICAL";
+ const setupReason=invalidated
+  ?"Price has crossed the Wave 1 origin, so the completed count is invalidated in hindsight"
+  :"The primary 1–5 count is already complete; Wave 2/3/5 levels are historical, not a current executable setup";
+ return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel,phase,score:primary.quality,confidence:primary.quality,setupState,setupReason};
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
  const rows=frames.map(f=>{
@@ -296,11 +302,11 @@ export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResul
  const usable=rows.filter(r=>r.available);
  const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1;
  const totalWeight=usable.reduce((sum,r)=>sum+weight(r),0);
- const weightedSigned=usable.reduce((sum,r)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*weight(r),0)/Math.max(1,totalWeight);
+ const weightedCentered=usable.reduce((sum,r)=>sum+(r.score-50)*weight(r),0)/Math.max(1,totalWeight);
  const elliottSigned=usable.reduce((sum,r)=>sum+(r.elliottTrend==="Bullish"?r.elliottScore:r.elliottTrend==="Bearish"?-r.elliottScore:0)*weight(r),0)/Math.max(1,totalWeight);
  return{
-  trend:usable.length?(weightedSigned>50?"Bullish":weightedSigned<50?"Bearish":"Neutral"):"Neutral",
-  score:usable.length?clamp(weightedSigned):0,
+  trend:usable.length?(weightedCentered>12?"Bullish":weightedCentered<-12?"Bearish":"Neutral"):"Neutral",
+  score:usable.length?clamp(50+weightedCentered/2):0,
   elliottTrend:usable.length?(elliottSigned>12?"Bullish":elliottSigned<-12?"Bearish":"Neutral"):"Neutral",
   elliottScore:usable.length?clamp(50+elliottSigned/2):0,
   frames:rows
