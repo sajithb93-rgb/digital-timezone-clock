@@ -174,32 +174,58 @@ function impulseCandidate(c:Candle[],q:Pivot[],bull:boolean):WaveCount|null{
 }
 
 export function validateZigzag(prices:number[],bullishCorrection:boolean){
-  if(prices.length<3)return{valid:false,bRetracement:0,cProjection:0};
-  const [a,b,c]=prices,ab=abs(b-a),bc=abs(c-b);
-  if(ab<=0||bc<=0)return{valid:false,bRetracement:0,cProjection:0};
-  const bRetracement=abs(b-a)/ab, cProjection=bc/ab;
-  const structure=bullishCorrection?a<c&&b>a:a>c&&b<a;
+  if(prices.length<4)return{valid:false,bRetracement:0,cProjection:0};
+  const [x,a,b,c]=prices,xa=Math.abs(a-x),ab=Math.abs(b-a),bc=Math.abs(c-b);
+  if(xa<=0||ab<=0||bc<=0)return{valid:false,bRetracement:0,cProjection:0};
+  const bRetracement=ab/xa,cProjection=bc/ab;
+  const structure=bullishCorrection?c>b&&b>a:a>b&&b<a;
   const bWithinA=bullishCorrection?b<a:b>a;
-  return{valid:structure&&bWithinA&&inRange(bRetracement,.382,.786)&&cProjection>=.618,bRetracement,cProjection};
+  const valid=structure&&bWithinA&&bRetracement>=.382&&bRetracement<=.786&&cProjection>=.618;
+  return{valid,bRetracement,cProjection};
 }
 
 export function validateFlat(prices:number[],bullishCorrection:boolean){
-  if(prices.length<3)return{valid:false,bRetracement:0,cProjection:0};
-  const [a,b,c]=prices,ab=abs(b-a),bc=abs(c-b);
-  if(ab<=0||bc<=0)return{valid:false,bRetracement:0,cProjection:0};
-  const bRetracement=abs(b-a)/ab,cProjection=bc/ab;
-  const structure=bullishCorrection?c<=a:c>=a;
-  return{valid:structure&&inRange(bRetracement,.9,1.1)&&inRange(cProjection,.618,1.618),bRetracement,cProjection};
+  if(prices.length<4)return{valid:false,bRetracement:0,cProjection:0};
+  const [x,a,b,c]=prices,xa=Math.abs(a-x),ab=Math.abs(b-a),bc=Math.abs(c-b);
+  if(xa<=0||ab<=0||bc<=0)return{valid:false,bRetracement:0,cProjection:0};
+  const bRetracement=ab/xa,cProjection=bc/ab;
+  const directionStructure=bullishCorrection?c<a:c>a;
+  const valid=bRetracement>=.9&&bRetracement<=1.1&&cProjection>=.618&&cProjection<=1.618&&directionStructure;
+  return{valid,bRetracement,cProjection};
 }
 
 export function validateTriangle(prices:number[],bullish:boolean){
   if(prices.length<5)return{valid:false,contracting:false,expanding:false};
-  const seg=prices.slice(1).map((p,i)=>abs(p-prices[i]));
+  const seg=prices.slice(1).map((p,i)=>Math.abs(p-prices[i]));
   const contracting=seg[0]>seg[1]&&seg[1]>seg[2]&&seg[2]>seg[3];
   const expanding=seg[0]<seg[1]&&seg[1]<seg[2]&&seg[2]<seg[3];
-  const high=Math.max(...prices),low=Math.min(...prices),mid=(high+low)/2;
-  const directionBias=bullish?prices.at(-1)!>mid:prices.at(-1)!<mid;
-  return{valid:(contracting||expanding)&&directionBias,contracting,expanding};
+  const highs=prices.filter((_,i)=>i%2===0);
+  const lows=prices.filter((_,i)=>i%2===1);
+  const upperSlope=highs.length>=2?highs.at(-1)!-highs[0]:0;
+  const lowerSlope=lows.length>=2?lows.at(-1)!-lows[0]:0;
+  const converging=upperSlope<0&&lowerSlope>0 || upperSlope>0&&lowerSlope<0 || (Math.abs(upperSlope)<1e-12&&Math.abs(lowerSlope)<1e-12);
+  const valid=(contracting||expanding||converging)&&Math.abs(prices.at(-1)!-prices[0])<Math.abs(prices[1]-prices[0]);
+  return{valid,contracting,expanding};
+}
+
+function correctionCandidates(c:Candle[]){
+  const ps=alternatePivots(swingPivots(c,2)),out:(WaveCount & {pattern:ElliottPattern})[]=[];
+  for(let i=0;i<=ps.length-4;i++){
+    const q=ps.slice(i,i+4),bullish=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L",bearish=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H";
+    if(!bullish&&!bearish)continue;
+    const p=q.map(x=>x.price),isBullishCorrection=bearish,z=validateZigzag(p,isBullishCorrection),f=validateFlat(p,isBullishCorrection);
+    const abc=q.slice(1);
+    if(z.valid)out.push({points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction:isBullishCorrection?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[3].price],quality:80,rules:["A–B–C zigzag geometry","B retraces 38.2–78.6% of X–A","C reaches at least 61.8% of A–B"],strict:false,pattern:"Zigzag"});
+    else if(f.valid)out.push({points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction:isBullishCorrection?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[3].price],quality:74,rules:["A–B–C flat geometry","B retraces roughly 90–110% of X–A","C length is inside a common flat range"],strict:false,pattern:"Flat"});
+  }
+  for(let i=0;i<=ps.length-5;i++){
+    const q=ps.slice(i,i+5),bullish=q[0].type==="L"&&q[1].type==="H",bearish=q[0].type==="H"&&q[1].type==="L";
+    if(!bullish&&!bearish)continue;
+    const p=q.map(x=>x.price),tri=validateTriangle(p,bullish);
+    if(!tri.valid)continue;
+    out.push({points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C","D","E"][j]})),kind:"Correction",direction:bullish?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[4].price],quality:tri.contracting?82:68,rules:["A–B–C–D–E triangle candidate",tri.contracting?"Contracting triangle proportions detected":"Triangle boundary convergence detected"],strict:false,pattern:"Triangle"});
+  }
+  return out.sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
 }
 
 function correctionCandidates(c:Candle[]){
@@ -293,8 +319,8 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     r.candidateCount=action.length;
     r.correctionCandidates=corrections.length;
     r.phase=correction ? correction.pattern + " correction candidate" : "No qualified Elliott count";
-    r.pattern=correction?.pattern??"None";
-    r.correctionPattern=correction?.pattern??"None";
+    r.pattern=correction?.pattern??"Correction";
+    r.correctionPattern=(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Triangle")?correction.pattern:"None";
     r.activeWave=correction ? (String(correction.points.at(-1)?.label||"C") as AdvancedElliottResult["activeWave"]) : "None";
     return r;
   }
@@ -310,7 +336,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   const lastClose=c.at(-1)?.close??prices[5];
   const invalidated=primary.direction==="bullish"?lastClose<=prices[0]:lastClose>=prices[0];
   const setupState:ElliottCountState=invalidated?"INVALIDATED":"HISTORICAL";
-  const pattern:AdvancedElliottResult["pattern"]=primary.kind==="Impulse" ? "Impulse" : (primary.points[0].index<c.length*.45 ? "Leading Diagonal" : "Ending Diagonal");
+  const pattern:AdvancedElliottResult["pattern"]=primary.kind==="Impulse" ? "Impulse" : "Diagonal";
   const confidence=clamp(primary.quality-(nested3.score<45?8:0)+(nested5.score>=60?4:0));
   const channelSlope=(prices[4]-prices[2])/Math.max(primary.points[4].index-primary.points[2].index,1);
   const channel={a:prices[3]-channelSlope*(primary.points[3].index-primary.points[2].index),b:prices[3]};
@@ -331,6 +357,6 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     fibLevels,channel,phase,score:primary.quality,confidence,setupState,
     setupReason,pattern,degree,countState:setupState,activeWave:"Wave 5",
     candidateCount:action.length,correctionCandidates:corrections.length,nested,
-    correctionPattern:correction?.pattern??"None",engine:"ADVANCED_ELLIOTT_V2"
+    correctionPattern:(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Triangle")?correction.pattern:"None",engine:"ADVANCED_ELLIOTT_V2"
   };
 }
