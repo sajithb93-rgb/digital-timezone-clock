@@ -179,8 +179,15 @@ function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
   if(validation.w5BeyondW3){points+=6;rules.push("Wave 5 exceeds Wave 3")}
   else if(validation.truncated){points-=6;rules.push("Wave 5 truncation candidate")}
   else rules.push("Wave 5 direction invalid");
-  const alternatesDeep=(r2>=.5)!=(r4>=.5);
-  if(alternatesDeep){points+=6;rules.push("Wave 2 / 4 depth alternation")}else rules.push("Wave 2 / 4 depth similarity");
+  const w2Complexity=correctionComplexity(c,q[1].index,q[2].index);
+  const w4Complexity=correctionComplexity(c,q[3].index,q[4].index);
+  const depthAlternation=(r2>=.5)!=(r4>=.5);
+  const structureAlternation=(w2Complexity<=2)!=(w4Complexity<=2);
+  if(depthAlternation||structureAlternation){points+=6;rules.push("Wave 2 / 4 alternation supported by depth or structure")}
+  else rules.push("Wave 2 / 4 alternation not strongly supported");
+  const actionary=[w1,w3,w5],smallest=Math.min(...actionary),extendedCount=smallest>0?actionary.filter(x=>x/smallest>=1.618).length:3;
+  if(extendedCount<=2){points+=4;rules.push("Extension count is plausible")}
+  else{points-=4;rules.push("All three actionary waves appear extended — degree may be wrong")}
   const internal3=internalImpulseSupport(c,q[2].index,q[3].index,bull);
   if(internal3>=6){points+=6;rules.push("Wave 3 internal pivot structure supports impulse")}
   else if(internal3>0)rules.push("Wave 3 internal structure weak / partial");
@@ -232,6 +239,10 @@ export function validateImpulseWave(prices:number[],bull:boolean):ImpulseValidat
  const w5BeyondW3=bull?p[5]>p[3]:p[5]<p[3];
  const truncated=w5DirectionValid&&!w5BeyondW3;
  return{w2Valid,w3BeyondW1,w3NotShortest,w4Valid,w5DirectionValid,w5BeyondW3,truncated,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4Valid&&w5DirectionValid};
+}
+
+function correctionComplexity(c:Candle[],start:number,end:number):number{
+ return pivots(c,1).filter(p=>p.index>start&&p.index<end).length;
 }
 
 function internalImpulseSupport(c:Candle[],start:number,end:number,bull:boolean):number{
