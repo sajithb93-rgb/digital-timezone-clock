@@ -177,10 +177,12 @@ export function validateZigzag(prices:number[],bullishCorrection:boolean){
   if(prices.length<4)return{valid:false,bRetracement:0,cProjection:0};
   const [x,a,b,c]=prices,xa=Math.abs(a-x),ab=Math.abs(b-a),bc=Math.abs(c-b);
   if(xa<=0||ab<=0||bc<=0)return{valid:false,bRetracement:0,cProjection:0};
+  const aUp=a>x;
   const bRetracement=ab/xa,cProjection=bc/ab;
-  const structure=bullishCorrection?c>b&&b>a:a>b&&b<a;
-  const bWithinA=bullishCorrection?b<a:b>a;
-  const valid=structure&&bWithinA&&bRetracement>=.382&&bRetracement<=.786&&cProjection>=.618;
+  const bWithinXA=aUp ? b>x&&b<a : b<x&&b>a;
+  const cExtendsA=aUp ? c>a : c<a;
+  const direction=aUp ? "bullish" : "bearish";
+  const valid=direction===(bullishCorrection?"bullish":"bearish")&&bWithinXA&&cExtendsA&&bRetracement>=.382&&bRetracement<=.786&&cProjection>=.618;
   return{valid,bRetracement,cProjection};
 }
 
@@ -188,9 +190,11 @@ export function validateFlat(prices:number[],bullishCorrection:boolean){
   if(prices.length<4)return{valid:false,bRetracement:0,cProjection:0};
   const [x,a,b,c]=prices,xa=Math.abs(a-x),ab=Math.abs(b-a),bc=Math.abs(c-b);
   if(xa<=0||ab<=0||bc<=0)return{valid:false,bRetracement:0,cProjection:0};
+  const aUp=a>x;
   const bRetracement=ab/xa,cProjection=bc/ab;
-  const directionStructure=bullishCorrection?c<a:c>a;
-  const valid=bRetracement>=.9&&bRetracement<=1.1&&cProjection>=.618&&cProjection<=1.618&&directionStructure;
+  const direction=aUp ? "bullish" : "bearish";
+  const cReversesA=aUp ? c<a : c>a;
+  const valid=direction===(bullishCorrection?"bullish":"bearish")&&bRetracement>=.9&&bRetracement<=1.1&&cReversesA&&cProjection>=.618&&cProjection<=1.618;
   return{valid,bRetracement,cProjection};
 }
 
@@ -199,50 +203,36 @@ export function validateTriangle(prices:number[],bullish:boolean){
   const seg=prices.slice(1).map((p,i)=>Math.abs(p-prices[i]));
   const contracting=seg[0]>seg[1]&&seg[1]>seg[2]&&seg[2]>seg[3];
   const expanding=seg[0]<seg[1]&&seg[1]<seg[2]&&seg[2]<seg[3];
-  const highs=prices.filter((_,i)=>i%2===0);
-  const lows=prices.filter((_,i)=>i%2===1);
-  const upperSlope=highs.length>=2?highs.at(-1)!-highs[0]:0;
-  const lowerSlope=lows.length>=2?lows.at(-1)!-lows[0]:0;
-  const converging=upperSlope<0&&lowerSlope>0 || upperSlope>0&&lowerSlope<0 || (Math.abs(upperSlope)<1e-12&&Math.abs(lowerSlope)<1e-12);
-  const valid=(contracting||expanding||converging)&&Math.abs(prices.at(-1)!-prices[0])<Math.abs(prices[1]-prices[0]);
-  return{valid,contracting,expanding};
+  const high=Math.max(...prices),low=Math.min(...prices),range=high-low;
+  const endInside=range>0&&Math.abs(prices.at(-1)!-prices[0])<range*.95;
+  return{valid:(contracting||expanding)&&endInside,contracting,expanding};
 }
 
 function correctionCandidates(c:Candle[]){
   const ps=alternatePivots(swingPivots(c,2)),out:(WaveCount & {pattern:ElliottPattern})[]=[];
   for(let i=0;i<=ps.length-4;i++){
-    const q=ps.slice(i,i+4),bullish=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L",bearish=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H";
-    if(!bullish&&!bearish)continue;
-    const p=q.map(x=>x.price),isBullishCorrection=bearish,z=validateZigzag(p,isBullishCorrection),f=validateFlat(p,isBullishCorrection);
-    const abc=q.slice(1);
-    if(z.valid)out.push({points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction:isBullishCorrection?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[3].price],quality:80,rules:["A–B–C zigzag geometry","B retraces 38.2–78.6% of X–A","C reaches at least 61.8% of A–B"],strict:false,pattern:"Zigzag"});
-    else if(f.valid)out.push({points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction:isBullishCorrection?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[3].price],quality:74,rules:["A–B–C flat geometry","B retraces roughly 90–110% of X–A","C length is inside a common flat range"],strict:false,pattern:"Flat"});
+    const q=ps.slice(i,i+4),downward=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L",upward=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H";
+    if(!downward&&!upward)continue;
+    const p=q.map(x=>x.price),isBullishCorrection=upward,z=validateZigzag(p,isBullishCorrection),f=validateFlat(p,isBullishCorrection);
+    const abc=q.slice(1),direction=upward?"bullish":"bearish";
+    if(z.valid)out.push({
+      points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction,invalidation:q[0].price,entry:null,targets:[q[3].price],
+      quality:80,rules:["A–B–C zigzag geometry","B retraces 38.2–78.6% of X–A","C extends beyond A"],strict:false,pattern:"Zigzag"
+    });
+    else if(f.valid)out.push({
+      points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction,invalidation:q[0].price,entry:null,targets:[q[3].price],
+      quality:74,rules:["A–B–C flat geometry","B retraces roughly 90–110% of X–A","C reverses A with common projection"],strict:false,pattern:"Flat"
+    });
   }
   for(let i=0;i<=ps.length-5;i++){
-    const q=ps.slice(i,i+5),bullish=q[0].type==="L"&&q[1].type==="H",bearish=q[0].type==="H"&&q[1].type==="L";
-    if(!bullish&&!bearish)continue;
-    const p=q.map(x=>x.price),tri=validateTriangle(p,bullish);
+    const q=ps.slice(i,i+5),upward=q[0].type==="L"&&q[1].type==="H",downward=q[0].type==="H"&&q[1].type==="L";
+    if(!upward&&!downward)continue;
+    const p=q.map(x=>x.price),tri=validateTriangle(p,upward);
     if(!tri.valid)continue;
-    out.push({points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C","D","E"][j]})),kind:"Correction",direction:bullish?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[4].price],quality:tri.contracting?82:68,rules:["A–B–C–D–E triangle candidate",tri.contracting?"Contracting triangle proportions detected":"Triangle boundary convergence detected"],strict:false,pattern:"Triangle"});
-  }
-  return out.sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
-}
-
-function correctionCandidates(c:Candle[]){
-  const ps=alternatePivots(swingPivots(c,2)),out:(WaveCount & {pattern:ElliottPattern})[]=[];
-  for(let i=0;i<=ps.length-3;i++){
-    const q=ps.slice(i,i+3),bullish=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L",bearish=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H";
-    if(!bullish&&!bearish)continue;
-    const p=q.map(x=>x.price),z=validateZigzag(p,bullish),f=validateFlat(p,bullish);
-    if(z.valid)out.push({points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction:bullish?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[2].price],quality:78,rules:["A–B–C zigzag geometry","B remains within the A leg","C reaches at least 61.8% of A"],strict:false,pattern:"Zigzag"});
-    else if(f.valid)out.push({points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction:bullish?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[2].price],quality:72,rules:["A–B–C flat geometry","B retraces roughly 90–110% of A","C length is inside a common flat range"],strict:false,pattern:"Flat"});
-  }
-  for(let i=0;i<=ps.length-5;i++){
-    const q=ps.slice(i,i+5),bullish=q[0].type==="L"&&q[1].type==="H",bearish=q[0].type==="H"&&q[1].type==="L";
-    if(!bullish&&!bearish)continue;
-    const p=q.map(x=>x.price),tri=validateTriangle(p,bullish);
-    if(!tri.valid)continue;
-    out.push({points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C","D","E"][j]})),kind:"Correction",direction:bullish?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[4].price],quality:tri.contracting?82:68,rules:["A–B–C–D–E triangle candidate",tri.contracting?"Contracting triangle proportions detected":"Expanding triangle proportions detected"],strict:false,pattern:"Triangle"});
+    out.push({
+      points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C","D","E"][j]})),kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[4].price],
+      quality:tri.contracting?82:68,rules:["A–B–C–D–E triangle candidate",tri.contracting?"Contracting triangle proportions detected":"Triangle range/geometry detected"],strict:false,pattern:"Triangle"
+    });
   }
   return out.sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
 }
