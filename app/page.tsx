@@ -106,6 +106,7 @@ export default function Home(){
     const data=await fetchKlines(symbol,interval,350,marketType);
     if(stop)return;
     setRestConnected(true);
+    setError("");
     setCandles(prev=>mergeCandles(data,prev));
     setAnalysisCandles(data.filter(x=>x.closed!==false));
    }catch(e){
