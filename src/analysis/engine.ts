@@ -14,7 +14,7 @@ export type SMCResult={
  vwap:number; volumeRatio:number; displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
 };
 export type WavePoint={index:number;price:number;label:string};
-export type WaveCount={points:WavePoint[];kind:"Impulse"|"Correction";direction:"bullish"|"bearish";invalidation:number;targets:number[];quality:number;rules:string[]};
+export type WaveCount={points:WavePoint[];kind:"Impulse"|"Correction";direction:"bullish"|"bearish";invalidation:number;entry:number|null;targets:number[];quality:number;rules:string[]};
 export type ElliottResult={
  primary:WaveCount|null;alternative:WaveCount|null;correction:WaveCount|null;
  fib:{w2:number;w3:number;w4:number;w5:number}|null;
@@ -143,50 +143,82 @@ export function analyzeSMC(c:Candle[]):SMCResult{
 }
 
 function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
- const ps=pivots(c,2).slice(-18),out:WaveCount[]=[];
- if(ps.length<6)return out;
- for(let s=0;s<=ps.length-6;s++){
-  const q=ps.slice(s,s+6),types=bull?["L","H","L","H","L","H"]:["H","L","H","L","H","L"];
+ const ps=pivots(c,2).slice(-20),out:WaveCount[]=[];
+ if(ps.length<5)return out;
+ for(let s=0;s<=ps.length-5;s++){
+  const q=ps.slice(s,s+5),types=bull?["L","H","L","H","L"]:["H","L","H","L","H"];
   if(q.some((p,i)=>p.type!==types[i]))continue;
-  const p=q.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);if(!w1||!w3||!w5)continue;
-  const r2=w2/w1,r3=w3/w1,r4=w4/w3,r5=w5/w1,r3r5=w3/Math.max(w5,.0000001);let points=0;const rules:string[]=[];
+  const p=q.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]);
+  if(!w1||!w2||!w3||!w4)continue;
+  const r2=w2/w1,r3=w3/w1,r4=w4/w3;
+  let points=0;const rules:string[]=[];
   if(r2>=.382&&r2<=.786){points+=18;rules.push("Wave 2 retracement 38.2–78.6%")}else rules.push("Wave 2 outside common retracement");
   if(r3>=1){points+=18;rules.push("Wave 3 extends Wave 1")}else rules.push("Wave 3 weak");
-  if(w3>=Math.min(w1,w5)){points+=18;rules.push("Wave 3 is not shortest")}else rules.push("Wave 3 may be shortest");
+  if(w3>=Math.min(w1,w4)){points+=18;rules.push("Wave 3 is not shortest")}else rules.push("Wave 3 may be shortest");
   if(r4>=.236&&r4<=.618){points+=14;rules.push("Wave 4 retracement 23.6–61.8%")}else rules.push("Wave 4 outside common retracement");
   if(bull?p[4]>p[1]:p[4]<p[1]){points+=14;rules.push("Wave 4 avoids Wave 1 overlap")}else rules.push("Wave 4 overlap / invalid");
-  if(r5>=.382&&r5<=2.618){points+=10;rules.push("Wave 5 projection plausible")}
-  if(r3r5>1.05){points+=8;rules.push("Wave 3 materially stronger than Wave 5")}
+  const alternatesDeep=(r2>=.5)!=(r4>=.5);
+  if(alternatesDeep){points+=6;rules.push("Wave 2 / 4 depth alternation")}else rules.push("Wave 2 / 4 depth similarity");
+  if(Math.abs(p[4]-p[0])>Math.abs(p[2]-p[0])){points+=4;rules.push("Wave structure expands through Wave 5")}else rules.push("Weak overall expansion");
   const quality=clamp(points),dir=bull?1:-1;
-  out.push({points:q.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)})),kind:"Impulse",direction:bull?"bullish":"bearish",invalidation:p[0],targets:[p[5]+dir*w1*1.618,p[5]+dir*w1*2.618],quality,rules});
+  const entry=p[2];
+  const invalidation=p[0];
+  const risk=Math.abs(entry-invalidation);
+  const targets=risk>0
+    ? [p[3],p[4],p[4]+dir*Math.max(w1,risk)*1.618]
+    : [p[4]];
+  out.push({
+   points:q.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)})),
+   kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets,quality,rules
+  });
  }
- return out.sort((a,b)=>b.quality-a.quality);
+ return out;
 }
 function correctionCandidates(c:Candle[]):WaveCount[]{
- const ps=pivots(c,2).slice(-16),out:WaveCount[]=[];
- for(let s=0;s<=ps.length-4;s++){const q=ps.slice(s,s+4),bull=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L",bear=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H";if(!bull&&!bear)continue;const p=q.map(x=>x.price),ab=Math.abs(p[1]-p[0]),bc=Math.abs(p[2]-p[1]),cd=Math.abs(p[3]-p[2]);const rb=bc/Math.max(ab,.0000001),rc=cd/Math.max(ab,.0000001),quality=clamp(45+(rb>=.382&&rb<=1.618?25:0)+(rc>=.382&&rc<=1.618?25:0));out.push({points:q.map((x,i)=>({index:x.index,price:x.price,label:["A","B","C","D"][i]})),kind:"Correction",direction:bull?"bearish":"bullish",invalidation:p[0],targets:[p[3]],quality,rules:["Alternating pivot correction candidate"]})}
- return out.sort((a,b)=>b.quality-a.quality);
+ const ps=pivots(c,2).slice(-18),out:WaveCount[]=[];
+ if(ps.length<3)return out;
+ for(let s=0;s<=ps.length-3;s++){
+  const q=ps.slice(s,s+3);
+  const bear=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H";
+  const bull=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L";
+  if(!bull&&!bear)continue;
+  const p=q.map(x=>x.price),ab=Math.abs(p[1]-p[0]),bc=Math.abs(p[2]-p[1]);
+  if(!ab||!bc)continue;
+  const ratio=bc/ab;
+  const quality=clamp(50+(ratio>=.382&&ratio<=1.618?30:0)+(bc>=ab*.5?10:0)+(bc<=ab*1.618?10:0));
+  const direction=bull?"bullish":"bearish";
+  out.push({
+   points:q.map((x,i)=>({index:x.index,price:x.price,label:["A","B","C"][i]})),
+   kind:"Correction",direction,invalidation:p[0],entry:null,targets:[p[2]],
+   quality,rules:[
+    "A–B–C three-point correction candidate",
+    ratio>=.382&&ratio<=1.618?"B/C proportion plausible":"B/C proportion outside common range"
+   ]
+  });
+ }
+ return out.sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
 }
 export function analyzeElliott(c:Candle[]):ElliottResult{
  if(c.length<30)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Insufficient data",score:0,confidence:0};
- const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>{const ai=a.points.at(-1)?.index??-1,bi=b.points.at(-1)?.index??-1;return bi-ai||b.quality-a.quality;});
+ const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
  const qualified=all.filter(x=>x.quality>=60);
  let primary=qualified[0]??null;
- let alternative=all.find(x=>x!==primary)??null;
+ let alternative=qualified.find(x=>x!==primary)??all.find(x=>x!==primary)??null;
  const correction=correctionCandidates(c)[0]??null;
  if(!primary){
-  const ps=pivots(c,2).slice(-6);
-  if(ps.length===6){
+  const ps=pivots(c,2).slice(-5);
+  if(ps.length===5){
    const bull=ps[0].type==="L"&&ps[1].type==="H";
    const points=ps.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)}));
-   alternative={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation:ps[0].price,targets:[ps[5].price],quality:35,rules:["Fallback pivot-sequence candidate; strict Elliott rules not confirmed"]};
+   const entry=ps[2].price, invalidation=ps[0].price, dir=bull?1:-1, risk=Math.abs(entry-invalidation);
+   alternative={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets:risk>0?[ps[3].price,ps[4].price,ps[4].price+dir*Math.max(risk,Math.abs(ps[1].price-ps[0].price))*1.618]:[ps[4].price],quality:35,rules:["Fallback 1–5 pivot-sequence candidate; strict Elliott rules not confirmed"]};
   }
  }
- if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"Correction candidate":"No strict impulse candidate",score:0,confidence:0};
- const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]),a=p[0],b=p[3],slope=(b-a)/Math.max(primary.points[3].index-primary.points[0].index,1);
- const hi=Math.max(p[0],p[5]),lo=Math.min(p[0],p[5]),range=hi-lo,dir=primary.direction==="bullish"?1:-1;
- const fibLevels=[["0%",p[5]],["23.6%",p[5]+(p[0]-p[5])*.236],["38.2%",p[5]+(p[0]-p[5])*.382],["50%",p[5]+(p[0]-p[5])*.5],["61.8%",p[5]+(p[0]-p[5])*.618],["78.6%",p[5]+(p[0]-p[5])*.786],["100%",p[0]],["127.2%",p[5]+dir*range*.272],["161.8%",p[5]+dir*range*.618],["261.8%",p[5]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
- return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel:{a,b:a+slope*(primary.points[5].index-primary.points[0].index)},phase:primary.quality>=78?"Impulse candidate · high rule conformance":primary.quality>=60?"Impulse candidate · moderate rule conformance":"Impulse candidate · low rule conformance",score:primary.quality,confidence:primary.quality};
+ if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"A–B–C correction candidate":"No strict 1–5 impulse candidate",score:0,confidence:0};
+ const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),entry=primary.entry??p[2],a=p[0],b=p[3],slope=(b-a)/Math.max(primary.points[3].index-primary.points[0].index,1);
+ const hi=Math.max(p[0],p[4]),lo=Math.min(p[0],p[4]),range=hi-lo,dir=primary.direction==="bullish"?1:-1;
+ const fibLevels=[["0%",p[4]],["23.6%",p[4]+(p[0]-p[4])*.236],["38.2%",p[4]+(p[0]-p[4])*.382],["50%",p[4]+(p[0]-p[4])*.5],["61.8%",p[4]+(p[0]-p[4])*.618],["78.6%",p[4]+(p[0]-p[4])*.786],["100%",p[0]],["127.2%",p[4]+dir*range*.272],["161.8%",p[4]+dir*range*.618],["261.8%",p[4]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
+ return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+((Math.abs(p[4]-p[3]))/w1).toFixed(3)},fibLevels,channel:{a,b:a+slope*(primary.points[4].index-primary.points[0].index)},phase:primary.quality>=78?"1–5 impulse candidate · high rule conformance":primary.quality>=60?"1–5 impulse candidate · moderate rule conformance":"1–5 impulse candidate · low rule conformance",score:primary.quality,confidence:primary.quality};
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
  const rows=frames.map(f=>{const available=f.candles.length>=25;const s=available?analyzeSMC(f.candles):null;return{interval:f.interval,trend:s?.trend??"Neutral",score:s?.score??0,structure:s?.events.at(-1)?.type??(available?"No event":"UNAVAILABLE"),available};});
