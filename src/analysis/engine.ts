@@ -143,32 +143,28 @@ export function analyzeSMC(c:Candle[]):SMCResult{
 }
 
 function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
- const ps=pivots(c,2).slice(-20),out:WaveCount[]=[];
- if(ps.length<5)return out;
- for(let s=0;s<=ps.length-5;s++){
-  const q=ps.slice(s,s+5),types=bull?["L","H","L","H","L"]:["H","L","H","L","H"];
+ const ps=pivots(c,2).slice(-22),out:WaveCount[]=[];
+ if(ps.length<6)return out;
+ for(let s=0;s<=ps.length-6;s++){
+  const q=ps.slice(s,s+6),types=bull?["L","H","L","H","L","H"]:["H","L","H","L","H","L"];
   if(q.some((p,i)=>p.type!==types[i]))continue;
-  const p=q.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]);
-  if(!w1||!w2||!w3||!w4)continue;
-  const r2=w2/w1,r3=w3/w1,r4=w4/w3;
+  const p=q.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);
+  if(!w1||!w2||!w3||!w4||!w5)continue;
+  const r2=w2/w1,r3=w3/w1,r4=w4/w3,r5=w5/w1;
   let points=0;const rules:string[]=[];
-  if(r2>=.382&&r2<=.786){points+=18;rules.push("Wave 2 retracement 38.2–78.6%")}else rules.push("Wave 2 outside common retracement");
+  if(r2>=.382&&r2<=.786){points+=16;rules.push("Wave 2 retracement 38.2–78.6%")}else rules.push("Wave 2 outside common retracement");
   if(r3>=1){points+=18;rules.push("Wave 3 extends Wave 1")}else rules.push("Wave 3 weak");
-  if(w3>=Math.min(w1,w4)){points+=18;rules.push("Wave 3 is not shortest")}else rules.push("Wave 3 may be shortest");
+  if(w3>=Math.min(w1,w5)){points+=18;rules.push("Wave 3 is not shortest")}else rules.push("Wave 3 may be shortest");
   if(r4>=.236&&r4<=.618){points+=14;rules.push("Wave 4 retracement 23.6–61.8%")}else rules.push("Wave 4 outside common retracement");
   if(bull?p[4]>p[1]:p[4]<p[1]){points+=14;rules.push("Wave 4 avoids Wave 1 overlap")}else rules.push("Wave 4 overlap / invalid");
+  if(r5>=.382&&r5<=2.618){points+=10;rules.push("Wave 5 projection plausible")}else rules.push("Wave 5 projection weak");
   const alternatesDeep=(r2>=.5)!=(r4>=.5);
   if(alternatesDeep){points+=6;rules.push("Wave 2 / 4 depth alternation")}else rules.push("Wave 2 / 4 depth similarity");
-  if(Math.abs(p[4]-p[0])>Math.abs(p[2]-p[0])){points+=4;rules.push("Wave structure expands through Wave 5")}else rules.push("Weak overall expansion");
   const quality=clamp(points),dir=bull?1:-1;
-  const entry=p[2];
-  const invalidation=p[0];
-  const risk=Math.abs(entry-invalidation);
-  const targets=risk>0
-    ? [p[3],p[4],p[4]+dir*Math.max(w1,risk)*1.618]
-    : [p[4]];
+  const entry=p[2],invalidation=p[0],risk=Math.abs(entry-invalidation);
+  const targets=risk>0?[p[3],p[5],p[5]+dir*Math.max(w1,risk)*1.618]:[p[5]];
   out.push({
-   points:q.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)})),
+   points:q.map((x,i)=>({index:x.index,price:x.price,label:i===0?"":String(i)})),
    kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets,quality,rules
   });
  }
