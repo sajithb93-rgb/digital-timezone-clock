@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, isSetupActive, validateImpulseWave } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 
 function candles(count:number, start=100):Candle[]{
@@ -47,6 +47,14 @@ describe("analysis regression",()=>{
     if(!s.entryZone) expect(s.setup.direction).toBe("WAIT");
   });
 
+  it("exposes Elliott evidence separately for available MTF frames",()=>{
+    const m=analyzeMTF([{interval:"4h",candles:candles(100)}]);
+    expect(m.frames[0].available).toBe(true);
+    expect(m.frames[0].elliottTrend).toBeDefined();
+    expect(m.frames[0].elliottScore).toBeDefined();
+    expect(m.elliottTrend).toBeDefined();
+  });
+
   it("marks missing MTF frames as unavailable without treating them as neutral evidence",()=>{
     const m=analyzeMTF([
       {interval:"4h",candles:candles(100)},
@@ -54,6 +62,18 @@ describe("analysis regression",()=>{
     ]);
     expect(m.frames.find(x=>x.interval==="1h")?.available).toBe(false);
     expect(m.frames.find(x=>x.interval==="1h")?.structure).toBe("UNAVAILABLE");
+  });
+
+  it("calculates Wave 5 from Wave 4 end to Wave 5 end",()=>{
+    const m=impulseMetrics([100,120,110,150,135,165]);
+    expect(m?.w5).toBe(30);
+    expect(m?.r5).toBeCloseTo(1.5);
+  });
+
+  it("anchors Elliott Fibonacci levels to the completed Wave 5 end and Wave 1 origin",()=>{
+    const levels=buildImpulseFibLevels([100,120,110,150,135,165],true);
+    expect(levels.find(x=>x.label==="0%")?.price).toBe(165);
+    expect(levels.find(x=>x.label==="100%")?.price).toBe(100);
   });
 
   it("enforces the three strict standard-impulse rules",()=>{
