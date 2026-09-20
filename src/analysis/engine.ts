@@ -151,6 +151,13 @@ function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
   const p=q.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);
   if(!w1||!w2||!w3||!w4||!w5)continue;
   const r2=w2/w1,r3=w3/w1,r4=w4/w3,r5=w5/w1;
+  // Absolute impulse rules: Wave 2 must not fully retrace Wave 1,
+  // Wave 3 must pass Wave 1's end, Wave 3 cannot be shortest,
+  // and Wave 4 must not enter Wave 1 price territory.
+  const geometryValid=bull
+    ? p[2]>p[0]&&p[2]<p[1]&&p[3]>p[1]&&p[4]>p[1]
+    : p[2]<p[0]&&p[2]>p[1]&&p[3]<p[1]&&p[4]<p[1];
+  if(!geometryValid)continue;
   let points=0;const rules:string[]=[];
   if(r2>=.382&&r2<=.786){points+=16;rules.push("Wave 2 retracement 38.2–78.6%")}else rules.push("Wave 2 outside common retracement");
   if(r3>=1){points+=18;rules.push("Wave 3 extends Wave 1")}else rules.push("Wave 3 weak");
