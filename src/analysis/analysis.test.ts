@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
+import { analyzeElliottAdvanced, validateFlat, validateTriangle, validateZigzag } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
   return Array.from({length:count},(_,i)=>{
@@ -114,4 +115,33 @@ describe("analysis regression",()=>{
     expect(result.trades).toBe(0);
     expect(result.openAtEnd).toBe(0);
   });
+
+  it("accepts a structurally valid impulse in the advanced Elliott engine",()=>{
+    const e=analyzeElliottAdvanced(
+      [100,120,110,150,135,165,170,166,172,169,175,171,180,176,182,178,185,181,188,184,190,186,192,188,194,190,196,192,198,194]
+      .map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}))
+    );
+    expect(e.engine).toBe("ADVANCED_ELLIOTT_V2");
+    expect(e.primary?.kind).toBe("Impulse");
+    expect(e.primary?.strict).toBe(true);
+  });
+
+  it("keeps corrective structures separate from the primary impulse count",()=>{
+    expect(validateZigzag([150,125,140],false).valid).toBe(true);
+    expect(validateFlat([150,145,151],false).valid).toBe(true);
+    expect(analyzeElliottAdvanced(candles(100)).primary).toBeNull();
+  });
+
+  it("requires real contraction or expansion for a triangle candidate",()=>{
+    expect(validateTriangle([100,90,96,92,94],true).contracting).toBe(true);
+    expect(validateTriangle([100,110,105,116,109],true).expanding).toBe(true);
+  });
+
+  it("never promotes the fallback monotonic candle series to an Elliott count",()=>{
+    const e=analyzeElliottAdvanced(candles(120));
+    expect(e.primary).toBeNull();
+    expect(e.setupState).toBe("NONE");
+    expect(e.engine).toBe("ADVANCED_ELLIOTT_V2");
+  });
+
 });
