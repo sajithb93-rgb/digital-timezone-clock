@@ -14,7 +14,7 @@ export type SMCResult={
  vwap:number; volumeRatio:number; displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
 };
 export type WavePoint={index:number;price:number;label:string};
-export type WaveCount={points:WavePoint[];kind:"Impulse"|"Correction";direction:"bullish"|"bearish";invalidation:number;entry:number|null;targets:number[];quality:number;rules:string[];truncated?:boolean;};
+export type WaveCount={points:WavePoint[];kind:"Impulse"|"Correction";direction:"bullish"|"bearish";invalidation:number;entry:number|null;targets:number[];quality:number;rules:string[];truncated?:boolean;strict?:boolean;};
 export type ElliottResult={
  primary:WaveCount|null;alternative:WaveCount|null;correction:WaveCount|null;
  fib:{w2:number;w3:number;w4:number;w5:number}|null;
@@ -31,13 +31,25 @@ function atrAt(c:Candle[],end:number,n=14){if(!c.length||end<0)return 0;const e=
 function pivots(c:Candle[],w=3):Pivot[]{
  const out:Pivot[]=[];
  for(let i=w;i<c.length-w;i++){
-  let hi=true,lo=true,score=0;
-  for(let j=i-w;j<=i+w;j++){if(j===i)continue;if(c[j].high>=c[i].high)hi=false;if(c[j].low<=c[i].low)lo=false}
-  if(hi){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].high,type:"H",strength:score/(2*w+1),confirmedAt:i+w})}
-  if(lo){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].low,type:"L",strength:score/(2*w+1),confirmedAt:i+w})}
+  let hi=true,lo=true,highScore=0,lowScore=0;
+  for(let j=i-w;j<=i+w;j++){
+   if(j===i)continue;
+   if(c[j].high>=c[i].high)hi=false;
+   if(c[j].low<=c[i].low)lo=false;
+   highScore+=Math.max(0,c[i].high-c[j].high);
+   lowScore+=Math.max(0,c[j].low-c[i].low);
+  }
+  if(hi&&lo){
+   if(highScore>=lowScore)lo=false;
+   else hi=false;
+  }
+  const divisor=2*w+1;
+  if(hi)out.push({index:i,price:c[i].high,type:"H",strength:highScore/Math.max(1,divisor),confirmedAt:i+w});
+  if(lo)out.push({index:i,price:c[i].low,type:"L",strength:lowScore/Math.max(1,divisor),confirmedAt:i+w});
  }
- return out.sort((a,b)=>a.index-b.index);
+ return out.sort((a,b)=>a.index-b.index||(a.type==="H"?-1:1));
 }
+
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
 export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.high>=zone.low&&last.low<=zone.high}
 function range(c:Candle[]){const q=c.slice(-60);return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))}}
@@ -177,7 +189,7 @@ function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
   const targets=risk>0?[p[3],p[5],p[5]+dir*Math.max(w1,risk)*1.618]:[p[5]];
   out.push({
    points:q.map((x,i)=>({index:x.index,price:x.price,label:i===0?"":String(i)})),
-   kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets,quality,rules,truncated:validation.truncated
+   kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets,quality,rules,truncated:validation.truncated,strict:true
   });
  }
  return out;
@@ -245,15 +257,18 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
  const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
  const qualified=all.filter(x=>x.quality>=60);
  let primary=qualified[0]??null;
- let alternative=qualified.find(x=>x!==primary)??all.find(x=>x!==primary)??null;
+ let alternative=qualified.find(x=>x!==primary)??null;
  const correction=correctionCandidates(c)[0]??null;
  if(!primary){
   const ps=pivots(c,2).slice(-5);
   if(ps.length===5){
    const bull=ps[0].type==="L"&&ps[1].type==="H";
-   const points=ps.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)}));
-   const entry=ps[2].price, invalidation=ps[0].price, dir=bull?1:-1, risk=Math.abs(entry-invalidation);
-   alternative={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets:risk>0?[ps[3].price,ps[4].price,ps[4].price+dir*Math.max(risk,Math.abs(ps[1].price-ps[0].price))*1.618]:[ps[4].price],quality:35,rules:["Fallback 1–5 pivot-sequence candidate; strict Elliott rules not confirmed"]};
+   const bear=ps[0].type==="H"&&ps[1].type==="L";
+   if(bull||bear){
+    const points=ps.map((x,i)=>({index:x.index,price:x.price,label:String(i+1)}));
+    const entry=ps[2].price, invalidation=ps[0].price, dir=bull?1:-1, risk=Math.abs(entry-invalidation);
+    alternative={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets:risk>0?[ps[3].price,ps[4].price,ps[4].price+dir*Math.max(risk,Math.abs(ps[1].price-ps[0].price))*1.618]:[ps[4].price],quality:35,rules:["Fallback 1–5 pivot-sequence candidate; strict Elliott rules not confirmed"],strict:false};
+   }
   }
  }
  if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"A–B–C correction candidate":"No strict 1–5 impulse candidate",score:0,confidence:0,setupState:"NONE",setupReason:"No qualified impulse count"};
