@@ -83,6 +83,13 @@ describe("analysis regression",()=>{
     expect(validateImpulseWave([100,120,110,150,115,160],true).valid).toBe(false);
   });
 
+  it("applies the same strict impulse rules to bearish counts",()=>{
+    expect(validateImpulseWave([200,180,190,150,165,130],false).valid).toBe(true);
+    expect(validateImpulseWave([200,180,205,150,165,130],false).valid).toBe(false);
+    expect(validateImpulseWave([200,180,190,175,185,130],false).valid).toBe(false);
+    expect(validateImpulseWave([200,180,190,150,185,130],false).valid).toBe(false);
+  });
+
   it("classifies a directional Wave 5 that fails to exceed Wave 3 as a truncation",()=>{
     const v=validateImpulseWave([100,120,110,150,135,145],true);
     expect(v.valid).toBe(true);
