@@ -1,4 +1,4 @@
-import { analyzeElliottAdvanced } from "./elliott";
+import { analyzeElliottAdvanced, type AdvancedElliottResult } from "./elliott";
 export type Candle={time:number;open:number;high:number;low:number;close:number;volume:number;takerBuyVolume?:number;closed?:boolean};
 export type Pivot={index:number;price:number;type:"H"|"L";label?:string;strength?:number;confirmedAt?:number};
 export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"bearish";filled:boolean;fillIndex?:number;size?:number};
@@ -159,7 +159,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  return{trend,asOf:c.length-1,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
 }
 
-export function analyzeElliott(c:Candle[]):ElliottResult{
+export function analyzeElliott(c:Candle[]):AdvancedElliottResult{
  return analyzeElliottAdvanced(c);
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
