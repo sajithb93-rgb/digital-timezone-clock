@@ -372,7 +372,7 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
  return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel,phase,score:primary.quality,confidence:primary.quality,setupState,setupReason};
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
- const rows=frames.map(f=>{
+ const rows:MTFFrame[]=frames.map(f=>{
   const available=f.candles.length>=25;
   if(!available)return{interval:f.interval,trend:"Neutral" as const,score:0,structure:"UNAVAILABLE",available:false,elliottTrend:"Neutral" as const,elliottScore:0,elliottPhase:"UNAVAILABLE"};
   const smc=analyzeSMC(f.candles),ew=analyzeElliott(f.candles);
@@ -380,7 +380,8 @@ export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResul
   const smcSigned=smc.trend==="Bullish"?smc.score:smc.trend==="Bearish"?-smc.score:0;
   const ewSigned=elliottTrend==="Bullish"?ew.score:elliottTrend==="Bearish"?-ew.score:0;
   const signed=(smcSigned+ewSigned)/2;
-  return{interval:f.interval,trend:signed>12?"Bullish":signed<-12?"Bearish":"Neutral",score:clamp(50+signed/2),structure:smc.events.at(-1)?.type??"No event",available:true,elliottTrend,elliottScore:ew.score,elliottPhase:ew.phase};
+  const trend:MTFFrame["trend"]=signed>12?"Bullish":signed<-12?"Bearish":"Neutral";
+  return{interval:f.interval,trend,score:clamp(50+signed/2),structure:smc.events.at(-1)?.type??"No event",available:true,elliottTrend,elliottScore:ew.score,elliottPhase:ew.phase};
  });
  const usable=rows.filter(r=>r.available);
  const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1;
