@@ -159,6 +159,63 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  return{trend,asOf:c.length-1,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
 }
 
+export type ImpulseMetrics={w1:number;w2:number;w3:number;w4:number;w5:number;r2:number;r3:number;r4:number;r5:number};
+export function impulseMetrics(prices:number[]):ImpulseMetrics|null{
+ if(prices.length<6)return null;
+ const [p0,p1,p2,p3,p4,p5]=prices;
+ const w1=Math.abs(p1-p0),w2=Math.abs(p2-p1),w3=Math.abs(p3-p2),w4=Math.abs(p4-p3),w5=Math.abs(p5-p4);
+ if(!w1||!w2||!w3||!w4||!w5)return null;
+ return{w1,w2,w3,w4,w5,r2:w2/w1,r3:w3/w1,r4:w4/w3,r5:w5/w1};
+}
+
+export function buildImpulseFibLevels(prices:number[],bull:boolean):{label:string;price:number}[]{
+ if(prices.length<6)return[];
+ const [p0,,,,,p5]=prices,dir=bull?1:-1,range=Math.abs(p5-p0);
+ return[
+  ["0%",p5],["23.6%",p5+(p0-p5)*.236],["38.2%",p5+(p0-p5)*.382],["50%",p5+(p0-p5)*.5],
+  ["61.8%",p5+(p0-p5)*.618],["78.6%",p5+(p0-p5)*.786],["100%",p0],
+  ["127.2%",p5+dir*range*.272],["161.8%",p5+dir*range*.618],["261.8%",p5+dir*range*1.618]
+ ].map(([label,price])=>({label:String(label),price:Number(price)}));
+}
+
+export type ImpulseValidation={
+ w2Valid:boolean;w3BeyondW1:boolean;w3NotShortest:boolean;w4Valid:boolean;
+ w5DirectionValid:boolean;w5BeyondW3:boolean;truncated:boolean;valid:boolean;
+};
+export function validateImpulseWave(prices:number[],bull:boolean):ImpulseValidation{
+ if(prices.length<6)return{w2Valid:false,w3BeyondW1:false,w3NotShortest:false,w4Valid:false,w5DirectionValid:false,w5BeyondW3:false,truncated:false,valid:false};
+ const [p0,p1,p2,p3,p4,p5]=prices;
+ const w1=Math.abs(p1-p0),w3=Math.abs(p3-p2),w5=Math.abs(p5-p4);
+ const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
+ const w3BeyondW1=bull?p3>p1:p3<p1;
+ const w3NotShortest=w3>=w1&&w3>=w5;
+ const w4Valid=bull?p4>p1&&p4<p3:p4<p1&&p4>p3;
+ const w5DirectionValid=bull?p5>p4:p5<p4;
+ const w5BeyondW3=bull?p5>p3:p5<p3;
+ const truncated=w5DirectionValid&&!w5BeyondW3;
+ return{w2Valid,w3BeyondW1,w3NotShortest,w4Valid,w5DirectionValid,w5BeyondW3,truncated,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4Valid&&w5DirectionValid};
+}
+
+export type DiagonalValidation={
+ w2Valid:boolean;w3BeyondW1:boolean;w3NotShortest:boolean;w4OverlapsW1:boolean;w4DoesNotPassW2:boolean;
+ w5DirectionValid:boolean;w5BeyondW3:boolean;contracting:boolean;expanding:boolean;valid:boolean;
+};
+export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValidation{
+ if(prices.length<6)return{w2Valid:false,w3BeyondW1:false,w3NotShortest:false,w4OverlapsW1:false,w4DoesNotPassW2:false,w5DirectionValid:false,w5BeyondW3:false,contracting:false,expanding:false,valid:false};
+ const [p0,p1,p2,p3,p4,p5]=prices;
+ const w1=Math.abs(p1-p0),w2=Math.abs(p2-p1),w3=Math.abs(p3-p2),w4=Math.abs(p4-p3),w5=Math.abs(p5-p4);
+ const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
+ const w3BeyondW1=bull?p3>p1:p3<p1;
+ const w3NotShortest=w3>=w5;
+ const w4OverlapsW1=bull?p4<=p1&&p4>p2:p4>=p1&&p4<p2;
+ const w4DoesNotPassW2=bull?p4>p2:p4<p2;
+ const w5DirectionValid=bull?p5>p4:p5<p4;
+ const w5BeyondW3=bull?p5>p3:p5<p3;
+ const contracting=w3<w1&&w4<w2&&w5<w3;
+ const expanding=w3>w1&&w4>w2&&w5>w3;
+ return{w2Valid,w3BeyondW1,w3NotShortest,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4OverlapsW1&&w4DoesNotPassW2&&w5DirectionValid};
+}
+
 export function analyzeElliott(c:Candle[]):AdvancedElliottResult{
  return analyzeElliottAdvanced(c);
 }
