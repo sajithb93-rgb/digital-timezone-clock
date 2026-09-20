@@ -70,7 +70,8 @@ export default function Home(){
   return()=>{stop=true;if(retry)clearTimeout(retry);ws?.close()};
  },[symbol,interval,marketType]);
 
- const lastClosedTime=candles.length?([...candles].reverse().find(x=>x.closed!==false)?.time??0):0;
+ const lastClosed=candles.at(-1)?.closed!==false?candles.at(-1):candles.at(-2);
+ const lastClosedTime=lastClosed?.time??0;
  useEffect(()=>{if(!lastClosedTime)return;setAnalysisCandles(prev=>prev.at(-1)?.time===lastClosedTime?prev:candles.filter(x=>x.closed!==false))},[lastClosedTime]);
 
  useEffect(()=>{let stop=false;const load=async()=>{try{const cfg=marketConfig[marketType==="spot"?"usdm":marketType];const [oi,pi,t]=await Promise.all([fetch(`${cfg.rest}/openInterest?symbol=${encodeURIComponent(symbol)}`),fetch(`${cfg.rest}/premiumIndex?symbol=${encodeURIComponent(symbol)}`),fetch(`${cfg.rest}/ticker/24hr?symbol=${encodeURIComponent(symbol)}`)]);if(!oi.ok||!pi.ok||!t.ok)throw new Error();const [o,p,tt]=await Promise.all([oi.json(),pi.json(),t.json()]);if(!stop)setDerivatives({openInterest:o.openInterest,fundingRate:p.lastFundingRate,change24h:tt.priceChangePercent})}catch{if(!stop)setDerivatives(null)}};if(symbol)load();const id=window.setInterval(load,15000);return()=>{stop=true;clearInterval(id)}},[symbol,marketType]);
