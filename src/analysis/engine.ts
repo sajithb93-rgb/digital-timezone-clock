@@ -233,7 +233,6 @@ export function validateImpulseWave(prices:number[],bull:boolean):ImpulseValidat
  const w1=Math.abs(p[1]-p[0]),w3=Math.abs(p[3]-p[2]),w5=Math.abs(p[5]-p[4]);
  const w2Valid=bull?p[2]>p[0]&&p[2]<p[1]:p[2]<p[0]&&p[2]>p[1];
  const w3BeyondW1=bull?p[3]>p[1]:p[3]<p[1];
- const w3NotShortest=w3>0&&w3>=w5;
  const w3NotShortest=w3>0&&w3>=w1&&w3>=w5;
  const w4Valid=bull?p[4]>p[1]&&p[4]<p[3]:p[4]<p[1]&&p[4]>p[3];
  const w5DirectionValid=bull?p[5]>p[4]:p[5]<p[4];
@@ -264,6 +263,7 @@ export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValid
  const p=prices,w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);
  const w2Valid=bull?p[2]>p[0]&&p[2]<p[1]:p[2]<p[0]&&p[2]>p[1];
  const w3BeyondW1=bull?p[3]>p[1]:p[3]<p[1];
+ const w3NotShortest=w3>0&&w3>=w5;
  const w4OverlapsW1=bull?p[4]<=p[1]&&p[4]>p[2]:p[4]>=p[1]&&p[4]<p[2];
  const w4DoesNotPassW2=bull?p[4]>p[2]:p[4]<p[2];
  const w5DirectionValid=bull?p[5]>p[4]:p[5]<p[4];
