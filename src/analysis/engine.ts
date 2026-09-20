@@ -233,6 +233,7 @@ export function validateImpulseWave(prices:number[],bull:boolean):ImpulseValidat
  const w1=Math.abs(p[1]-p[0]),w3=Math.abs(p[3]-p[2]),w5=Math.abs(p[5]-p[4]);
  const w2Valid=bull?p[2]>p[0]&&p[2]<p[1]:p[2]<p[0]&&p[2]>p[1];
  const w3BeyondW1=bull?p[3]>p[1]:p[3]<p[1];
+ const w3NotShortest=w3>0&&w3>=w5;
  const w3NotShortest=w3>0&&w3>=w1&&w3>=w5;
  const w4Valid=bull?p[4]>p[1]&&p[4]<p[3]:p[4]<p[1]&&p[4]>p[3];
  const w5DirectionValid=bull?p[5]>p[4]:p[5]<p[4];
@@ -248,6 +249,7 @@ function correctionComplexity(c:Candle[],start:number,end:number):number{
 export type DiagonalValidation={
  w2Valid:boolean;
  w3BeyondW1:boolean;
+ w3NotShortest:boolean;
  w4OverlapsW1:boolean;
  w4DoesNotPassW2:boolean;
  w5DirectionValid:boolean;
@@ -258,7 +260,7 @@ export type DiagonalValidation={
 };
 
 export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValidation{
- if(prices.length<6)return{w2Valid:false,w3BeyondW1:false,w4OverlapsW1:false,w4DoesNotPassW2:false,w5DirectionValid:false,w5BeyondW3:false,contracting:false,expanding:false,valid:false};
+ if(prices.length<6)return{w2Valid:false,w3BeyondW1:false,w3NotShortest:false,w4OverlapsW1:false,w4DoesNotPassW2:false,w5DirectionValid:false,w5BeyondW3:false,contracting:false,expanding:false,valid:false};
  const p=prices,w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);
  const w2Valid=bull?p[2]>p[0]&&p[2]<p[1]:p[2]<p[0]&&p[2]>p[1];
  const w3BeyondW1=bull?p[3]>p[1]:p[3]<p[1];
@@ -268,7 +270,7 @@ export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValid
  const w5BeyondW3=bull?p[5]>p[3]:p[5]<p[3];
  const contracting=w3<w1&&w4<w2&&w5<w3;
  const expanding=w3>w1&&w4>w2&&w5>w3;
- return{w2Valid,w3BeyondW1,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:w2Valid&&w3BeyondW1&&w4OverlapsW1&&w4DoesNotPassW2&&w5DirectionValid&&w5BeyondW3};
+ return{w2Valid,w3BeyondW1,w3NotShortest,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4OverlapsW1&&w4DoesNotPassW2&&w5DirectionValid&&w5BeyondW3};
 }
 
 function diagonalCandidates(c:Candle[],bull:boolean):WaveCount[]{
@@ -289,6 +291,7 @@ function diagonalCandidates(c:Candle[],bull:boolean):WaveCount[]{
    targets:risk>0?[p[3],p[5],p[5]+dir*Math.max(w1,risk)*1.618]:[p[5]],
    quality,rules:[
     "Diagonal candidate: Wave 4 overlaps Wave 1",
+    "Wave 3 is not the shortest actionary wave",
     v.contracting?"Contracting diagonal proportions supported":v.expanding?"Expanding diagonal proportions supported":"Diagonal proportions mixed"
    ],strict:true
   });
