@@ -118,7 +118,7 @@ describe("analysis regression",()=>{
 
   it("accepts a structurally valid impulse in the advanced Elliott engine",()=>{
     const e=analyzeElliottAdvanced(
-      [100,120,110,150,135,165,170,166,172,169,175,171,180,176,182,178,185,181,188,184,190,186,192,188,194,190,196,192,198,194]
+      [100,90,100,120,110,150,135,165,155,150,152,149]
       .map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}))
     );
     expect(e.engine).toBe("ADVANCED_ELLIOTT_V2");
