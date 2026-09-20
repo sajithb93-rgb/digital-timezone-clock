@@ -4,6 +4,7 @@ export type ElliottPattern =
   | "Impulse"
   | "Leading Diagonal"
   | "Ending Diagonal"
+  | "Diagonal"
   | "Zigzag"
   | "Flat"
   | "Triangle"
