@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateImpulseWave } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 
 function candles(count:number, start=100):Candle[]{
@@ -81,6 +81,13 @@ describe("analysis regression",()=>{
     expect(validateImpulseWave([100,120,99,150,135,165],true).valid).toBe(false);
     expect(validateImpulseWave([100,120,110,125,115,150],true).valid).toBe(false);
     expect(validateImpulseWave([100,120,110,150,115,160],true).valid).toBe(false);
+  });
+
+  it("recognizes diagonal overlap without weakening the Wave 3 rule",()=>{
+    const v=validateDiagonalWave([100,120,110,150,118,155],true);
+    expect(v.w4OverlapsW1).toBe(true);
+    expect(v.valid).toBe(true);
+    expect(validateDiagonalWave([100,120,110,125,118,150],true).valid).toBe(false);
   });
 
   it("applies the same strict impulse rules to bearish counts",()=>{
