@@ -20,9 +20,10 @@ export type ElliottResult={
  fib:{w2:number;w3:number;w4:number;w5:number}|null;
  fibLevels:{label:string;price:number}[]; channel:{a:number;b:number}|null;
  phase:string;score:number;confidence:number;
+ setupState:"HISTORICAL"|"NONE";setupReason:string;
 };
-export type MTFFrame={interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string;available:boolean};
-export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;frames:MTFFrame[]};
+export type MTFFrame={interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string;available:boolean;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;elliottPhase:string};
+export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;frames:MTFFrame[]};
 
 function trueRange(c:Candle[],i:number){if(i===0)return c[i].high-c[i].low;return Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close))}
 function atr(c:Candle[],n=14){return atrAt(c,c.length-1,n)}
@@ -168,6 +169,9 @@ function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
   else rules.push("Wave 5 direction invalid");
   const alternatesDeep=(r2>=.5)!=(r4>=.5);
   if(alternatesDeep){points+=6;rules.push("Wave 2 / 4 depth alternation")}else rules.push("Wave 2 / 4 depth similarity");
+  const internal3=internalImpulseSupport(c,q[2].index,q[3].index,bull);
+  if(internal3>=6){points+=6;rules.push("Wave 3 internal pivot structure supports impulse")}
+  else if(internal3>0)rules.push("Wave 3 internal structure weak / partial");
   const quality=clamp(points),dir=bull?1:-1;
   const entry=p[2],invalidation=p[0],risk=Math.abs(entry-invalidation);
   const targets=risk>0?[p[3],p[5],p[5]+dir*Math.max(w1,risk)*1.618]:[p[5]];
@@ -203,6 +207,15 @@ export function validateImpulseWave(prices:number[],bull:boolean):ImpulseValidat
  return{w2Valid,w3BeyondW1,w3NotShortest,w4Valid,w5DirectionValid,w5BeyondW3,truncated,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4Valid&&w5DirectionValid};
 }
 
+function internalImpulseSupport(c:Candle[],start:number,end:number,bull:boolean):number{
+ const ps=pivots(c,1).filter(p=>p.index>start&&p.index<end);
+ if(ps.length<3)return 0;
+ let alternating=0;
+ for(let i=1;i<ps.length;i++)if(ps[i].type!==ps[i-1].type)alternating++;
+ const directionPoints=ps.filter(p=>bull?p.type==="H":p.type==="L").length;
+ return Math.min(10,Math.round(Math.min(ps.length,5)/5*6+(alternating>=Math.min(4,ps.length-1)?2:0)+(directionPoints>=2?2:0)));
+}
+
 function correctionCandidates(c:Candle[]):WaveCount[]{
  const ps=pivots(c,2).slice(-18),out:WaveCount[]=[];
  if(ps.length<3)return out;
@@ -228,7 +241,7 @@ function correctionCandidates(c:Candle[]):WaveCount[]{
  return out.sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
 }
 export function analyzeElliott(c:Candle[]):ElliottResult{
- if(c.length<30)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Insufficient data",score:0,confidence:0};
+ if(c.length<30)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Insufficient data",score:0,confidence:0,setupState:"NONE",setupReason:"Insufficient closed-candle history"};
  const all=[...impulseCandidates(c,true),...impulseCandidates(c,false)].sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
  const qualified=all.filter(x=>x.quality>=60);
  let primary=qualified[0]??null;
@@ -243,15 +256,39 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
    alternative={points,kind:"Impulse",direction:bull?"bullish":"bearish",invalidation,entry,targets:risk>0?[ps[3].price,ps[4].price,ps[4].price+dir*Math.max(risk,Math.abs(ps[1].price-ps[0].price))*1.618]:[ps[4].price],quality:35,rules:["Fallback 1–5 pivot-sequence candidate; strict Elliott rules not confirmed"]};
   }
  }
- if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"A–B–C correction candidate":"No strict 1–5 impulse candidate",score:0,confidence:0};
- const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),entry=primary.entry??p[2],a=p[0],b=p[3],slope=(b-a)/Math.max(primary.points[3].index-primary.points[0].index,1);
- const hi=Math.max(p[0],p[4]),lo=Math.min(p[0],p[4]),range=hi-lo,dir=primary.direction==="bullish"?1:-1;
- const fibLevels=[["0%",p[4]],["23.6%",p[4]+(p[0]-p[4])*.236],["38.2%",p[4]+(p[0]-p[4])*.382],["50%",p[4]+(p[0]-p[4])*.5],["61.8%",p[4]+(p[0]-p[4])*.618],["78.6%",p[4]+(p[0]-p[4])*.786],["100%",p[0]],["127.2%",p[4]+dir*range*.272],["161.8%",p[4]+dir*range*.618],["261.8%",p[4]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
- return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel:{a,b:a+slope*(primary.points[4].index-primary.points[0].index)},phase:primary.quality>=78?"1–5 impulse candidate · high rule conformance":primary.quality>=60?"1–5 impulse candidate · moderate rule conformance":"1–5 impulse candidate · low rule conformance",score:primary.quality,confidence:primary.quality};
+ if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"A–B–C correction candidate":"No strict 1–5 impulse candidate",score:0,confidence:0,setupState:"NONE",setupReason:"No qualified impulse count"};
+ const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]),entry=primary.entry??p[2],dir=primary.direction==="bullish"?1:-1;
+ const hi=Math.max(p[0],p[5]),lo=Math.min(p[0],p[5]),range=hi-lo;
+ const fibLevels=[["0%",p[5]],["23.6%",p[5]+(p[0]-p[5])*.236],["38.2%",p[5]+(p[0]-p[5])*.382],["50%",p[5]+(p[0]-p[5])*.5],["61.8%",p[5]+(p[0]-p[5])*.618],["78.6%",p[5]+(p[0]-p[5])*.786],["100%",p[0]],["127.2%",p[5]+dir*range*.272],["161.8%",p[5]+dir*range*.618],["261.8%",p[5]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
+ const i2=primary.points[2].index,i3=primary.points[3].index,i4=primary.points[4].index;
+ const channelSlope=(p[4]-p[2])/Math.max(i4-i2,1);
+ const channel={a:p[3]-channelSlope*(i3-i2),b:p[3]};
+ const phaseBase=primary.quality>=78?"1–5 impulse candidate · high rule conformance":primary.quality>=60?"1–5 impulse candidate · moderate rule conformance":"1–5 impulse candidate · low rule conformance";
+ const phase=primary.truncated?phaseBase+" · Wave 5 truncation candidate":phaseBase;
+ return{primary,alternative,correction,fib:{w2:+(w2/w1).toFixed(3),w3:+(w3/w1).toFixed(3),w4:+(w4/w3).toFixed(3),w5:+(w5/w1).toFixed(3)},fibLevels,channel,phase,score:primary.quality,confidence:primary.quality,setupState:"HISTORICAL",setupReason:"The primary 1–5 count is already complete; Entry is the historical Wave 2 termination, not a current executable setup"};
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
- const rows=frames.map(f=>{const available=f.candles.length>=25;const s=available?analyzeSMC(f.candles):null;return{interval:f.interval,trend:s?.trend??"Neutral",score:s?.score??0,structure:s?.events.at(-1)?.type??(available?"No event":"UNAVAILABLE"),available};});
- const usable=rows.filter(r=>r.available); const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1; const totalWeight=usable.reduce((sum,r)=>sum+weight(r),0);
- const weighted=usable.reduce((sum,r)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*weight(r),0)/Math.max(1,totalWeight);
- return{trend:usable.length?(weighted>12?"Bullish":weighted<-12?"Bearish":"Neutral"):"Neutral",score:usable.length?clamp(50+weighted/2):0,frames:rows};
+ const rows=frames.map(f=>{
+  const available=f.candles.length>=25;
+  if(!available)return{interval:f.interval,trend:"Neutral" as const,score:0,structure:"UNAVAILABLE",available:false,elliottTrend:"Neutral" as const,elliottScore:0,elliottPhase:"UNAVAILABLE"};
+  const smc=analyzeSMC(f.candles),ew=analyzeElliott(f.candles);
+  const elliottTrend=ew.primary?.direction==="bullish"?"Bullish":ew.primary?.direction==="bearish"?"Bearish":"Neutral";
+  const smcSigned=smc.trend==="Bullish"?smc.score:smc.trend==="Bearish"?-smc.score:0;
+  const ewSigned=elliottTrend==="Bullish"?ew.score:elliottTrend==="Bearish"?-ew.score:0;
+  const signed=(smcSigned+ewSigned)/2;
+  return{interval:f.interval,trend:signed>12?"Bullish":signed<-12?"Bearish":"Neutral",score:clamp(50+signed/2),structure:smc.events.at(-1)?.type??"No event",available:true,elliottTrend,elliottScore:ew.score,elliottPhase:ew.phase};
+ });
+ const usable=rows.filter(r=>r.available);
+ const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1;
+ const totalWeight=usable.reduce((sum,r)=>sum+weight(r),0);
+ const weightedSigned=usable.reduce((sum,r)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*weight(r),0)/Math.max(1,totalWeight);
+ const elliottSigned=usable.reduce((sum,r)=>sum+(r.elliottTrend==="Bullish"?r.elliottScore:r.elliottTrend==="Bearish"?-r.elliottScore:0)*weight(r),0)/Math.max(1,totalWeight);
+ return{
+  trend:usable.length?(weightedSigned>50?"Bullish":weightedSigned<50?"Bearish":"Neutral"):"Neutral",
+  score:usable.length?clamp(weightedSigned):0,
+  elliottTrend:usable.length?(elliottSigned>12?"Bullish":elliottSigned<-12?"Bearish":"Neutral"):"Neutral",
+  elliottScore:usable.length?clamp(50+elliottSigned/2):0,
+  frames:rows
+ };
 }
+
