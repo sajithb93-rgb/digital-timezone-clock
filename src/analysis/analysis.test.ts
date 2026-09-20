@@ -127,14 +127,14 @@ describe("analysis regression",()=>{
   });
 
   it("keeps corrective structures separate from the primary impulse count",()=>{
-    expect(validateZigzag([150,125,140],false).valid).toBe(true);
-    expect(validateFlat([150,145,151],false).valid).toBe(true);
+    expect(validateZigzag([200,150,170,130],false).valid).toBe(true);
+    expect(validateFlat([200,150,195,145],false).valid).toBe(true);
     expect(analyzeElliottAdvanced(candles(100)).primary).toBeNull();
   });
 
   it("requires real contraction or expansion for a triangle candidate",()=>{
     expect(validateTriangle([100,90,96,92,94],true).contracting).toBe(true);
-    expect(validateTriangle([100,110,105,116,109],true).expanding).toBe(true);
+    expect(validateTriangle([100,90,105,80,110],true).expanding).toBe(true);
   });
 
   it("never promotes the fallback monotonic candle series to an Elliott count",()=>{
