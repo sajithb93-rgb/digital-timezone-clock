@@ -60,14 +60,142 @@ export default function Home(){
  useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:(await fetchKlines(symbol,tf,180,marketType)).filter(x=>x.closed!==false)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol,marketType]);
 
  useEffect(()=>{
-  let ws:WebSocket|undefined,stop=false,retry:ReturnType<typeof setTimeout>|undefined;
-  setCandles([]);setAnalysisCandles([]);setConnected(false);setRestConnected(false);setBacktest(null);setLoading(true);setError("");setDerivatives(null);
-  const connect=()=>{if(stop)return;ws=new WebSocket(`${marketConfig[marketType].ws}${symbol.toLowerCase()}@kline_${interval}`);
-   ws.onopen=()=>setConnected(true);ws.onclose=()=>{setConnected(false);if(!stop)retry=setTimeout(connect,2500)};ws.onerror=()=>setConnected(false);
-   ws.onmessage=e=>{try{const k=JSON.parse(e.data).k;if(!k)return;const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V,closed:!!k.x};setCandles(p=>{const a=[...p],l=a.at(-1);if(l?.time===c.time)a[a.length-1]=c;else a.push(c);return a.length>350?a.slice(-350):a})}catch{}};
+  let ws:WebSocket|undefined;
+  let stop=false;
+  let retryTimer:ReturnType<typeof setTimeout>|undefined;
+  let staleTimer:ReturnType<typeof setTimeout>|undefined;
+  let stableTimer:ReturnType<typeof setTimeout>|undefined;
+  let reconnectAttempt=0;
+  let establishedOnce=false;
+  let restSyncInFlight=false;
+  const MAX_RECONNECT_DELAY=30000;
+  const STALE_AFTER_MS=45000;
+
+  const mergeCandles=(incoming:Candle[],existing:Candle[]=[],preferIncoming=false)=>{
+   const byTime=new Map<number,Candle>();
+   if(preferIncoming){
+    for(const c of existing)byTime.set(c.time,c);
+    for(const c of incoming)byTime.set(c.time,c);
+   }else{
+    for(const c of incoming)byTime.set(c.time,c);
+    for(const c of existing)byTime.set(c.time,c);
+   }
+   return [...byTime.values()].sort((a,b)=>a.time-b.time).slice(-350);
   };
-  fetchKlines(symbol,interval,350,marketType).then(data=>{if(stop)return;setRestConnected(true);setCandles(data);setAnalysisCandles(data.filter(x=>x.closed!==false));setLoading(false);connect()}).catch(e=>{if(!stop){setRestConnected(false);setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
-  return()=>{stop=true;if(retry)clearTimeout(retry);ws?.close()};
+
+  setCandles([]);setAnalysisCandles([]);setConnected(false);setRestConnected(false);setBacktest(null);setLoading(true);setError("");setDerivatives(null);
+
+  const clearTimers=()=>{
+   if(retryTimer){clearTimeout(retryTimer);retryTimer=undefined}
+   if(staleTimer){clearTimeout(staleTimer);staleTimer=undefined}
+   if(stableTimer){clearTimeout(stableTimer);stableTimer=undefined}
+  };
+
+  const armStaleTimer=(socket:WebSocket)=>{
+   if(staleTimer)clearTimeout(staleTimer);
+   staleTimer=setTimeout(()=>{
+    if(stop||ws!==socket||socket.readyState!==WebSocket.OPEN)return;
+    try{socket.close(4001,"stale market-data stream")}catch{}
+   },STALE_AFTER_MS);
+  };
+
+  const syncFromRest=async()=>{
+   if(stop||restSyncInFlight)return;
+   restSyncInFlight=true;
+   try{
+    const data=await fetchKlines(symbol,interval,350,marketType);
+    if(stop)return;
+    setRestConnected(true);
+    setCandles(prev=>mergeCandles(data,prev));
+    setAnalysisCandles(data.filter(x=>x.closed!==false));
+   }catch(e){
+    if(stop)return;
+    setRestConnected(false);
+    if(e instanceof Error&&e.name!=="AbortError")setError(e.message||"Market data resync failed");
+   }finally{restSyncInFlight=false}
+  };
+
+  const scheduleReconnect=()=>{
+   if(stop||retryTimer)return;
+   const baseDelay=Math.min(MAX_RECONNECT_DELAY,1000*Math.pow(2,Math.min(reconnectAttempt,5)));
+   const jitter=Math.round(baseDelay*0.2*(Math.random()*2-1));
+   const delay=Math.max(750,baseDelay+jitter);
+   reconnectAttempt+=1;
+   retryTimer=setTimeout(()=>{retryTimer=undefined;connect()},delay);
+  };
+
+  const connect=()=>{
+   if(stop)return;
+   if(retryTimer){clearTimeout(retryTimer);retryTimer=undefined}
+   if(staleTimer){clearTimeout(staleTimer);staleTimer=undefined}
+   const socket=new WebSocket(marketConfig[marketType].ws + symbol.toLowerCase() + "@kline_" + interval);
+   ws=socket;
+
+   socket.onopen=()=>{
+    if(stop||ws!==socket)return;
+    setConnected(true);
+    if(stableTimer)clearTimeout(stableTimer);
+    stableTimer=setTimeout(()=>{if(!stop&&ws===socket)reconnectAttempt=0},10000);
+    armStaleTimer(socket);
+    if(establishedOnce)void syncFromRest();
+    establishedOnce=true;
+   };
+
+   socket.onmessage=e=>{
+    if(stop||ws!==socket)return;
+    try{
+     const k=JSON.parse(e.data).k;
+     if(!k)return;
+     const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V,closed:!!k.x};
+     setCandles(prev=>mergeCandles([c],prev,true));
+     if(c.closed){
+      setAnalysisCandles(prev=>{
+       const byTime=new Map<number,Candle>();
+       for(const item of prev)byTime.set(item.time,item);
+       byTime.set(c.time,c);
+       return [...byTime.values()].sort((a,b)=>a.time-b.time).slice(-350);
+      });
+     }
+     armStaleTimer(socket);
+    }catch{}
+   };
+
+   socket.onerror=()=>{
+    if(stop||ws!==socket)return;
+    setConnected(false);
+   };
+
+   socket.onclose=()=>{
+    if(ws!==socket)return;
+    if(stableTimer){clearTimeout(stableTimer);stableTimer=undefined}
+    if(staleTimer){clearTimeout(staleTimer);staleTimer=undefined}
+    setConnected(false);
+    scheduleReconnect();
+   };
+  };
+
+  fetchKlines(symbol,interval,350,marketType).then(data=>{
+   if(stop)return;
+   setRestConnected(true);
+   setCandles(data);
+   setAnalysisCandles(data.filter(x=>x.closed!==false));
+   setLoading(false);
+   connect();
+  }).catch(e=>{
+   if(stop)return;
+   setRestConnected(false);
+   setLoading(false);
+   setError(e instanceof Error?e.message:"Market data error");
+   scheduleReconnect();
+  });
+
+  return()=>{
+   stop=true;
+   clearTimers();
+   const oldSocket=ws;
+   ws=undefined;
+   try{oldSocket?.close(1000,"effect cleanup")}catch{}
+  };
  },[symbol,interval,marketType]);
 
  const lastClosed=candles.at(-1)?.closed!==false?candles.at(-1):candles.at(-2);
