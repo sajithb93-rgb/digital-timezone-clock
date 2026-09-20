@@ -194,6 +194,21 @@ function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
  }
  return out;
 }
+export type ImpulseMetrics={w1:number;w2:number;w3:number;w4:number;w5:number;r2:number;r3:number;r4:number;r5:number};
+
+export function impulseMetrics(prices:number[]):ImpulseMetrics|null{
+ if(prices.length<6)return null;
+ const p=prices,w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]);
+ if(!w1||!w2||!w3||!w4||!w5)return null;
+ return{w1,w2,w3,w4,w5,r2:w2/w1,r3:w3/w1,r4:w4/w3,r5:w5/w1};
+}
+
+export function buildImpulseFibLevels(prices:number[],bull:boolean):{label:string;price:number}[]{
+ if(prices.length<6)return[];
+ const p=prices,dir=bull?1:-1,range=Math.abs(p[5]-p[0]);
+ return[["0%",p[5]],["23.6%",p[5]+(p[0]-p[5])*.236],["38.2%",p[5]+(p[0]-p[5])*.382],["50%",p[5]+(p[0]-p[5])*.5],["61.8%",p[5]+(p[0]-p[5])*.618],["78.6%",p[5]+(p[0]-p[5])*.786],["100%",p[0]],["127.2%",p[5]+dir*range*.272],["161.8%",p[5]+dir*range*.618],["261.8%",p[5]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
+}
+
 export type ImpulseValidation={
  w2Valid:boolean;
  w3BeyondW1:boolean;
@@ -272,9 +287,11 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
   }
  }
  if(!primary)return{primary:null,alternative,correction,fib:null,fibLevels:[],channel:null,phase:correction?"A–B–C correction candidate":"No strict 1–5 impulse candidate",score:0,confidence:0,setupState:"NONE",setupReason:"No qualified impulse count"};
- const p=primary.points.map(x=>x.price),w1=Math.abs(p[1]-p[0]),w2=Math.abs(p[2]-p[1]),w3=Math.abs(p[3]-p[2]),w4=Math.abs(p[4]-p[3]),w5=Math.abs(p[5]-p[4]),entry=primary.entry??p[2],dir=primary.direction==="bullish"?1:-1;
- const hi=Math.max(p[0],p[5]),lo=Math.min(p[0],p[5]),range=hi-lo;
- const fibLevels=[["0%",p[5]],["23.6%",p[5]+(p[0]-p[5])*.236],["38.2%",p[5]+(p[0]-p[5])*.382],["50%",p[5]+(p[0]-p[5])*.5],["61.8%",p[5]+(p[0]-p[5])*.618],["78.6%",p[5]+(p[0]-p[5])*.786],["100%",p[0]],["127.2%",p[5]+dir*range*.272],["161.8%",p[5]+dir*range*.618],["261.8%",p[5]+dir*range*1.618]].map(([label,price])=>({label:String(label),price:Number(price)}));
+ const p=primary.points.map(x=>x.price),metrics=impulseMetrics(p);
+ if(!metrics)return{primary:null,alternative:null,correction:null,fib:null,fibLevels:[],channel:null,phase:"Invalid primary metrics",score:0,confidence:0,setupState:"NONE",setupReason:"Primary wave metrics are invalid"};
+ const {w1,w2,w3,w4,w5}=metrics;
+ const entry=primary.entry??p[2];
+ const fibLevels=buildImpulseFibLevels(p,primary.direction==="bullish");
  const i2=primary.points[2].index,i3=primary.points[3].index,i4=primary.points[4].index;
  const channelSlope=(p[4]-p[2])/Math.max(i4-i2,1);
  const channel={a:p[3]-channelSlope*(i3-i2),b:p[3]};
