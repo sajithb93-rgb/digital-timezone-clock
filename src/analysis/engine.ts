@@ -175,7 +175,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
   }
   if(bullBreak>0){
-   const linked=events.some(e=>e.direction==="bullish"&&e.index>=bullBreak&&e.index<=bullBreak+1);
+   const linked=events.some(e=>e.direction==="bullish"&&e.index>=i+1&&e.index<=Math.min(end,i+12));
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bullBreak+1;j<=end;j++){
@@ -189,7 +189,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    }
   }
   if(bearBreak>0){
-   const linked=events.some(e=>e.direction==="bearish"&&e.index>=bearBreak&&e.index<=bearBreak+1);
+   const linked=events.some(e=>e.direction==="bearish"&&e.index>=i+1&&e.index<=Math.min(end,i+12));
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bearBreak+1;j<=end;j++){
