@@ -69,9 +69,9 @@ describe("Elliott / EliteWave candidate rules",()=>{
   }
  });
 
- it("labels corrections as ABC, not A-B-C-D",()=>{
+ it("represents an ABC correction with Start, A, B and C turning points",()=>{
   const result=analyzeElliott(flatSeries(80));
-  if(result.correction)expect(result.correction.points.map(p=>p.label)).toEqual(["A","B","C"]);
+  if(result.correction)expect(result.correction.points.map(p=>p.label)).toEqual(["Start","A","B","C"]);
  });
 });
 
