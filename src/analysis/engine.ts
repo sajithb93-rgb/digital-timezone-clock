@@ -256,7 +256,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const latestEvent=events.at(-1);
  const eventAge=latestEvent?data.length-1-latestEvent.index:Infinity;
  const recentStructure=latestEvent&&eventAge<=30?latestEvent:undefined;
- const structureDirection=recentStructure?.direction??structure;
+ const structureDirection=recentStructure?.direction??null;
  const latestSwingHigh=highs.at(-1),latestSwingLow=lows.at(-1);
  let trend:SMCResult["trend"];
  if(structureDirection==="bullish")trend="Bullish";
@@ -317,9 +317,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
    ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<entry&&p<last.close).sort((x,y)=>y-x)
    :[];
  const uniqueTargets=structuralTargets.filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*.0005,1e-12));
- const targets=entry!==null&&risk>0
-  ?(uniqueTargets.length?uniqueTargets.slice(0,4):[1.5,2.5,3.5].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x))
-  :[];
+ const targets=entry!==null&&risk>0?uniqueTargets.slice(0,4):[];
 
  const confirmations:string[]=[];
  if(direction&&latestEvent?.direction===direction)confirmations.push("Confirmed structure alignment");
