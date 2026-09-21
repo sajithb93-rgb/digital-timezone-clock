@@ -29,7 +29,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300,marketType:Ma
 }
 
 export default function Home(){
- const [mode,setMode]=useState<Mode>("smc"),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m"),[marketType,setMarketType]=useState<MarketKind>("spot");
+ const [mode,setMode]=useState<Mode>("smc"),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m"),[marketType,setMarketType]=useState<MarketKind>("usdm");
  const [theme,setTheme]=useState<"tradingview"|"cyber">("tradingview");
  const [newsEvents,setNewsEvents]=useState<NewsEvent[]>([]),[newsNow,setNewsNow]=useState(Date.now()),[newsLoading,setNewsLoading]=useState(true),[newsError,setNewsError]=useState(false);
 
