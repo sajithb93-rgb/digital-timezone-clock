@@ -130,7 +130,7 @@ function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{
    return {...b,active:!invalidated};
   });
 }
-function equalLevelsfunction equalLevels(ps:Pivot[],tol:number){
+function equalLevels(ps:Pivot[],tol:number){
  const out:Pivot[]=[];
  for(let i=0;i<ps.length;i++){
   const match=ps.slice(0,i).find(x=>Math.abs(x.price-ps[i].price)<=tol);
@@ -366,6 +366,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   targets,
   score,
   setup
+ }
 }
 
 function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
