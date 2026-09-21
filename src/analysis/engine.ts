@@ -8,6 +8,7 @@ export type StructureEvent={index:number;price:number;type:"BOS"|"CHOCH";directi
 export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean;displacement?:boolean};
 export type Zone={low:number;high:number;type:"entry"|"stop"|"target"};
 export type Setup={direction:"BUY"|"SELL"|"WAIT";status:"WAIT"|"ACTIVE";entry:number|null;stop:number|null;targets:number[];rr:number|null;confidence:number;confirmations:string[]};
+const MIN_SETUP_RR=1.5;
 export type SMCResult={
  trend:"Bullish"|"Bearish"|"Neutral"; asOf:number; pivots:Pivot[]; internalPivots:Pivot[]; events:StructureEvent[];
  fvgs:FVG[]; orderBlocks:OB[]; breakers:Breaker[]; liquidityHighs:Pivot[]; liquidityLows:Pivot[]; equalHighs:Pivot[]; equalLows:Pivot[];
@@ -333,7 +334,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const opposingTargets=direction&&entry!==null?recentOpposingTargets(direction,entry,last,obs,fvgs,asOf,a):[];
  const uniqueTargets=[...structuralTargets,...opposingTargets].sort((x,y)=>direction==="bullish"?x-y:y-x)
   .filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*0.0005,.0000001));
- const targets=entry!==null&&risk?(uniqueTargets.length?uniqueTargets.slice(0,4):[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x)):[];
+ const targets=entry!==null&&risk
+  ?uniqueTargets.filter(p=>Math.abs(p-entry)/risk>=MIN_SETUP_RR).slice(0,4)
+  :[];
  const confirmations:string[]=[];
  if(direction&&events.at(-1)?.direction===direction)confirmations.push("Swing structure aligned");
  if(direction&&internalEvents.at(-1)?.direction===direction)confirmations.push("Internal structure aligned");
@@ -346,7 +349,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
  const score=zone&&direction?clamp(rawScore):0;
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
- const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0;
+ const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0&&rr!==null&&rr>=MIN_SETUP_RR;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable?score:0,confirmations:usable?confirmations:[]};
