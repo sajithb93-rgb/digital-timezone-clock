@@ -134,6 +134,13 @@ describe("analysis regression",()=>{
     if(e.primary) expect(e.primary.quality).toBeGreaterThanOrEqual(60);
   });
 
+  it("does not treat an unfinished tail candle as backtestable data",()=>{
+    const c=[...candles(80),{...candles(1)[0],time:80,closed:false}];
+    const result=runSMCBacktest(c,1,30,0,0);
+    expect(result.trades).toBe(0);
+    expect(result.openAtEnd).toBe(0);
+  });
+
   it("rejects invalid backtest configuration safely",()=>{
     const result=runSMCBacktest(candles(100),0,30,0,0);
     expect(result.trades).toBe(0);
