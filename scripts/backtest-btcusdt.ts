@@ -241,7 +241,9 @@ async function main() {
       warmupCandles: WARMUP,
       strategy: "SMC ACTIVE setup + aligned EliteWave primary count (quality >= 50)",
       execution: "signal on close; next candle open entry; stop-first on same-candle stop/target ambiguity; no overlapping positions",
-      dataSource: "Binance Futures REST klines"
+      dataSource: "Binance Vision USD-M Futures daily kline archives",
+      archiveLagDays: ARCHIVE_LAG_DAYS,
+      archiveWindow: "exactly DAYS complete UTC calendar days; excludes the most recent archive-lag days to avoid publication-delay 404s"
     },
     data: {
       candles: candles.length,
