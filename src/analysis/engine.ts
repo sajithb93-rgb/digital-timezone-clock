@@ -116,19 +116,22 @@ function findOrderBlocks(c:Candle[],a:number,events:StructureEvent[]):OB[]{
  return out.sort((a,b)=>a.index-b.index);
 }
 function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{
- return obs
-  .filter(o=>o.mitigated&&o.mitigationIndex!==undefined)
-  .map((o):Breaker=>({
-   index:o.mitigationIndex!,
-   low:o.low,
-   high:o.high,
-   type:o.type==="bullish"?"bearish":"bullish",
-   active:true
-  }))
-  .map(b=>{
-   const invalidated=c.slice(b.index+1).some(x=>b.type==="bullish"?x.close<b.low:x.close>b.high);
-   return {...b,active:!invalidated};
-  });
+ return obs.flatMap((o):Breaker[]=>{
+  if(!o.mitigated||o.mitigationIndex===undefined)return [];
+  let invalidationIndex=-1;
+  for(let j=o.mitigationIndex+1;j<c.length;j++){
+   const invalidated=o.type==="bullish"?c[j].close<o.low:c[j].close>o.high;
+   if(invalidated){invalidationIndex=j;break;}
+  }
+  if(invalidationIndex<0)return [];
+  const type=o.type==="bullish"?"bearish":"bullish";
+  let active=true;
+  for(let j=invalidationIndex+1;j<c.length;j++){
+   const reversed=type==="bullish"?c[j].close<o.low:c[j].close>o.high;
+   if(reversed){active=false;break;}
+  }
+  return[{index:invalidationIndex,low:o.low,high:o.high,type,active}];
+ }).sort((a,b)=>a.index-b.index);
 }
 function equalLevels(ps:Pivot[],tol:number){
  const out:Pivot[]=[];
