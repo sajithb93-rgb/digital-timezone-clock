@@ -28,6 +28,11 @@ describe("SMC engine regression rules",()=>{
   expect(result.fvgs.some(x=>x.from===27&&x.to===29&&x.type==="bullish"&&!x.filled)).toBe(true);
  });
 
+ it("does not create breakers from an order-block touch alone",()=>{
+  const result=analyzeSMC(flatSeries(60));
+  expect(result.breakers).toEqual([]);
+ });
+
  it("never emits a structure break before the broken pivot could be confirmed",()=>{
   const data=flatSeries(35);
   const result=analyzeSMC(data);
