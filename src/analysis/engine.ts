@@ -30,13 +30,20 @@ function atr(c:Candle[],n=14){return atrAt(c,c.length-1,n)}
 function atrAt(c:Candle[],end:number,n=14){if(!c.length||end<0)return 0;const e=Math.min(end,c.length-1),start=Math.max(0,e-n+1);return c.slice(start,e+1).reduce((v,_,i)=>v+trueRange(c,start+i),0)/Math.max(1,e-start+1)}
 function pivots(c:Candle[],w=3):Pivot[]{
  const out:Pivot[]=[];
- for(let i=w;i<c.length-w;i++){
+ const width=Math.max(1,Math.floor(w));
+ if(c.length<width*2+3)return out;
+ for(let i=width;i<c.length-width;i++){
   let hi=true,lo=true,score=0;
-  for(let j=i-w;j<=i+w;j++){if(j===i)continue;if(c[j].high>=c[i].high)hi=false;if(c[j].low<=c[i].low)lo=false}
-  if(hi){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].high,type:"H",strength:score/(2*w+1),confirmedAt:i+w})}
-  if(lo){for(let j=Math.max(0,i-w);j<=Math.min(c.length-1,i+w);j++)score+=Math.abs(c[j].high-c[j].low);out.push({index:i,price:c[i].low,type:"L",strength:score/(2*w+1),confirmedAt:i+w})}
+  for(let j=i-width;j<=i+width;j++){
+   if(j===i)continue;
+   if(c[j].high>=c[i].high)hi=false;
+   if(c[j].low<=c[i].low)lo=false;
+  }
+  for(let j=Math.max(0,i-width);j<=Math.min(c.length-1,i+width);j++)score+=Math.abs(c[j].high-c[j].low);
+  if(hi)out.push({index:i,price:c[i].high,type:"H",strength:score/(2*width+1),confirmedAt:i+width});
+  if(lo)out.push({index:i,price:c[i].low,type:"L",strength:score/(2*width+1),confirmedAt:i+width});
  }
- return out.sort((a,b)=>a.index-b.index);
+ return out.sort((a,b)=>a.index-b.index||a.type.localeCompare(b.type));
 }
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
 function range(c:Candle[]){const q=c.slice(-60);return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))}}
@@ -52,32 +59,107 @@ function findFvgs(c:Candle[],a:number):FVG[]{
  }
  return out;
 }
-function findOrderBlocks(c:Candle[],a:number):OB[]{
+function findOrderBlocks(c:Candle[],a:number,events:StructureEvent[]):OB[]{
  const out:OB[]=[];
- for(let i=1;i<c.length-3;i++){
-  const bullishBase=c[i].close<c[i].open;
-  const bearishBase=c[i].close>c[i].open;
-  let bullBreak=-1,bearBreak=-1,bullStrength=0,bearStrength=0;
-  for(let k=1;k<=3&&i+k<c.length;k++){
-   const d=displacementAt(c,i+k,atrAt(c,i+k));
-   if(bullishBase&&c[i+k].close>c[i].high&&d>=.55){bullBreak=i+k;bullStrength=d;break}
-   if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
-  }
-  if(bullBreak>0){
-   let m:number|undefined;
-   for(let j=bullBreak+1;j<c.length;j++)if(c[j].low<=c[i].open){m=j;break}
-   out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
-  }
-  if(bearBreak>0){
-   let m:number|undefined;
-   for(let j=bearBreak+1;j<c.length;j++)if(c[j].high>=c[i].open){m=j;break}
-   out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
+ const seen=new Set<string>();
+ for(const event of events){
+  const i=event.index;
+  if(i<1||i>=c.length)continue;
+  const eventAtr=atrAt(c,i);
+  const displacement=displacementAt(c,i,eventAtr);
+  if(displacement<.55)continue;
+  const baseType=event.direction==="bullish"?"bearish":"bullish";
+
+  for(let k=1;k<=5;k++){
+   const bi=i-k;
+   if(bi<0)break;
+   const base=c[bi];
+   const isBase=baseType==="bearish"?base.close<base.open:base.close>base.open;
+   if(!isBase)continue;
+
+   const broken=event.direction==="bullish"?c[i].close>base.high:c[i].close<base.low;
+   if(!broken)continue;
+
+   const type=event.direction;
+   const low=type==="bullish"?base.low:base.open;
+   const high=type==="bullish"?base.open:base.high;
+   if(high<=low)continue;
+
+   const key=bi+"|"+type;
+   if(seen.has(key))break;
+   seen.add(key);
+
+   let mitigationIndex:number|undefined;
+   let invalidated=false;
+   for(let j=i+1;j<c.length;j++){
+    if(mitigationIndex===undefined&&(
+      type==="bullish"?c[j].low<=high:c[j].high>=low
+    ))mitigationIndex=j;
+    if(type==="bullish"?c[j].close<low:c[j].close>high){
+     invalidated=true;
+     break;
+    }
+   }
+
+   out.push({
+    index:bi,
+    low,
+    high,
+    type,
+    mitigated:mitigationIndex!==undefined||invalidated,
+    mitigationIndex,
+    strength:displacement
+   });
+   break;
   }
  }
- return out;
+ return out.sort((a,b)=>a.index-b.index);
 }
-function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{return obs.filter(o=>o.mitigated&&o.mitigationIndex!==undefined).map((o):Breaker=>({index:o.mitigationIndex!,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true})).filter(b=>{const k=c.slice(b.index+1);return b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high)})}
-function equalLevels(ps:Pivot[],tol:number){const out:Pivot[]=[];for(let i=0;i<ps.length;i++)if(ps.slice(0,i).some(x=>Math.abs(x.price-ps[i].price)<=tol))out.push(ps[i]);return out}
+function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{
+ return obs
+  .filter(o=>o.mitigated&&o.mitigationIndex!==undefined)
+  .map((o):Breaker=>({
+   index:o.mitigationIndex!,
+   low:o.low,
+   high:o.high,
+   type:o.type==="bullish"?"bearish":"bullish",
+   active:true
+  }))
+  .map(b=>{
+   const invalidated=c.slice(b.index+1).some(x=>b.type==="bullish"?x.close<b.low:x.close>b.high);
+   return {...b,active:!invalidated};
+  });
+}
+function equalLevelsfunction equalLevels(ps:Pivot[],tol:number){
+ const out:Pivot[]=[];
+ for(let i=0;i<ps.length;i++){
+  const match=ps.slice(0,i).find(x=>Math.abs(x.price-ps[i].price)<=tol);
+  if(!match)continue;
+  if(!out.some(x=>x.index===match.index&&x.type===match.type))out.push(match);
+  if(!out.some(x=>x.index===ps[i].index&&x.type===ps[i].type))out.push(ps[i]);
+ }
+ return out.sort((a,b)=>a.index-b.index);
+}
+function zoneUsable(zone:Zone,last:Candle,atrValue:number,direction:"bullish"|"bearish"){
+ const maxDistance=Math.max(atrValue*2,Math.abs(last.close)*.002);
+ if(direction==="bullish"){
+  if(last.close<zone.low)return false;
+  return last.close<=zone.high || last.close-zone.high<=maxDistance;
+ }
+ if(last.close>zone.high)return false;
+ return last.close>=zone.low || zone.low-last.close<=maxDistance;
+}
+function zoneTrigger(c:Candle[],zone:Zone,direction:"bullish"|"bearish"){
+ const start=Math.max(0,c.length-4);
+ for(let i=start;i<c.length;i++){
+  const x=c[i],a=atrAt(c,i);
+  const touched=x.high>=zone.low&&x.low<=zone.high;
+  const reaction=direction==="bullish"?x.close>x.open:x.close<x.open;
+  const displacement=body(x)/Math.max(a,1e-12)>=.35;
+  if(touched&&reaction&&displacement)return i;
+ }
+ return -1;
+}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
  const empty:SMCResult={
@@ -90,12 +172,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const data=c.at(-1)?.closed===false?c.slice(0,-1):c;
  if(data.length<25)return empty;
 
- const a=atr(data), ps=labelPivots(pivots(data,3)), internal=labelPivots(pivots(data,1));
+ const a=atr(data),ps=labelPivots(pivots(data,3)),internal=labelPivots(pivots(data,1));
  const events:StructureEvent[]=[];
  let structure:"bullish"|"bearish"|null=null;
- let activeH:Pivot|null=null,activeL:Pivot|null=null,hiPtr=0,loPtr=0;
- const confirmedHighs=ps.filter(p=>p.type==="H").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
- const confirmedLows=ps.filter(p=>p.type==="L").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
+ let activeH:Pivot|null=null,activeL:Pivot|null=null;
+ let hiPtr=0,loPtr=0;
+ const confirmedHighs=ps.filter(p=>p.type==="H");
+ const confirmedLows=ps.filter(p=>p.type==="L");
 
  for(let i=0;i<data.length;i++){
   while(hiPtr<confirmedHighs.length&&(confirmedHighs[hiPtr].confirmedAt??Infinity)<=i)activeH=confirmedHighs[hiPtr++];
@@ -103,14 +186,24 @@ export function analyzeSMC(c:Candle[]):SMCResult{
 
   const bullBreak=!!activeH&&data[i].close>activeH.price;
   const bearBreak=!!activeL&&data[i].close<activeL.price;
-  const disp=displacementAt(data,i,atrAt(data,i))>=.7;
+  const displacement=displacementAt(data,i,atrAt(data,i))>=.7;
 
   if(bullBreak){
-   events.push({index:i,price:activeH!.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});
+   events.push({
+    index:i,price:activeH!.price,
+    type:structure==="bearish"?"CHOCH":"BOS",
+    direction:"bullish",
+    strength:displacement?"displacement":"normal"
+   });
    structure="bullish";
    activeH=null;
   }else if(bearBreak){
-   events.push({index:i,price:activeL!.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});
+   events.push({
+    index:i,price:activeL!.price,
+    type:structure==="bullish"?"CHOCH":"BOS",
+    direction:"bearish",
+    strength:displacement?"displacement":"normal"
+   });
    structure="bearish";
    activeL=null;
   }
@@ -122,18 +215,20 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const highs=ps.filter(p=>p.type==="H");
  const lows=ps.filter(p=>p.type==="L");
  const tol=Math.max(a*.15,1e-12);
- const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
+ const equalHighs=equalLevels(highs,tol);
+ const equalLows=equalLevels(lows,tol);
  const liquidityHighs=(equalHighs.length?equalHighs:highs.slice(-6)).slice(-8);
  const liquidityLows=(equalLows.length?equalLows:lows.slice(-6)).slice(-8);
 
  const sweeps:Sweep[]=[];
- const recentLiquidity=[...liquidityHighs,...liquidityLows];
  const sweepStart=Math.max(0,data.length-80);
- for(const p of recentLiquidity){
+ for(const p of [...liquidityHighs,...liquidityLows]){
   const start=Math.max((p.confirmedAt??p.index)+1,sweepStart);
   for(let j=start;j<data.length;j++){
    const x=data[j];
-   const swept=p.type==="H"?x.high>p.price&&x.close<p.price:x.low<p.price&&x.close>p.price;
+   const swept=p.type==="H"
+    ?x.high>p.price&&x.close<p.price
+    :x.low<p.price&&x.close>p.price;
    if(!swept)continue;
    sweeps.push({
     index:j,
@@ -154,6 +249,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const recentCandles=data.slice(-60);
  const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
  const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,1e-12);
+
  const latestEvent=events.at(-1);
  const structureDirection=latestEvent?.direction??structure;
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
@@ -171,28 +267,28 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const triggerIndex=zone&&rawDirection?zoneTrigger(data,zone,rawDirection):-1;
  const direction=zone&&triggerIndex>=0?rawDirection:null;
 
- const priorLow=zone&&rawDirection==="bullish"
+ const priorLow=zone&&direction==="bullish"
   ?[...lows].reverse().find(p=>p.index<triggerIndex&&p.price<zone.low)
   :undefined;
- const priorHigh=zone&&rawDirection==="bearish"
+ const priorHigh=zone&&direction==="bearish"
   ?[...highs].reverse().find(p=>p.index<triggerIndex&&p.price>zone.high)
   :undefined;
 
- const structuralLow=zone&&rawDirection==="bullish"
+ const structuralLow=zone&&direction==="bullish"
   ?(priorLow&&zone.low-priorLow.price<=a*1.5?priorLow.price:zone.low)
   :null;
- const structuralHigh=zone&&rawDirection==="bearish"
+ const structuralHigh=zone&&direction==="bearish"
   ?(priorHigh&&priorHigh.price-zone.high<=a*1.5?priorHigh.price:zone.high)
   :null;
 
  const entry=zone?(zone.low+zone.high)/2:null;
- const stop=zone&&rawDirection==="bullish"&&structuralLow!==null
+ const stop=direction==="bullish"&&structuralLow!==null
   ?structuralLow-a*.15
-  :zone&&rawDirection==="bearish"&&structuralHigh!==null
+  :direction==="bearish"&&structuralHigh!==null
    ?structuralHigh+a*.15
-   :zone&&rawDirection==="bullish"
+   :direction==="bullish"&&zone
     ?zone.low-a*.15
-    :zone
+    :direction==="bearish"&&zone
      ?zone.high+a*.15
      :null;
 
@@ -203,12 +299,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
    ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<entry&&p<last.close).sort((x,y)=>y-x)
    :[];
  const uniqueTargets=structuralTargets.filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*.0005,1e-12));
- const targets=entry!==null&&risk
+ const targets=entry!==null&&risk>0
   ?(uniqueTargets.length?uniqueTargets.slice(0,4):[1.5,2.5,3.5].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x))
   :[];
 
  const confirmations:string[]=[];
  if(direction&&latestEvent?.direction===direction)confirmations.push("Confirmed structure alignment");
+
  const sweep=direction==="bullish"
   ?sweeps.slice().reverse().find(s=>s.type==="low")
   :direction==="bearish"
@@ -229,10 +326,12 @@ export function analyzeSMC(c:Candle[]):SMCResult{
    +(((direction==="bullish"&&pd==="Discount")||(direction==="bearish"&&pd==="Premium"))?10:0)
    +(volumeRatio>=1.2?5:0)
   :0;
+
  const score=direction&&entry!==null&&stop!==null&&risk>0?clamp(rawScore):0;
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
  const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0&&
   ((direction==="bullish"&&stop<entry&&targets[0]>entry)||(direction==="bearish"&&stop>entry&&targets[0]<entry));
+
  const setup:Setup={
   direction:usable?(direction==="bullish"?"BUY":"SELL"):"WAIT",
   entry:usable?entry:null,
@@ -268,7 +367,6 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   score,
   setup
 }
-
 
 function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
  const ps=pivots(c,2).slice(-24),out:WaveCount[]=[];
