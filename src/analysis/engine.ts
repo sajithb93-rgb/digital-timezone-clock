@@ -149,8 +149,8 @@ function zoneUsable(zone:Zone,last:Candle,atrValue:number,direction:"bullish"|"b
  if(last.close>zone.high)return false;
  return last.close>=zone.low || zone.low-last.close<=maxDistance;
 }
-function zoneTrigger(c:Candle[],zone:Zone,direction:"bullish"|"bearish"){
- const start=Math.max(0,c.length-4);
+function zoneTrigger(c:Candle[],zone:Zone,direction:"bullish"|"bearish",minIndex=0){
+ const start=Math.max(minIndex,c.length-4);
  for(let i=start;i<c.length;i++){
   const x=c[i],a=atrAt(c,i);
   const touched=x.high>=zone.low&&x.low<=zone.high;
@@ -251,21 +251,36 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,1e-12);
 
  const latestEvent=events.at(-1);
- const structureDirection=latestEvent?.direction??structure;
- const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
+ const eventAge=latestEvent?data.length-1-latestEvent.index:Infinity;
+ const recentStructure=latestEvent&&eventAge<=30?latestEvent:undefined;
+ const structureDirection=recentStructure?.direction??structure;
+ const latestSwingHigh=highs.at(-1),latestSwingLow=lows.at(-1);
+ let trend:SMCResult["trend"];
+ if(structureDirection==="bullish")trend="Bullish";
+ else if(structureDirection==="bearish")trend="Bearish";
+ else if(latestSwingHigh&&latestSwingLow){
+  const hh=latestSwingHigh.label==="HH",hl=latestSwingLow.label==="HL";
+  const lh=latestSwingHigh.label==="LH",ll=latestSwingLow.label==="LL";
+  trend=hh&&hl?"Bullish":lh&&ll?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
+ }else trend=last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
+
  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
  const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
 
  let zone:Zone|null=null;
+ let zoneAnchor=-1;
  if(rawDirection){
-  const candidates:Zone[]=[
-   ...obs.filter(x=>x.type===rawDirection&&!x.mitigated).reverse().map(x=>({low:x.low,high:x.high,type:"entry" as const})),
-   ...fvgs.filter(x=>x.type===rawDirection&&!x.filled).reverse().map(x=>({low:x.low,high:x.high,type:"entry" as const}))
+  const candidates:[Zone,number][]=[
+   ...obs.filter(x=>x.type===rawDirection&&!x.mitigated).reverse().map(x=>[{low:x.low,high:x.high,type:"entry" as const},x.index] as [Zone,number]),
+   ...fvgs.filter(x=>x.type===rawDirection&&!x.filled).reverse().map(x=>[{low:x.low,high:x.high,type:"entry" as const},x.to] as [Zone,number])
   ];
-  zone=candidates.find(z=>zoneUsable(z,last,a,rawDirection))??null;
+  const selected=candidates.find(([z])=>zoneUsable(z,last,a,rawDirection));
+  if(selected){zone=selected[0];zoneAnchor=selected[1];}
  }
- const triggerIndex=zone&&rawDirection?zoneTrigger(data,zone,rawDirection):-1;
- const direction=zone&&triggerIndex>=0?rawDirection:null;
+
+ const triggerIndex=zone&&rawDirection?zoneTrigger(data,zone,rawDirection,zoneAnchor+1):-1;
+ const setupFresh=triggerIndex>=Math.max(0,data.length-3)&&zone!==null&&zoneUsable(zone,last,a,rawDirection!);
+ const direction=zone&&triggerIndex>=0&&setupFresh?rawDirection:null;
 
  const priorLow=zone&&direction==="bullish"
   ?[...lows].reverse().find(p=>p.index<triggerIndex&&p.price<zone.low)
@@ -307,13 +322,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  if(direction&&latestEvent?.direction===direction)confirmations.push("Confirmed structure alignment");
 
  const sweep=direction==="bullish"
-  ?sweeps.slice().reverse().find(s=>s.type==="low")
+  ?sweeps.slice().reverse().find(s=>s.type==="low"&&s.index>=Math.max(0,data.length-20)&&(triggerIndex<0||s.index<=triggerIndex))
   :direction==="bearish"
-   ?sweeps.slice().reverse().find(s=>s.type==="high")
+   ?sweeps.slice().reverse().find(s=>s.type==="high"&&s.index>=Math.max(0,data.length-20)&&(triggerIndex<0||s.index<=triggerIndex))
    :undefined;
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
- if(direction&&obs.some(x=>x.type===direction&&!x.mitigated))confirmations.push("Unmitigated order block");
- if(direction&&fvgs.some(x=>x.type===direction&&!x.filled))confirmations.push("Unfilled fair value gap");
+ if(direction&&zone?.type==="entry"&&obs.some(x=>x.type===direction&&!x.mitigated&&x.low===zone.low&&x.high===zone.high))confirmations.push("Selected unmitigated order block");
+ if(direction&&zone?.type==="entry"&&fvgs.some(x=>x.type===direction&&!x.filled&&x.low===zone.low&&x.high===zone.high))confirmations.push("Selected unfilled fair value gap");
  if((direction==="bullish"&&pd==="Discount")||(direction==="bearish"&&pd==="Premium"))confirmations.push("Premium/discount aligned");
  if(triggerIndex>=0&&displacementAt(data,triggerIndex,atrAt(data,triggerIndex))>=.5)confirmations.push("Closed-candle displacement trigger");
 
@@ -321,8 +336,8 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   ?25
    +(latestEvent?.direction===direction?20:0)
    +(sweep?.confirmed?15:0)
-   +(obs.some(x=>x.type===direction&&!x.mitigated)?15:0)
-   +(fvgs.some(x=>x.type===direction&&!x.filled)?10:0)
+   +(zone&&obs.some(x=>x.type===direction&&!x.mitigated&&x.low===zone.low&&x.high===zone.high)?15:0)
+   +(zone&&fvgs.some(x=>x.type===direction&&!x.filled&&x.low===zone.low&&x.high===zone.high)?10:0)
    +(((direction==="bullish"&&pd==="Discount")||(direction==="bearish"&&pd==="Premium"))?10:0)
    +(volumeRatio>=1.2?5:0)
   :0;
