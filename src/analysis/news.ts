@@ -45,7 +45,16 @@ export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes
     nextEvent, minutesToEvent, minutesSinceEvent
   };
   const medium = events.filter(e => e.impact === "medium").sort((a,b) => Math.abs(a.date-now) - Math.abs(b.date-now))[0];
-  if (medium && Math.abs(medium.date - now) <= buffer) return { level: "MEDIUM", blocked: false, message: medium.title + " is near the market — use caution", nextEvent: medium, minutesToEvent: Math.ceil((medium.date-now)/60_000) };
+  if (medium && Math.abs(medium.date - now) <= buffer) {
+    const delta=medium.date-now;
+    return {
+      level: "MEDIUM", blocked: false,
+      message: delta>=0 ? medium.title + " in " + Math.ceil(delta/60_000) + "m — use caution" : medium.title + " was " + Math.ceil(Math.abs(delta)/60_000) + "m ago — use caution",
+      nextEvent: medium,
+      minutesToEvent: delta>=0 ? Math.ceil(delta/60_000) : undefined,
+      minutesSinceEvent: delta<0 ? Math.ceil(Math.abs(delta)/60_000) : undefined
+    };
+  }
   return { level: "LOW", blocked: false, message: "No high-impact USD news in the configured window" };
 }
 export async function fetchNewsEvents(signal?: AbortSignal): Promise<NewsEvent[]> {

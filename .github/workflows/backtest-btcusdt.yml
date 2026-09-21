@@ -1,0 +1,61 @@
+name: BTCUSDT 5m Backtest
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Lookback period in days"
+        required: true
+        default: "90"
+        type: string
+      initial_equity:
+        description: "Starting equity (USDT)"
+        required: true
+        default: "10000"
+        type: string
+      risk_fraction:
+        description: "Equity risk per trade (0.01 = 1%)"
+        required: true
+        default: "0.01"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: btcusdt-backtest-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    name: Run Binance Futures backtest
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run BTCUSDT 5m backtest
+        env:
+          SYMBOL: BTCUSDT
+          DAYS: ${{ inputs.days }}
+          INITIAL_EQUITY: ${{ inputs.initial_equity }}
+          RISK_FRACTION: ${{ inputs.risk_fraction }}
+        run: npm run backtest
+
+      - name: Upload JSON report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: btcusdt-5m-backtest-${{ github.run_number }}
+          path: backtest-*.json
+          if-no-files-found: warn
+          retention-days: 30
