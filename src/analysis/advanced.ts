@@ -47,7 +47,7 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
    continue;
   }
   const range=Math.max(x.high-x.low,1e-12);
-  const bodyBias=Math.max(-1,Math.min(1,(x.close-x.open)/range);
+  const bodyBias=Math.max(-1,Math.min(1,(x.close-x.open)/range));
   const buyShare=.5+bodyBias*.25;
   const b=x.volume*buyShare,s=x.volume-b;
   buy+=b;sell+=s;cum+=b-s;
