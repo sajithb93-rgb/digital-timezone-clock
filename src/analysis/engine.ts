@@ -444,37 +444,44 @@ function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
  return out;
 }
 function correctionCandidates(c:Candle[]):WaveCount[]{
- const ps=pivots(c,2).slice(-20),out:WaveCount[]=[];
- if(ps.length<3)return out;
+ const ps=pivots(c,2).slice(-22),out:WaveCount[]=[];
+ if(ps.length<4)return out;
 
- for(let s=0;s<=ps.length-3;s++){
-  const q=ps.slice(s,s+3);
+ for(let s=0;s<=ps.length-4;s++){
+  const q=ps.slice(s,s+4);
   if(q.some((p,i)=>i>0&&p.index<=q[i-1].index))continue;
 
-  const bull=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L";
-  const bear=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H";
-  if(!bull&&!bear)continue;
+  const bearish=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L";
+  const bullish=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H";
+  if(!bearish&&!bullish)continue;
 
   const p=q.map(x=>x.price);
-  const aLeg=Math.abs(p[1]-p[0]),cLeg=Math.abs(p[2]-p[1]);
-  if(aLeg<=0||cLeg<=0)continue;
+  const aLeg=Math.abs(p[1]-p[0]);
+  const bLeg=Math.abs(p[2]-p[1]);
+  const cLeg=Math.abs(p[3]-p[2]);
+  if(aLeg<=0||bLeg<=0||cLeg<=0)continue;
 
-  const bRetrace=cLeg/aLeg;
-  const cVsA=Math.abs(p[2]-p[0])/aLeg;
-  let quality=40;
-  const rules:string[]=["ABC candidate from three confirmed pivots"];
+  const bRetrace=bLeg/aLeg;
+  const cProjection=cLeg/aLeg;
+  let quality=35;
+  const rules:string[]=["ABC correction candidate from four confirmed pivots"];
 
-  if(bRetrace>=.382&&bRetrace<=.786){quality+=25;rules.push("C retracement is 38.2–78.6% of A")}
-  else if(bRetrace<1){quality+=12;rules.push("C remains inside the A-leg")}
-  if(cVsA>=.618&&cVsA<=1.618){quality+=25;rules.push("C length is plausible relative to A")}
-  else if(cVsA<2){quality+=10;rules.push("C length is within a broad extension range")}
+  if(bRetrace>=.382&&bRetrace<=.786){quality+=30;rules.push("B retraces 38.2–78.6% of A")}
+  else if(bRetrace<1){quality+=12;rules.push("B is a shallow A retracement")}
+  else if(bRetrace<1.0)quality+=8;
+
+  if(cProjection>=.618&&cProjection<=1.618){quality+=25;rules.push("C is 0.618–1.618× A")}
+  else if(cProjection<2){quality+=12;rules.push("C remains within a broad A extension range")}
+
+  if(bearish?p[3]<p[1]:p[3]>p[1]){quality+=10;rules.push("C extends beyond A termination")}
+  else rules.push("C fails to extend beyond A termination");
 
   out.push({
-   points:q.map((x,i)=>({index:x.index,price:x.price,label:["A","B","C"][i]})),
+   points:q.map((x,i)=>({index:x.index,price:x.price,label:["Start","A","B","C"][i]})),
    kind:"Correction",
-   direction:bull?"bullish":"bearish",
+   direction:bearish?"bearish":"bullish",
    invalidation:p[0],
-   targets:[p[2]],
+   targets:[p[3]],
    quality:clamp(quality),
    rules
   });
