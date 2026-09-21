@@ -116,6 +116,8 @@ function inferDegree(spanBars:number,totalBars:number):ElliottDegree{
   return "Primary";
 }
 
+const MAX_PRIMARY_AGE_BARS = 144;
+
 function extensionProfile(w1:number,w3:number,w5:number){
   const base=Math.min(w1,w3,w5);
   if(base<=0)return{count:3,plausible:false};
@@ -297,19 +299,27 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     ...diagonalCandidates(c,true),...diagonalCandidates(c,false)
   ];
   const ranked=action
-    .sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)))
+    .sort((a,b)=>{
+      const ageA=(c.length-1)-(a.points.at(-1)?.index??-1);
+      const ageB=(c.length-1)-(b.points.at(-1)?.index??-1);
+      const recentA=ageA<=MAX_PRIMARY_AGE_BARS?8*(1-ageA/MAX_PRIMARY_AGE_BARS):0;
+      const recentB=ageB<=MAX_PRIMARY_AGE_BARS?8*(1-ageB/MAX_PRIMARY_AGE_BARS):0;
+      return (b.quality+recentB)-(a.quality+recentA)
+        ||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1));
+    })
     .filter((x,i,a)=>i===a.findIndex(y=>y.points.map(p=>p.index).join(",")===x.points.map(p=>p.index).join(",")));
-  const primary=ranked.find(x=>x.quality>=60)??null;
+  const recentRanked=ranked.filter(x=>((c.length-1)-(x.points.at(-1)?.index??-1))<=MAX_PRIMARY_AGE_BARS);
+  const primary=recentRanked.find(x=>x.quality>=60)??null;
   const alternative=ranked.find(x=>x!==primary&&x.quality>=55)??null;
   const correction=corrections[0]??null;
 
   if(!primary){
-    const r=EMPTY(correction?"No complete 1–5 count; correction candidate is the strongest completed structure":"No qualified Elliott count");
+    const r=EMPTY(correction?"No recent complete 1–5 count; correction candidate is the strongest completed structure":"No recent qualified Elliott count");
     r.alternative=alternative;
     r.correction=correction;
     r.candidateCount=action.length;
     r.correctionCandidates=corrections.length;
-    r.phase=correction ? correction.pattern + " correction candidate" : "No qualified Elliott count";
+    r.phase=correction ? correction.pattern + " correction candidate" : "No recent qualified Elliott count";
     r.pattern=correction?.pattern??"Correction";
     r.correctionPattern=(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Triangle")?correction.pattern:"None";
     r.activeWave=correction ? (String(correction.points.at(-1)?.label||"C") as AdvancedElliottResult["activeWave"]) : "None";
