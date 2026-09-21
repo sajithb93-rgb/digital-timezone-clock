@@ -155,77 +155,120 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
  */
 export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,slippageBps=0){
   let trades=0,wins=0,losses=0,totalR=0,grossR=0,costR=0,grossWinR=0,grossLossR=0,maxEquity=0,equity=0,maxDD=0,expired=0,notTriggered=0,openAtEnd=0;
-  if(!Number.isFinite(riskR)||riskR<=0||!Number.isFinite(maxHoldingCandles)||maxHoldingCandles<1||!Number.isFinite(feeBps)||feeBps<0||feeBps>10000||!Number.isFinite(slippageBps)||slippageBps<0||slippageBps>10000){
+  if(!Array.isArray(c)||!Number.isFinite(riskR)||riskR<=0||!Number.isFinite(maxHoldingCandles)||maxHoldingCandles<1||!Number.isFinite(feeBps)||feeBps<0||feeBps>10000||!Number.isFinite(slippageBps)||slippageBps<0||slippageBps>10000){
+    return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered,openAtEnd};
+  }
+
+  // Backtests must never inspect an unfinished candle. The analysis window ends
+  // before the signal bar, and the signal can only execute on later closed bars.
+  const closedCandles=c.filter(x=>x.closed!==false);
+  if(closedCandles.length<81){
     return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered,openAtEnd};
   }
 
   const seenSignals=new Set<string>();
-  let nextAvailableIndex=80;
-  for(let i=80;i<c.length;i++){
-    const s=analyzeSMC(c.slice(0,i));
-    if(s.setup.direction==="WAIT"||s.setup.entry==null||s.stop==null)continue;
-    const entry=s.setup.entry,stop=s.stop,target=s.targets[0];
-    if(target==null||![entry,stop,target].every(Number.isFinite)||entry<=0||stop<=0||target<=0)continue;
-    const isBuy=s.setup.direction==="BUY";
-    if((isBuy&&(stop>=entry||target<=entry))||(!isBuy&&(stop<=entry||target>=entry)))continue;
+  let cursor=80;
+  const maxBars=Math.max(1,Math.floor(maxHoldingCandles));
 
-    // One trade per distinct generated setup; evaluate each historical bar without fixed sampling.
+  while(cursor<closedCandles.length){
+    const analysisWindow=closedCandles.slice(0,cursor);
+    const s=analyzeSMC(analysisWindow);
+    if(s.setup.direction==="WAIT"||s.setup.entry==null||s.stop==null){
+      cursor++;
+      continue;
+    }
+
+    const entry=s.setup.entry,stop=s.stop,target=s.targets[0];
+    if(target==null||![entry,stop,target].every(Number.isFinite)||entry<=0||stop<=0||target<=0){
+      cursor++;
+      continue;
+    }
+
+    const isBuy=s.setup.direction==="BUY";
+    if((isBuy&&(stop>=entry||target<=entry))||(!isBuy&&(stop<=entry||target>=entry))){
+      cursor++;
+      continue;
+    }
+
     const eventIndex=s.events.at(-1)?.index??-1;
     const signalKey=[eventIndex,s.setup.direction,entry.toPrecision(12),stop.toPrecision(12)].join("|");
-    if(seenSignals.has(signalKey)||i<nextAvailableIndex)continue;
+    if(seenSignals.has(signalKey)){
+      cursor++;
+      continue;
+    }
+    seenSignals.add(signalKey);
 
     const riskDistance=Math.abs(entry-stop);
     const rewardR=Math.abs(target-entry)/riskDistance;
-    if(!Number.isFinite(rewardR)||rewardR<=0)continue;
-
-    // The setup is known only after bar i-1 closes, so entry can trigger from bar i onward.
-    const maxBars=Math.max(1,Math.floor(maxHoldingCandles));
-    const scanEnd=Math.min(c.length, i+maxBars+1);
-    let entryBar=-1;
-    for(let j=i;j<scanEnd;j++){
-      if(c[j].low<=entry&&c[j].high>=entry){entryBar=j;break;}
+    if(!Number.isFinite(rewardR)||rewardR<=0){
+      cursor++;
+      continue;
     }
-    if(entryBar<0){seenSignals.add(signalKey);notTriggered++;continue;}
-    seenSignals.add(signalKey);
+
+    // Pending entry expires after the same holding horizon used for the position.
+    const entryEnd=Math.min(closedCandles.length,cursor+maxBars);
+    let entryBar=-1;
+    for(let j=cursor;j<entryEnd;j++){
+      if(closedCandles[j].low<=entry&&closedCandles[j].high>=entry){entryBar=j;break;}
+    }
+    if(entryBar<0){
+      notTriggered++;
+      cursor++;
+      continue;
+    }
 
     let result=0,exitPrice=entry,closed=false,exitIndex=-1;
-    const tradeEnd=Math.min(c.length,entryBar+maxBars+1);
+    const tradeEnd=Math.min(closedCandles.length,entryBar+maxBars);
     for(let j=entryBar;j<tradeEnd;j++){
-      const x=c[j];
+      const x=closedCandles[j];
       const stopHit=isBuy?x.low<=stop:x.high>=stop;
       const targetHit=isBuy?x.high>=target:x.low<=target;
-      // Conservative intrabar ordering when both are touched is stop first.
-      if(stopHit){result=-riskR;exitPrice=stop;closed=true;exitIndex=j;break;}
-      if(targetHit){result=rewardR*riskR;exitPrice=target;closed=true;exitIndex=j;break;}
+      // With OHLC-only data, same-candle stop+target ordering is unknowable.
+      // Use the conservative stop-first rule consistently.
+      if(stopHit){
+        result=-riskR;exitPrice=stop;closed=true;exitIndex=j;break;
+      }
+      if(targetHit){
+        result=rewardR*riskR;exitPrice=target;closed=true;exitIndex=j;break;
+      }
     }
 
     if(!closed){
-      // Do not mark an unfinished dataset tail as an expiry.
-      if(tradeEnd>=c.length){openAtEnd++;nextAvailableIndex=c.length;continue;}
+      if(tradeEnd>=closedCandles.length){
+        openAtEnd++;
+        break;
+      }
       exitIndex=tradeEnd-1;
-      if(exitIndex<entryBar)continue;
-      exitPrice=c[exitIndex].close;
+      if(exitIndex<entryBar){
+        cursor++;
+        continue;
+      }
+      exitPrice=closedCandles[exitIndex].close;
       const moveR=(isBuy?exitPrice-entry:entry-exitPrice)/riskDistance;
       result=moveR*riskR;
       expired++;
     }
-    nextAvailableIndex=Math.max(nextAvailableIndex,exitIndex+1);
+
+    // No overlap: once an actual position starts, the next signal is considered
+    // only after this trade exits or the dataset ends.
+    cursor=Math.max(cursor+1,exitIndex+1);
 
     const side=isBuy?1:-1;
     const slip=Math.max(0,slippageBps)/10000;
     const entryExec=entry*(1+side*slip);
     const exitExec=Math.max(exitPrice,1e-12)*(1-side*slip);
-    const grossMoveR=(isBuy?exitExec-entryExec:entryExec-exitExec)/riskDistance*riskR;
     const feeRate=Math.max(0,feeBps)/10000;
     const tradeCostR=((entryExec+exitExec)*feeRate)/riskDistance;
-    const netResult=grossMoveR-tradeCostR;
-    result=grossMoveR;
+    const netResult=(isBuy?exitExec-entryExec:entryExec-exitExec)/riskDistance*riskR-tradeCostR;
+
     grossR+=result;
     costR+=tradeCostR;
     totalR+=netResult;
     trades++;
     if(netResult>0){wins++;grossWinR+=netResult;}else{losses++;grossLossR+=Math.abs(netResult);}
-    equity+=netResult;maxEquity=Math.max(maxEquity,equity);maxDD=Math.max(maxDD,maxEquity-equity);
+    equity+=netResult;
+    maxEquity=Math.max(maxEquity,equity);
+    maxDD=Math.max(maxDD,maxEquity-equity);
   }
 
   return{
