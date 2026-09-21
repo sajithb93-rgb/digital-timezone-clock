@@ -280,6 +280,11 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
  const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
+ const sweep=rawDirection==="bullish"
+  ?sweeps.slice().reverse().find(x=>x.type==="low"&&asOf-x.index<=20)
+  :rawDirection==="bearish"
+   ?sweeps.slice().reverse().find(x=>x.type==="high"&&asOf-x.index<=20)
+   :undefined;
  const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,events,last,a,asOf);
  const zone=selectedZone?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
  const direction=zone?rawDirection:null;
