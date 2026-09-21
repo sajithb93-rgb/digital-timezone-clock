@@ -12,7 +12,12 @@ const SLIPPAGE = Number(process.env.SLIPPAGE ?? 0.0002); // adverse fraction per
 const WARMUP = 500;
 const LIMIT = 1500;
 
-type BinanceKline = [\n  number, string, string, string, string, string,\n  number, string, string, string, string, string\n];\n\ntype Trade = { side: "LONG" | "SHORT"; entryTime: number; exitTime: number; entry: number; exit: number; stop: number; target: number; qty: number; pnl: number; r: number; reason: string };
+type BinanceKline = [
+  number, string, string, string, string, string,
+  number, string, string, string, string, string
+];
+
+type Trade = { side: "LONG" | "SHORT"; entryTime: number; exitTime: number; entry: number; exit: number; stop: number; target: number; qty: number; pnl: number; r: number; reason: string };
 
 async function fetchCandles(): Promise<Candle[]> {
   const end = Date.now();
