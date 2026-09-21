@@ -53,11 +53,60 @@ function pivots(c:Candle[],w=3):Pivot[]{
 
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
 export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.high>=zone.low&&last.low<=zone.high}
-function range(c:Candle[]){const q=c.slice(-60);return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))}}
+function range(c:Candle[]){
+ const q=c.slice(-60);
+ return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
+}
 function body(c:Candle){return Math.abs(c.close-c.open)}
 function displacementAt(c:Candle[],i:number,a:number){return a>0?body(c[i])/a:0}
-function labelPivots(ps:Pivot[]){const out:Pivot[]=[];let lastH:number|undefined,lastL:number|undefined;for(const p of ps){const q={...p};if(p.type==="H"){q.label=lastH===undefined?"SH":p.price>lastH?"HH":"LH";lastH=p.price}else{q.label=lastL===undefined?"SL":p.price>lastL?"HL":"LL";lastL=p.price}out.push(q)}return out}
-
+function labelPivots(ps:Pivot[]){
+ const out:Pivot[]=[];let lastH:number|undefined,lastL:number|undefined;
+ for(const p of ps){
+  const q={...p};
+  if(p.type==="H"){q.label=lastH===undefined?"SH":p.price>lastH?"HH":"LH";lastH=p.price}
+  else{q.label=lastL===undefined?"SL":p.price>lastL?"HL":"LL";lastL=p.price}
+  out.push(q);
+ }
+ return out;
+}
+function dealingRange(ps:Pivot[],c:Candle[],asOf:number){
+ const confirmed=ps.filter(p=>(p.confirmedAt??p.index)<=asOf).sort((a,b)=>a.index-b.index);
+ for(let i=confirmed.length-1;i>0;i--){
+  const a=confirmed[i],b=confirmed[i-1];
+  if(a.type===b.type)continue;
+  const high=a.type==="H"?a:b;
+  const low=a.type==="L"?a:b;
+  if(high.price>low.price)return{hi:high.price,lo:low.price,source:"confirmed-swing" as const};
+ }
+ const r=range(c);
+ return{hi:r.hi,lo:r.lo,source:"fallback-60" as const};
+}
+function uniquePivots(ps:Pivot[],tol:number){
+ const out:Pivot[]=[];
+ for(const p of [...ps].sort((a,b)=>a.index-b.index)){
+  if(!out.some(x=>Math.abs(x.price-p.price)<=tol))out.push(p);
+  else{
+   const i=out.findIndex(x=>Math.abs(x.price-p.price)<=tol);
+   if(i>=0&&p.index>out[i].index)out[i]=p;
+  }
+ }
+ return out.sort((a,b)=>a.index-b.index);
+}
+function equalLevels(ps:Pivot[],tol:number){
+ const unused=[...ps].sort((a,b)=>a.price-b.price);
+ const reps:Pivot[]=[];
+ while(unused.length){
+  const seed=unused.shift()!;
+  const cluster=[seed];
+  for(let i=unused.length-1;i>=0;i--){
+   if(Math.abs(unused[i].price-seed.price)<=tol)cluster.push(unused.splice(i,1)[0]);
+  }
+  if(cluster.length>=2){
+   reps.push(cluster.reduce((best,p)=>p.index>best.index?p:best));
+  }
+ }
+ return reps.sort((a,b)=>a.index-b.index);
+}
 function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  const out:FVG[]=[];
  const endIndex=Math.min(asOf,c.length-1);
@@ -111,7 +160,66 @@ function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
    return k.length>0&&(b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high));
   });
 }
-function equalLevels(ps:Pivot[],tol:number){const out:Pivot[]=[];for(let i=0;i<ps.length;i++)if(ps.slice(0,i).some(x=>Math.abs(x.price-ps[i].price)<=tol))out.push(ps[i]);return out}
+type ZoneCandidate={low:number;high:number;origin:number;kind:"OB"|"FVG";strength:number;linked:boolean;distance:number};
+function chooseEntryZone(
+ direction:"bullish"|"bearish"|null,
+ obs:OB[],
+ fvgs:FVG[],
+ events:StructureEvent[],
+ last:Candle,
+ atrValue:number,
+ asOf:number
+):ZoneCandidate|null{
+ if(!direction)return null;
+ const latestEvent=[...events].reverse().find(e=>e.direction===direction&&e.index<=asOf);
+ const candidates:ZoneCandidate[]=[];
+ for(const o of obs){
+  if(o.type!==direction||o.mitigated)continue;
+  const age=asOf-o.index;
+  if(age<0||age>50)continue;
+  const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
+  if(distance>atrValue*3.5)continue;
+  const linked=!!latestEvent&&o.index<=latestEvent.index&&latestEvent.index-o.index<=12;
+  candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked,distance});
+ }
+ for(const f of fvgs){
+  if(f.type!==direction||f.filled)continue;
+  const origin=f.to,age=asOf-origin;
+  if(age<0||age>40)continue;
+  const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
+  if(distance>atrValue*3.5)continue;
+  const linked=!!latestEvent&&origin<=latestEvent.index&&latestEvent.index-origin<=12;
+  candidates.push({low:f.low,high:f.high,origin,kind:"FVG",strength:f.size??0,linked,distance});
+ }
+ if(!candidates.length)return null;
+ candidates.sort((x,y)=>{
+  const score=(z:ZoneCandidate)=>
+   (z.linked?100000:0)
+   +(z.kind==="OB"?20000:10000)
+   +Math.max(0,5000-(asOf-z.origin)*100)
+   +Math.min(2000,z.strength*250)
+   -Math.min(5000,z.distance/Math.max(atrValue,.0000001)*1000);
+  return score(y)-score(x);
+ });
+ return candidates[0];
+}
+function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:Candle,obs:OB[],fvgs:FVG[],asOf:number,atrValue:number){
+ const levels:number[]=[];
+ const opposite=direction==="bullish"?"bearish":"bullish";
+ for(const o of obs){
+  if(o.type!==opposite||o.mitigated||asOf-o.index>50)continue;
+  const mid=(o.low+o.high)/2;
+  if(direction==="bullish"&&mid>Math.max(entry,last.close)&&mid<=last.close+atrValue*8)levels.push(mid);
+  if(direction==="bearish"&&mid<Math.min(entry,last.close)&&mid>=last.close-atrValue*8)levels.push(mid);
+ }
+ for(const f of fvgs){
+  if(f.type!==opposite||f.filled||asOf-f.to>40)continue;
+  const mid=(f.low+f.high)/2;
+  if(direction==="bullish"&&mid>Math.max(entry,last.close)&&mid<=last.close+atrValue*8)levels.push(mid);
+  if(direction==="bearish"&&mid<Math.min(entry,last.close)&&mid>=last.close-atrValue*8)levels.push(mid);
+ }
+ return levels;
+}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
  const empty:SMCResult={trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",status:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
@@ -146,44 +254,58 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const asOf=c.length-1;
  const fvgs=findFvgs(c,a,asOf),obs=findOrderBlocks(c,a,asOf),breakers=makeBreakers(obs,c,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.18,.0000001);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
- const liquidityHighs=equalHighs.length?equalHighs:highs.slice(-6),liquidityLows=equalLows.length?equalLows:lows.slice(-6);
+ const liquidityHighs=uniquePivots([...equalHighs,...highs.slice(-6)],tol).slice(-8);
+ const liquidityLows=uniquePivots([...equalLows,...lows.slice(-6)],tol).slice(-8);
  const sweeps:Sweep[]=[];
- for(const p of [...liquidityHighs.slice(-6),...liquidityLows.slice(-6)]){
-  for(let j=p.index+1;j<c.length;j++){const hit=p.type==="H"?c[j].high>p.price&&c[j].close<p.price:c[j].low<p.price&&c[j].close>p.price;if(hit){sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(c,j,a)>=.7});break}}
+ for(const p of [...liquidityHighs,...liquidityLows]){
+  if(asOf-p.index>40)continue;
+  for(let j=p.index+1;j<=asOf;j++){
+   const hit=p.type==="H"?c[j].high>p.price&&c[j].close<p.price:c[j].low<p.price&&c[j].close>p.price;
+   if(hit){
+    sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(c,j,atrAt(c,j))>=.7});
+    break;
+   }
+  }
  }
-  const r=range(c);
-  const mid=(r.hi+r.lo)/2;
-  const last=c[c.length-1];
-  const recentVolumes=c.slice(-21,-1);
-  const volBase=recentVolumes.reduce((s,x)=>s+x.volume,0)/Math.max(1,recentVolumes.length);
-  const volumeRatio=last.volume/Math.max(volBase,.0000001);
-  const recentCandles=c.slice(-60);
-  const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
-  const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
-  const structureDirection=events.at(-1)?.direction??null;
+ const r=dealingRange(ps,c,asOf);
+ const mid=(r.hi+r.lo)/2;
+ const last=c[c.length-1];
+ const recentVolumes=c.slice(-21,-1);
+ const volBase=recentVolumes.reduce((s,x)=>s+x.volume,0)/Math.max(1,recentVolumes.length);
+ const volumeRatio=last.volume/Math.max(volBase,.0000001);
+ const recentCandles=c.slice(-60);
+ const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
+ const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
+ const structureDirection=events.at(-1)?.direction??null;
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
  const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
- const ob=rawDirection?[...obs].reverse().find(x=>x.type===rawDirection&&!x.mitigated):undefined;
- const fvg=rawDirection?[...fvgs].reverse().find(x=>x.type===rawDirection&&!x.filled):undefined;
- const sweep=rawDirection==="bullish"?sweeps.slice().reverse().find(s=>s.type==="low"):rawDirection==="bearish"?sweeps.slice().reverse().find(s=>s.type==="high"):undefined;
- const zone=rawDirection?(ob?{low:ob.low,high:ob.high,type:"entry" as const}:fvg?{low:fvg.low,high:fvg.high,type:"entry" as const}:null):null;
+ const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,events,last,a,asOf);
+ const zone=selectedZone?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
  const direction=zone?rawDirection:null;
  const entry=zone?(zone.low+zone.high)/2:null;
- const priorLow=zone?[...lows].reverse().find(p=>p.index<c.length-1&&p.price<zone.low):undefined;
- const priorHigh=zone?[...highs].reverse().find(p=>p.index<c.length-1&&p.price>zone.high):undefined;
- const structuralLow=zone?(priorLow&&zone.low-priorLow.price<=a*1.5?priorLow.price:zone.low):null;
- const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.5?priorHigh.price:zone.high):null;
+ const zoneOrigin=selectedZone?.origin??asOf;
+ const priorLow=zone?[...lows].reverse().find(p=>p.index<zoneOrigin):undefined;
+ const priorHigh=zone?[...highs].reverse().find(p=>p.index<zoneOrigin):undefined;
+ const structuralLow=zone?(priorLow&&zone.low-priorLow.price<=a*1.8?priorLow.price:zone.low):null;
+ const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.8?priorHigh.price:zone.high):null;
  const stop=zone?(direction==="bullish"&&structuralLow!==null?structuralLow-a*.15:direction==="bearish"&&structuralHigh!==null?structuralHigh+a*.15:null):null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
- const structuralTargets=direction==="bullish"?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>entry&&p>last.close).sort((a,b)=>a-b):direction==="bearish"?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<entry&&p<last.close).sort((a,b)=>b-a):[];
- const uniqueTargets=structuralTargets.filter((p,i,a)=>i===0||Math.abs(p-a[i-1])>Math.max(Math.abs(p)*0.0005,.0000001));
+ const structuralTargets=direction==="bullish"
+  ?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>Math.max(entry,last.close)).sort((a,b)=>a-b)
+  :direction==="bearish"
+   ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<Math.min(entry,last.close)).sort((a,b)=>b-a)
+   :[];
+ const opposingTargets=direction&&entry!==null?recentOpposingTargets(direction,entry,last,obs,fvgs,asOf,a):[];
+ const uniqueTargets=[...structuralTargets,...opposingTargets].sort((x,y)=>direction==="bullish"?x-y:y-x)
+  .filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*0.0005,.0000001));
  const targets=entry!==null&&risk?(uniqueTargets.length?uniqueTargets.slice(0,4):[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x)):[];
  const confirmations:string[]=[];
  if(direction&&events.at(-1)?.direction===direction)confirmations.push("Structure aligned");
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
- if(ob)confirmations.push("Unmitigated order block");
- if(fvg)confirmations.push("Unfilled fair value gap");
+ if(selectedZone?.kind==="OB")confirmations.push("Qualified unmitigated order block");
+ if(selectedZone?.kind==="FVG")confirmations.push("Qualified unfilled fair value gap");
+ if(selectedZone?.linked)confirmations.push("Zone linked to latest structure event");
  if(direction==="bullish"&&pd==="Discount"||direction==="bearish"&&pd==="Premium")confirmations.push("Premium/discount aligned");
  if(Math.abs(last.close-last.open)>=a*.5)confirmations.push("Displacement");
  const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
