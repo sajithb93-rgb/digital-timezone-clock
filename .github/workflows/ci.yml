@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [trading-analysis-dashboard]
+    branches: [trading-analysis-dashboard, feature/elitewave-autodraw]
   pull_request:
     branches: [trading-analysis-dashboard]
 jobs:
