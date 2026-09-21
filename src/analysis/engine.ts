@@ -527,8 +527,40 @@ export function analyzeElliott(c:Candle[]):ElliottResult{
  };
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
- const rows=frames.map(f=>{const available=f.candles.length>=25;const s=available?analyzeSMC(f.candles):null;return{interval:f.interval,trend:s?.trend??"Neutral",score:s?.score??0,structure:s?.events.at(-1)?.type??(available?"No event":"UNAVAILABLE"),available};});
- const usable=rows.filter(r=>r.available); const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1; const totalWeight=usable.reduce((sum,r)=>sum+weight(r),0);
- const weighted=usable.reduce((sum,r)=>sum+(r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0)*weight(r),0)/Math.max(1,totalWeight);
- return{trend:usable.length?(weighted>12?"Bullish":weighted<-12?"Bearish":"Neutral"):"Neutral",score:usable.length?clamp(50+weighted/2):0,frames:rows};
+ const rows=frames.map(f=>{
+  const data=f.candles.at(-1)?.closed===false?f.candles.slice(0,-1):f.candles;
+  const available=data.length>=25;
+  const s=available?analyzeSMC(data):null;
+  if(!s)return{interval:f.interval,trend:"Neutral" as const,score:0,structure:"UNAVAILABLE",available:false};
+
+  const latest=s.events.at(-1);
+  const age=latest?s.asOf-latest.index:Infinity;
+  let contextScore=25;
+  if(s.trend!=="Neutral")contextScore=50;
+  if(latest&&age<=20)contextScore=latest.strength==="displacement"?75:65;
+  if(latest&&latest.type==="CHOCH"&&age<=10)contextScore+=5;
+  contextScore=clamp(contextScore);
+
+  return{
+   interval:f.interval,
+   trend:s.trend,
+   score:contextScore,
+   structure:latest?.type??"No event",
+   available:true
+  };
+ });
+
+ const usable=rows.filter(r=>r.available);
+ const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1;
+ const totalWeight=usable.reduce((sum,r)=>sum+weight(r),0);
+ const weighted=usable.reduce((sum,r)=>{
+  const signed=r.trend==="Bullish"?r.score:r.trend==="Bearish"?-r.score:0;
+  return sum+signed*weight(r);
+ },0)/Math.max(1,totalWeight);
+
+ return{
+  trend:usable.length?(weighted>12?"Bullish":weighted<-12?"Bearish":"Neutral"):"Neutral",
+  score:usable.length?clamp(50+weighted/2):0,
+  frames:rows
+ };
 }
