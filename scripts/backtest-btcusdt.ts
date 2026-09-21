@@ -12,7 +12,7 @@ const SLIPPAGE = Number(process.env.SLIPPAGE ?? 0.0002); // adverse fraction per
 const WARMUP = 500;
 const LIMIT = 1500;
 
-type Trade = { side: "LONG" | "SHORT"; entryTime: number; exitTime: number; entry: number; exit: number; stop: number; target: number; qty: number; pnl: number; r: number; reason: string };
+type BinanceKline = [\n  number, string, string, string, string, string,\n  number, string, string, string, string, string\n];\n\ntype Trade = { side: "LONG" | "SHORT"; entryTime: number; exitTime: number; entry: number; exit: number; stop: number; target: number; qty: number; pnl: number; r: number; reason: string };
 
 async function fetchCandles(): Promise<Candle[]> {
   const end = Date.now();
@@ -27,10 +27,10 @@ async function fetchCandles(): Promise<Candle[]> {
     url.searchParams.set("limit", String(LIMIT));
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Binance klines HTTP ${response.status}: ${await response.text()}`);
-    const rows = await response.json() as unknown[][];
+    const rows = await response.json() as BinanceKline[];
     if (!rows.length) break;
-    for (const r of rows) all.push({ time: Number(r[0]), open: +r[1], high: +r[2], low: +r[3], close: +r[4], volume: +r[5], takerBuyVolume: +r[9], closed: Number(r[6]) < Date.now() });
-    const next = Number(rows[rows.length - 1][0]) + 5 * 60_000;
+    for (const r of rows) all.push({ time: r[0], open: Number(r[1]), high: Number(r[2]), low: Number(r[3]), close: Number(r[4]), volume: Number(r[5]), takerBuyVolume: Number(r[9]), closed: r[6] < end });
+    const next = rows[rows.length - 1][0] + 5 * 60_000;
     if (next <= cursor) throw new Error("Binance pagination did not advance");
     cursor = next;
     if (rows.length < LIMIT) break;
