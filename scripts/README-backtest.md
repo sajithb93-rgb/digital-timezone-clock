@@ -1,6 +1,6 @@
 # BTCUSDT SMC + EliteWave backtest runner
 
-The runner downloads Binance USD-M Futures klines and writes a JSON report containing the candle window, signal audit trail, closed trades, and summary metrics.
+The runner downloads Binance USD-M Futures 5m klines from Binance Data Vision's public daily archive and writes a JSON report containing the candle window, signal audit trail, closed trades, and summary metrics.
 
 ## Run
 
@@ -14,6 +14,12 @@ Defaults: `BTCUSDT`, 5m, trailing 90 days, 10,000 USDT starting equity, 1% equit
 ```bash
 DAYS=90 INITIAL_EQUITY=10000 RISK_FRACTION=0.01 FEE_RATE=0.0005 SLIPPAGE=0.0002 npm run backtest
 ```
+
+The market-data API endpoint `fapi.binance.com` is not used by the backtest runner. This avoids exchange API geographic restrictions seen on hosted CI runners. Daily archives are read from:
+
+`https://data.binance.vision/data/futures/um/daily/klines/{SYMBOL}/{INTERVAL}/`
+
+The runner uses the Linux `unzip` utility to extract each downloaded archive on GitHub-hosted Ubuntu runners.
 
 ## Execution model
 
