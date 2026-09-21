@@ -1,4 +1,4 @@
-name: BTCUSDT 5m Backtest (Launcher)
+name: BTCUSDT 5m Backtest
 
 on:
   workflow_dispatch:
