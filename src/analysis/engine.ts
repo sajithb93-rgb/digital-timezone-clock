@@ -66,31 +66,40 @@ function findFvgs(c:Candle[],a:number):FVG[]{
  }
  return out;
 }
-function findOrderBlocks(c:Candle[],a:number):OB[]{
+function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1):OB[]{
  const out:OB[]=[];
- for(let i=1;i<c.length-3;i++){
+ const end=Math.min(asOf,c.length-1);
+ for(let i=1;i<=end-1;i++){
   const bullishBase=c[i].close<c[i].open;
   const bearishBase=c[i].close>c[i].open;
   let bullBreak=-1,bearBreak=-1,bullStrength=0,bearStrength=0;
-  for(let k=1;k<=3&&i+k<c.length;k++){
+  for(let k=1;k<=3&&i+k<=end;k++){
    const d=displacementAt(c,i+k,atrAt(c,i+k));
    if(bullishBase&&c[i+k].close>c[i].high&&d>=.55){bullBreak=i+k;bullStrength=d;break}
    if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
   }
   if(bullBreak>0){
    let m:number|undefined;
-   for(let j=bullBreak+1;j<c.length;j++)if(c[j].low<=c[i].open){m=j;break}
+   for(let j=bullBreak+1;j<=end;j++)if(c[j].low<=c[i].open){m=j;break}
    out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
   }
   if(bearBreak>0){
    let m:number|undefined;
-   for(let j=bearBreak+1;j<c.length;j++)if(c[j].high>=c[i].open){m=j;break}
+   for(let j=bearBreak+1;j<=end;j++)if(c[j].high>=c[i].open){m=j;break}
    out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
   }
  }
  return out;
 }
-function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{return obs.filter(o=>o.mitigated&&o.mitigationIndex!==undefined).map((o):Breaker=>({index:o.mitigationIndex!,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true})).filter(b=>{const k=c.slice(b.index+1);return b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high)})}
+function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
+ return obs
+  .filter(o=>o.mitigated&&o.mitigationIndex!==undefined&&o.mitigationIndex!<=asOf)
+  .map((o):Breaker=>({index:o.mitigationIndex!,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true}))
+  .filter(b=>{
+   const k=c.slice(b.index+1,Math.min(asOf+1,c.length));
+   return k.length>0&&(b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high));
+  });
+}
 function equalLevels(ps:Pivot[],tol:number){const out:Pivot[]=[];for(let i=0;i<ps.length;i++)if(ps.slice(0,i).some(x=>Math.abs(x.price-ps[i].price)<=tol))out.push(ps[i]);return out}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
@@ -104,10 +113,27 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   while(hiPtr<confirmedHighs.length&&(confirmedHighs[hiPtr].confirmedAt??Infinity)<=i)activeH=confirmedHighs[hiPtr++];
   while(loPtr<confirmedLows.length&&(confirmedLows[loPtr].confirmedAt??Infinity)<=i)activeL=confirmedLows[loPtr++];
   const disp=displacementAt(c,i,atrAt(c,i))>=.7;
-  if(activeH&&c[i].close>activeH.price){events.push({index:i,price:activeH.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});structure="bullish";activeH=null;}
-  if(activeL&&c[i].close<activeL.price){events.push({index:i,price:activeL.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});structure="bearish";activeL=null;}
+  const brokeBull=!!activeH&&c[i].close>activeH.price;
+  const brokeBear=!!activeL&&c[i].close<activeL.price;
+  if(brokeBull&&brokeBear){
+   // A single candle that closes through both active swing levels is ambiguous.
+   // Do not manufacture two opposing BOS/CHOCH events from the same OHLC bar.
+   activeH=null;
+   activeL=null;
+   continue;
+  }
+  if(brokeBull){
+   events.push({index:i,price:activeH!.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});
+   structure="bullish";
+   activeH=null;
+  }else if(brokeBear){
+   events.push({index:i,price:activeL!.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});
+   structure="bearish";
+   activeL=null;
+  }
  }
- const fvgs=findFvgs(c,a),obs=findOrderBlocks(c,a),breakers=makeBreakers(obs,c),highs=ps.filter(p=>p.type==="H"),lows=ps.filter(p=>p.type==="L"),tol=Math.max(a*.18,.0000001);
+ const asOf=c.length-1;
+ const fvgs=findFvgs(c,a,asOf),obs=findOrderBlocks(c,a,asOf),breakers=makeBreakers(obs,c,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.18,.0000001);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
  const liquidityHighs=equalHighs.length?equalHighs:highs.slice(-6),liquidityLows=equalLows.length?equalLows:lows.slice(-6);
  const sweeps:Sweep[]=[];
