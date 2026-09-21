@@ -58,11 +58,22 @@ function body(c:Candle){return Math.abs(c.close-c.open)}
 function displacementAt(c:Candle[],i:number,a:number){return a>0?body(c[i])/a:0}
 function labelPivots(ps:Pivot[]){const out:Pivot[]=[];let lastH:number|undefined,lastL:number|undefined;for(const p of ps){const q={...p};if(p.type==="H"){q.label=lastH===undefined?"SH":p.price>lastH?"HH":"LH";lastH=p.price}else{q.label=lastL===undefined?"SL":p.price>lastL?"HL":"LL";lastL=p.price}out.push(q)}return out}
 
-function findFvgs(c:Candle[],a:number):FVG[]{
+function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  const out:FVG[]=[];
- for(let i=1;i<c.length-1;i++){
-  if(c[i-1].high<c[i+1].low){const low=c[i-1].high,high=c[i+1].low;let fillIndex:number|undefined;for(let j=i+1;j<c.length;j++)if(c[j].low<=low){fillIndex=j;break}out.push({from:i-1,to:i+1,low,high,type:"bullish",filled:fillIndex!==undefined,fillIndex,size:(high-low)/Math.max(atrAt(c,i,14),.0000001)})}
-  if(c[i-1].low>c[i+1].high){const low=c[i+1].high,high=c[i-1].low;let fillIndex:number|undefined;for(let j=i+1;j<c.length;j++)if(c[j].high>=high){fillIndex=j;break}out.push({from:i-1,to:i+1,low,high,type:"bearish",filled:fillIndex!==undefined,fillIndex,size:(high-low)/Math.max(a,.0000001)})}
+ const endIndex=Math.min(asOf,c.length-1);
+ for(let i=1;i<endIndex;i++){
+  if(c[i-1].high<c[i+1].low){
+   const low=c[i-1].high,high=c[i+1].low;
+   let fillIndex:number|undefined;
+   for(let j=i+1;j<=endIndex;j++)if(c[j].low<=low){fillIndex=j;break}
+   out.push({from:i-1,to:i+1,low,high,type:"bullish",filled:fillIndex!==undefined,fillIndex,size:(high-low)/Math.max(atrAt(c,i,14),.0000001)})
+  }
+  if(c[i-1].low>c[i+1].high){
+   const low=c[i+1].high,high=c[i-1].low;
+   let fillIndex:number|undefined;
+   for(let j=i+1;j<=endIndex;j++)if(c[j].high>=high){fillIndex=j;break}
+   out.push({from:i-1,to:i+1,low,high,type:"bearish",filled:fillIndex!==undefined,fillIndex,size:(high-low)/Math.max(atrAt(c,i,14),.0000001)})
+  }
  }
  return out;
 }
