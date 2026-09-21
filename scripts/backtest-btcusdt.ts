@@ -15,6 +15,9 @@ const SLIPPAGE = Number(process.env.SLIPPAGE ?? 0.0002);
 const WARMUP = 500;
 const CONCURRENCY = 6;
 const ARCHIVE_LAG_DAYS = Number(process.env.ARCHIVE_LAG_DAYS ?? 2);
+const MIN_TARGET_RR = Number(process.env.MIN_TARGET_RR ?? 1.5);
+const MAX_ENTRY_DEVIATION_ATR = Number(process.env.MAX_ENTRY_DEVIATION_ATR ?? 0.5);
+const ELLIOTT_MAX_AGE_BARS = Number(process.env.ELLIOTT_MAX_AGE_BARS ?? 72);
 const execFileAsync = promisify(execFile);
 
 type ArchiveRow = {
@@ -31,11 +34,15 @@ type Trade = {
   side: "LONG" | "SHORT";
   entryTime: number;
   exitTime: number;
+  plannedEntry: number;
   entry: number;
-  exit: number;
   stop: number;
   target: number;
+  entryDeviationAtr: number;
   qty: number;
+  riskAmount: number;
+  grossPnl: number;
+  fees: number;
   pnl: number;
   r: number;
   reason: string;
@@ -43,10 +50,6 @@ type Trade = {
 
 function utcDateKey(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
-}
-
-function addUtcDays(ms: number, days: number): number {
-  return ms + days * 24 * 60 * 60 * 1000;
 }
 
 function parseCsv(content: string, source: string): ArchiveRow[] {
@@ -113,8 +116,6 @@ async function fetchCandles(): Promise<Candle[]> {
     new Date(now).getUTCDate()
   );
 
-  // Binance Vision daily archives can lag behind the UTC calendar.
-  // Use a small publication lag and then take exactly DAYS complete UTC days.
   const end = currentUtcDay - (ARCHIVE_LAG_DAYS - 1) * dayMs;
   const start = end - DAYS * dayMs;
 
@@ -170,13 +171,39 @@ async function fetchCandles(): Promise<Candle[]> {
   }
 }
 
+function trueRange(c: Candle[], i: number): number {
+  if (i <= 0) return c[i].high - c[i].low;
+  return Math.max(
+    c[i].high - c[i].low,
+    Math.abs(c[i].high - c[i - 1].close),
+    Math.abs(c[i].low - c[i - 1].close)
+  );
+}
+
+function atrAt(c: Candle[], end: number, n = 14): number {
+  if (!c.length || end < 0) return 0;
+  const e = Math.min(end, c.length - 1);
+  const start = Math.max(0, e - n + 1);
+  const total = c.slice(start, e + 1).reduce((sum, _, offset) => sum + trueRange(c, start + offset), 0);
+  return total / Math.max(1, e - start + 1);
+}
+
 function applySlippage(price: number, side: "BUY" | "SELL"): number {
   return price * (side === "BUY" ? 1 + SLIPPAGE : 1 - SLIPPAGE);
 }
 
+function isFavorableTarget(side: "LONG" | "SHORT", entry: number, target: number): boolean {
+  return side === "LONG" ? target > entry : target < entry;
+}
+
 async function main() {
-  if (!(DAYS > 0 && INITIAL_EQUITY > 0 && RISK_FRACTION > 0 && RISK_FRACTION <= 0.1)) {
-    throw new Error("Invalid DAYS, INITIAL_EQUITY, or RISK_FRACTION");
+  if (
+    !(DAYS > 0 && INITIAL_EQUITY > 0 && RISK_FRACTION > 0 && RISK_FRACTION <= 0.1) ||
+    !(MIN_TARGET_RR > 0 && MIN_TARGET_RR <= 10) ||
+    !(MAX_ENTRY_DEVIATION_ATR >= 0 && MAX_ENTRY_DEVIATION_ATR <= 5) ||
+    !(Number.isInteger(ELLIOTT_MAX_AGE_BARS) && ELLIOTT_MAX_AGE_BARS >= 1 && ELLIOTT_MAX_AGE_BARS <= 1000)
+  ) {
+    throw new Error("Invalid backtest configuration");
   }
 
   const candles = await fetchCandles();
@@ -188,11 +215,19 @@ async function main() {
   let equity = INITIAL_EQUITY;
   let peak = equity;
   let maxDrawdown = 0;
-  let active:
-    Omit<Trade, "exitTime" | "exit" | "pnl" | "r" | "reason"> | null = null;
+  let active: Omit<Trade, "exitTime" | "grossPnl" | "fees" | "pnl" | "r" | "reason"> | null = null;
 
   const trades: Trade[] = [];
   const signals: unknown[] = [];
+  const seenSignals = new Set<string>();
+  const rejections = {
+    staleElliott: 0,
+    invalidatedElliott: 0,
+    duplicateSetup: 0,
+    entryDeviation: 0,
+    invalidEntrySide: 0,
+    insufficientRR: 0
+  };
 
   for (let i = WARMUP; i < candles.length - 1; i++) {
     const window = candles.slice(Math.max(0, i - 500), i + 1);
@@ -208,18 +243,19 @@ async function main() {
       if (stopHit || targetHit) {
         const rawExit = stopHit ? active.stop : active.target;
         const exit = applySlippage(rawExit, long ? "SELL" : "BUY");
-        const gross = (exit - active.entry) * active.qty * (long ? 1 : -1);
+        const grossPnl = (exit - active.entry) * active.qty * (long ? 1 : -1);
         const fees = (active.entry * active.qty + exit * active.qty) * FEE_RATE;
-        const pnl = gross - fees;
+        const pnl = grossPnl - fees;
 
         equity += pnl;
 
         trades.push({
           ...active,
           exitTime: bar.time,
-          exit,
+          grossPnl,
+          fees,
           pnl,
-          r: pnl / Math.max(active.entry * active.qty * RISK_FRACTION, 1e-9),
+          r: pnl / Math.max(active.riskAmount, 1e-9),
           reason: stopHit ? "STOP (stop-first if ambiguous)" : "TARGET"
         });
 
@@ -232,18 +268,10 @@ async function main() {
       const elliott = analyzeElliott(window);
       const setup = smc.setup;
       const wave = elliott.primary;
-
-      const smcSide =
-        setup.direction === "BUY"
-          ? "LONG"
-          : setup.direction === "SELL"
-            ? "SHORT"
-            : null;
-
-      const waveAligned = !!wave && (
-        (smcSide === "LONG" && wave.direction === "bullish") ||
-        (smcSide === "SHORT" && wave.direction === "bearish")
-      );
+      const waveEndIndex = wave?.points.at(-1)?.index ?? -Infinity;
+      const waveAge = Number.isFinite(waveEndIndex) ? i - waveEndIndex : Infinity;
+      const waveFresh = !!wave && waveAge >= 0 && waveAge <= ELLIOTT_MAX_AGE_BARS;
+      const waveValid = !!wave && elliott.setupState !== "INVALIDATED";
 
       signals.push({
         time: signalCandle.time,
@@ -252,41 +280,127 @@ async function main() {
         smcScore: smc.score,
         waveDirection: wave?.direction ?? null,
         waveQuality: wave?.quality ?? null,
-        waveAligned
+        waveAligned: !!wave && waveValid && waveFresh && (
+          (setup.direction === "BUY" && wave.direction === "bullish") ||
+          (setup.direction === "SELL" && wave.direction === "bearish")
+        ),
+        waveAgeBars: Number.isFinite(waveAge) ? waveAge : null,
+        waveState: elliott.setupState
       });
+
+      if (elliott.setupState === "INVALIDATED") {
+        rejections.invalidatedElliott++;
+      }
+      if (wave && !waveFresh) {
+        rejections.staleElliott++;
+      }
+
+      const smcSide =
+        setup.direction === "BUY"
+          ? "LONG"
+          : setup.direction === "SELL"
+            ? "SHORT"
+            : null;
+
+      const waveAligned = !!wave &&
+        waveValid &&
+        waveFresh &&
+        wave.quality >= 50 &&
+        ((smcSide === "LONG" && wave.direction === "bullish") ||
+          (smcSide === "SHORT" && wave.direction === "bearish"));
 
       if (
         smcSide &&
         setup.status === "ACTIVE" &&
         waveAligned &&
-        wave &&
-        wave.quality >= 50 &&
         setup.entry !== null &&
         setup.stop !== null
       ) {
         const side = smcSide;
+        const plannedEntry = setup.entry;
         const rawEntry = next.open;
+        const signalAtr = atrAt(window, window.length - 1, 14);
+        const entryDeviationAtr = signalAtr > 0
+          ? Math.abs(rawEntry - plannedEntry) / signalAtr
+          : 0;
+
+        if (entryDeviationAtr > MAX_ENTRY_DEVIATION_ATR) {
+          rejections.entryDeviation++;
+          continue;
+        }
+
         const entry = applySlippage(rawEntry, side === "LONG" ? "BUY" : "SELL");
         const stop = setup.stop;
-        const target = setup.targets.find(
-          t => side === "LONG" ? t > entry : t < entry
-        );
-        const perUnitRisk = Math.abs(entry - stop);
 
-        if (
-          target !== undefined &&
-          perUnitRisk > 0 &&
-          (side === "LONG" ? stop < entry : stop > entry)
-        ) {
-          const riskBudget = equity * RISK_FRACTION;
-          const qty = riskBudget / perUnitRisk;
-          active = { side, entryTime: next.time, entry, stop, target, qty };
+        if ((side === "LONG" && stop >= entry) || (side === "SHORT" && stop <= entry)) {
+          rejections.invalidEntrySide++;
+          continue;
         }
+
+        const perUnitRisk = Math.abs(entry - stop);
+        if (!(perUnitRisk > 0 && Number.isFinite(perUnitRisk))) {
+          rejections.invalidEntrySide++;
+          continue;
+        }
+
+        const target = setup.targets
+          .filter(t => Number.isFinite(t) && t > 0 && isFavorableTarget(side, entry, t))
+          .find(t => Math.abs(t - entry) / perUnitRisk >= MIN_TARGET_RR);
+
+        if (target === undefined) {
+          rejections.insufficientRR++;
+          continue;
+        }
+
+        const actualRR = Math.abs(target - entry) / perUnitRisk;
+        if (!(actualRR >= MIN_TARGET_RR && Number.isFinite(actualRR))) {
+          rejections.insufficientRR++;
+          continue;
+        }
+
+        const eventIndex = smc.events.at(-1)?.index ?? -1;
+        const signalKey = [
+          eventIndex,
+          side,
+          plannedEntry.toPrecision(12),
+          stop.toPrecision(12),
+          waveEndIndex
+        ].join("|");
+
+        if (seenSignals.has(signalKey)) {
+          rejections.duplicateSetup++;
+          continue;
+        }
+        seenSignals.add(signalKey);
+
+        const riskBudget = equity * RISK_FRACTION;
+        const slippageCostPerUnit = entry * SLIPPAGE + stop * SLIPPAGE;
+        const feeCostPerUnit = (entry + stop) * FEE_RATE;
+        const effectiveRiskPerUnit = perUnitRisk + slippageCostPerUnit + feeCostPerUnit;
+        const qty = riskBudget / effectiveRiskPerUnit;
+        const riskAmount = perUnitRisk * qty;
+
+        if (!(qty > 0 && Number.isFinite(qty) && riskAmount > 0 && Number.isFinite(riskAmount))) {
+          rejections.invalidEntrySide++;
+          continue;
+        }
+
+        active = {
+          side,
+          entryTime: next.time,
+          plannedEntry,
+          entry,
+          stop,
+          target,
+          entryDeviationAtr,
+          qty,
+          riskAmount
+        };
       }
     }
 
     peak = Math.max(peak, equity);
-    maxDrawdown = Math.max(maxDrawdown, (peak - equity) / peak);
+    maxDrawdown = Math.max(maxDrawdown, (peak - equity) / Math.max(peak, 1e-9));
   }
 
   const wins = trades.filter(t => t.pnl > 0).length;
@@ -311,9 +425,15 @@ async function main() {
       feeRatePerSide: FEE_RATE,
       slippageFractionPerFill: SLIPPAGE,
       warmupCandles: WARMUP,
-      strategy: "SMC ACTIVE setup + aligned EliteWave primary count (quality >= 50)",
+      minTargetRR: MIN_TARGET_RR,
+      maxEntryDeviationATR: MAX_ENTRY_DEVIATION_ATR,
+      elliottMaxAgeBars: ELLIOTT_MAX_AGE_BARS,
+      strategy: "SMC ACTIVE setup + current aligned EliteWave primary count (quality >= 50)",
       execution:
-        "signal on close; next candle open entry; stop-first on same-candle stop/target ambiguity; no overlapping positions",
+        "signal on close; next candle open entry only when close-to-plan deviation is within the ATR guard; stop-first on same-candle stop/target ambiguity; no overlapping positions",
+      positionSizing:
+        "risk budget includes estimated stop slippage and round-trip fees so worst-case stop loss is closer to the configured equity risk",
+      rBasis: "PnL divided by price-stop risk amount (entry-stop distance x quantity)",
       dataSource: "Binance Vision USD-M Futures daily kline archives",
       archiveLagDays: ARCHIVE_LAG_DAYS,
       archiveWindow:
@@ -335,7 +455,8 @@ async function main() {
       winRatePct: trades.length ? wins / trades.length * 100 : 0,
       profitFactor: grossLoss ? grossProfit / grossLoss : null,
       maxDrawdownPct: maxDrawdown * 100,
-      openPositionAtEnd: !!active
+      openPositionAtEnd: !!active,
+      rejections
     },
     trades,
     signals
