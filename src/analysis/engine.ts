@@ -282,8 +282,15 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  }
 
  const triggerIndex=zone&&rawDirection?zoneTrigger(data,zone,rawDirection,zoneAnchor+1):-1;
+ const recentStructureAligned=!!recentStructure&&recentStructure.direction===rawDirection&&recentStructure.index<triggerIndex;
+ const recentSweepAligned=rawDirection==="bullish"
+  ?sweeps.some(s=>s.type==="low"&&s.displacement&&s.index>=Math.max(zoneAnchor+1,data.length-10)&&s.index<=triggerIndex)
+  :rawDirection==="bearish"
+   ?sweeps.some(s=>s.type==="high"&&s.displacement&&s.index>=Math.max(zoneAnchor+1,data.length-10)&&s.index<=triggerIndex)
+   :false;
  const setupFresh=triggerIndex>=Math.max(0,data.length-3)&&zone!==null&&zoneUsable(zone,last,a,rawDirection!);
- const direction=zone&&triggerIndex>=0&&setupFresh?rawDirection:null;
+ const qualifiedTrigger=recentStructureAligned||recentSweepAligned;
+ const direction=zone&&triggerIndex>=0&&setupFresh&&qualifiedTrigger?rawDirection:null;
 
  const priorLow=zone&&direction==="bullish"
   ?[...lows].reverse().find(p=>p.index<triggerIndex&&p.price<zone.low)
