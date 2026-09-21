@@ -79,68 +79,195 @@ function makeBreakers(obs:OB[],c:Candle[]):Breaker[]{return obs.filter(o=>o.miti
 function equalLevels(ps:Pivot[],tol:number){const out:Pivot[]=[];for(let i=0;i<ps.length;i++)if(ps.slice(0,i).some(x=>Math.abs(x.price-ps[i].price)<=tol))out.push(ps[i]);return out}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
- const empty:SMCResult={trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
- if(c.length<25)return empty;
- const a=atr(c),ps=labelPivots(pivots(c,3)),internal=labelPivots(pivots(c,1)),events:StructureEvent[]=[];let structure:"bullish"|"bearish"|null=null;let activeH:Pivot|null=null,activeL:Pivot|null=null;
+ const empty:SMCResult={
+  trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],
+  liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],
+  premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},
+  vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,
+  setup:{direction:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}
+ };
+ const data=c.at(-1)?.closed===false?c.slice(0,-1):c;
+ if(data.length<25)return empty;
+
+ const a=atr(data), ps=labelPivots(pivots(data,3)), internal=labelPivots(pivots(data,1));
+ const events:StructureEvent[]=[];
+ let structure:"bullish"|"bearish"|null=null;
+ let activeH:Pivot|null=null,activeL:Pivot|null=null,hiPtr=0,loPtr=0;
  const confirmedHighs=ps.filter(p=>p.type==="H").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
  const confirmedLows=ps.filter(p=>p.type==="L").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
- let hiPtr=0,loPtr=0;
- for(let i=0;i<c.length;i++){
+
+ for(let i=0;i<data.length;i++){
   while(hiPtr<confirmedHighs.length&&(confirmedHighs[hiPtr].confirmedAt??Infinity)<=i)activeH=confirmedHighs[hiPtr++];
   while(loPtr<confirmedLows.length&&(confirmedLows[loPtr].confirmedAt??Infinity)<=i)activeL=confirmedLows[loPtr++];
-  const disp=displacementAt(c,i,atrAt(c,i))>=.7;
-  if(activeH&&c[i].close>activeH.price){events.push({index:i,price:activeH.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});structure="bullish";activeH=null;}
-  if(activeL&&c[i].close<activeL.price){events.push({index:i,price:activeL.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});structure="bearish";activeL=null;}
+
+  const bullBreak=!!activeH&&data[i].close>activeH.price;
+  const bearBreak=!!activeL&&data[i].close<activeL.price;
+  const disp=displacementAt(data,i,atrAt(data,i))>=.7;
+
+  if(bullBreak){
+   events.push({index:i,price:activeH!.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});
+   structure="bullish";
+   activeH=null;
+  }else if(bearBreak){
+   events.push({index:i,price:activeL!.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});
+   structure="bearish";
+   activeL=null;
+  }
  }
- const fvgs=findFvgs(c,a),obs=findOrderBlocks(c,a),breakers=makeBreakers(obs,c),highs=ps.filter(p=>p.type==="H"),lows=ps.filter(p=>p.type==="L"),tol=Math.max(a*.18,.0000001);
+
+ const fvgs=findFvgs(data,a);
+ const obs=findOrderBlocks(data,a,events);
+ const breakers=makeBreakers(obs,data);
+ const highs=ps.filter(p=>p.type==="H");
+ const lows=ps.filter(p=>p.type==="L");
+ const tol=Math.max(a*.15,1e-12);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
- const liquidityHighs=equalHighs.length?equalHighs:highs.slice(-6),liquidityLows=equalLows.length?equalLows:lows.slice(-6);
+ const liquidityHighs=(equalHighs.length?equalHighs:highs.slice(-6)).slice(-8);
+ const liquidityLows=(equalLows.length?equalLows:lows.slice(-6)).slice(-8);
+
  const sweeps:Sweep[]=[];
- for(const p of [...liquidityHighs.slice(-6),...liquidityLows.slice(-6)]){
-  for(let j=p.index+1;j<c.length;j++){const hit=p.type==="H"?c[j].high>p.price&&c[j].close<p.price:c[j].low<p.price&&c[j].close>p.price;if(hit){sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(c,j,a)>=.7});break}}
+ const recentLiquidity=[...liquidityHighs,...liquidityLows];
+ const sweepStart=Math.max(0,data.length-80);
+ for(const p of recentLiquidity){
+  const start=Math.max((p.confirmedAt??p.index)+1,sweepStart);
+  for(let j=start;j<data.length;j++){
+   const x=data[j];
+   const swept=p.type==="H"?x.high>p.price&&x.close<p.price:x.low<p.price&&x.close>p.price;
+   if(!swept)continue;
+   sweeps.push({
+    index:j,
+    price:p.price,
+    type:p.type==="H"?"high":"low",
+    confirmed:true,
+    displacement:displacementAt(data,j,atrAt(data,j))>=.7
+   });
+   break;
+  }
  }
-  const r=range(c);
-  const mid=(r.hi+r.lo)/2;
-  const last=c[c.length-1];
-  const recentVolumes=c.slice(-21,-1);
-  const volBase=recentVolumes.reduce((s,x)=>s+x.volume,0)/Math.max(1,recentVolumes.length);
-  const volumeRatio=last.volume/Math.max(volBase,.0000001);
-  const recentCandles=c.slice(-60);
-  const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
-  const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
-  const structureDirection=events.at(-1)?.direction??null;
+ sweeps.sort((x,y)=>x.index-y.index);
+
+ const r=range(data),mid=(r.hi+r.lo)/2,last=data.at(-1)!;
+ const recentVolumes=data.slice(-21,-1);
+ const volBase=recentVolumes.reduce((s,x)=>s+x.volume,0)/Math.max(1,recentVolumes.length);
+ const volumeRatio=last.volume/Math.max(volBase,1e-12);
+ const recentCandles=data.slice(-60);
+ const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
+ const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,1e-12);
+ const latestEvent=events.at(-1);
+ const structureDirection=latestEvent?.direction??structure;
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
  const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
- const ob=rawDirection?[...obs].reverse().find(x=>x.type===rawDirection&&!x.mitigated):undefined;
- const fvg=rawDirection?[...fvgs].reverse().find(x=>x.type===rawDirection&&!x.filled):undefined;
- const sweep=rawDirection==="bullish"?sweeps.slice().reverse().find(s=>s.type==="low"):rawDirection==="bearish"?sweeps.slice().reverse().find(s=>s.type==="high"):undefined;
- const zone=rawDirection?(ob?{low:ob.low,high:ob.high,type:"entry" as const}:fvg?{low:fvg.low,high:fvg.high,type:"entry" as const}:null):null;
- const direction=zone?rawDirection:null;
+
+ let zone:Zone|null=null;
+ if(rawDirection){
+  const candidates:Zone[]=[
+   ...obs.filter(x=>x.type===rawDirection&&!x.mitigated).reverse().map(x=>({low:x.low,high:x.high,type:"entry" as const})),
+   ...fvgs.filter(x=>x.type===rawDirection&&!x.filled).reverse().map(x=>({low:x.low,high:x.high,type:"entry" as const}))
+  ];
+  zone=candidates.find(z=>zoneUsable(z,last,a,rawDirection))??null;
+ }
+ const triggerIndex=zone&&rawDirection?zoneTrigger(data,zone,rawDirection):-1;
+ const direction=zone&&triggerIndex>=0?rawDirection:null;
+
+ const priorLow=zone&&rawDirection==="bullish"
+  ?[...lows].reverse().find(p=>p.index<triggerIndex&&p.price<zone.low)
+  :undefined;
+ const priorHigh=zone&&rawDirection==="bearish"
+  ?[...highs].reverse().find(p=>p.index<triggerIndex&&p.price>zone.high)
+  :undefined;
+
+ const structuralLow=zone&&rawDirection==="bullish"
+  ?(priorLow&&zone.low-priorLow.price<=a*1.5?priorLow.price:zone.low)
+  :null;
+ const structuralHigh=zone&&rawDirection==="bearish"
+  ?(priorHigh&&priorHigh.price-zone.high<=a*1.5?priorHigh.price:zone.high)
+  :null;
+
  const entry=zone?(zone.low+zone.high)/2:null;
- const priorLow=zone?[...lows].reverse().find(p=>p.index<c.length-1&&p.price<zone.low):undefined;
- const priorHigh=zone?[...highs].reverse().find(p=>p.index<c.length-1&&p.price>zone.high):undefined;
- const structuralLow=zone?(priorLow&&zone.low-priorLow.price<=a*1.5?priorLow.price:zone.low):null;
- const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.5?priorHigh.price:zone.high):null;
- const stop=zone?(direction==="bullish"&&structuralLow!==null?structuralLow-a*.15:direction==="bearish"&&structuralHigh!==null?structuralHigh+a*.15:null):null;
+ const stop=zone&&rawDirection==="bullish"&&structuralLow!==null
+  ?structuralLow-a*.15
+  :zone&&rawDirection==="bearish"&&structuralHigh!==null
+   ?structuralHigh+a*.15
+   :zone&&rawDirection==="bullish"
+    ?zone.low-a*.15
+    :zone
+     ?zone.high+a*.15
+     :null;
+
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
- const structuralTargets=direction==="bullish"?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>entry&&p>last.close).sort((a,b)=>a-b):direction==="bearish"?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<entry&&p<last.close).sort((a,b)=>b-a):[];
- const uniqueTargets=structuralTargets.filter((p,i,a)=>i===0||Math.abs(p-a[i-1])>Math.max(Math.abs(p)*0.0005,.0000001));
- const targets=entry!==null&&risk?(uniqueTargets.length?uniqueTargets.slice(0,4):[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x)):[];
+ const structuralTargets=direction==="bullish"
+  ?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>entry&&p>last.close).sort((x,y)=>x-y)
+  :direction==="bearish"
+   ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<entry&&p<last.close).sort((x,y)=>y-x)
+   :[];
+ const uniqueTargets=structuralTargets.filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*.0005,1e-12));
+ const targets=entry!==null&&risk
+  ?(uniqueTargets.length?uniqueTargets.slice(0,4):[1.5,2.5,3.5].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x))
+  :[];
+
  const confirmations:string[]=[];
- if(direction&&events.at(-1)?.direction===direction)confirmations.push("Structure aligned");
+ if(direction&&latestEvent?.direction===direction)confirmations.push("Confirmed structure alignment");
+ const sweep=direction==="bullish"
+  ?sweeps.slice().reverse().find(s=>s.type==="low")
+  :direction==="bearish"
+   ?sweeps.slice().reverse().find(s=>s.type==="high")
+   :undefined;
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
- if(ob)confirmations.push("Unmitigated order block");
- if(fvg)confirmations.push("Unfilled fair value gap");
- if(direction==="bullish"&&pd==="Discount"||direction==="bearish"&&pd==="Premium")confirmations.push("Premium/discount aligned");
- if(Math.abs(last.close-last.open)>=a*.5)confirmations.push("Displacement");
- const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
- const score=zone&&direction?clamp(rawScore):0;
+ if(direction&&obs.some(x=>x.type===direction&&!x.mitigated))confirmations.push("Unmitigated order block");
+ if(direction&&fvgs.some(x=>x.type===direction&&!x.filled))confirmations.push("Unfilled fair value gap");
+ if((direction==="bullish"&&pd==="Discount")||(direction==="bearish"&&pd==="Premium"))confirmations.push("Premium/discount aligned");
+ if(triggerIndex>=0&&displacementAt(data,triggerIndex,atrAt(data,triggerIndex))>=.5)confirmations.push("Closed-candle displacement trigger");
+
+ const rawScore=direction
+  ?25
+   +(latestEvent?.direction===direction?20:0)
+   +(sweep?.confirmed?15:0)
+   +(obs.some(x=>x.type===direction&&!x.mitigated)?15:0)
+   +(fvgs.some(x=>x.type===direction&&!x.filled)?10:0)
+   +(((direction==="bullish"&&pd==="Discount")||(direction==="bearish"&&pd==="Premium"))?10:0)
+   +(volumeRatio>=1.2?5:0)
+  :0;
+ const score=direction&&entry!==null&&stop!==null&&risk>0?clamp(rawScore):0;
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
- const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0;
- const setup:Setup={direction:usable?(direction==="bullish"?"BUY":"SELL"):"WAIT",entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable?score:0,confirmations:usable?confirmations:[]};
- return{trend,asOf:c.length-1,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
+ const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0&&
+  ((direction==="bullish"&&stop<entry&&targets[0]>entry)||(direction==="bearish"&&stop>entry&&targets[0]<entry));
+ const setup:Setup={
+  direction:usable?(direction==="bullish"?"BUY":"SELL"):"WAIT",
+  entry:usable?entry:null,
+  stop:usable?stop:null,
+  targets:usable?targets:[],
+  rr:usable?rr:null,
+  confidence:usable?score:0,
+  confirmations:usable?confirmations:[]
+ };
+
+ return{
+  trend,
+  asOf:data.length-1,
+  pivots:ps.slice(-18),
+  internalPivots:internal.slice(-24),
+  events:events.slice(-12),
+  fvgs:fvgs.slice(-14),
+  orderBlocks:obs.slice(-10),
+  breakers:breakers.slice(-8),
+  liquidityHighs,
+  liquidityLows,
+  equalHighs:equalHighs.slice(-8),
+  equalLows:equalLows.slice(-8),
+  sweeps:sweeps.slice(-10),
+  premiumDiscount:pd,
+  premiumDiscountRange:{high:r.hi,low:r.lo,mid},
+  vwap,
+  volumeRatio,
+  displacement:displacementAt(data,data.length-1,a),
+  entryZone:zone,
+  stop,
+  targets,
+  score,
+  setup
 }
+
 
 function impulseCandidates(c:Candle[],bull:boolean):WaveCount[]{
  const ps=pivots(c,2).slice(-18),out:WaveCount[]=[];
