@@ -58,7 +58,12 @@ function range(c:Candle[]){
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
 }
 function body(c:Candle){return Math.abs(c.close-c.open)}
-function displacementAt(c:Candle[],i:number,a:number){return a>0?body(c[i])/a:0}
+function displacementAt(c:Candle[],i:number,a:number){
+ const tr=Math.max(trueRange(c,i),.0000001);
+ const bodyAtr=a>0?body(c[i])/a:0;
+ const bodyEfficiency=body(c[i])/tr;
+ return bodyAtr*.65+bodyEfficiency*.35;
+}
 function labelPivots(ps:Pivot[]){
  const out:Pivot[]=[];let lastH:number|undefined,lastL:number|undefined;
  for(const p of ps){
@@ -76,10 +81,14 @@ function dealingRange(ps:Pivot[],c:Candle[],asOf:number){
   if(a.type===b.type)continue;
   const high=a.type==="H"?a:b;
   const low=a.type==="L"?a:b;
-  if(high.price>low.price)return{hi:high.price,lo:low.price,source:"confirmed-swing" as const};
+  if(high.price>low.price)return{
+   hi:high.price,lo:low.price,
+   anchorIndex:Math.min(high.index,low.index),
+   source:"confirmed-swing" as const
+  };
  }
  const r=range(c);
- return{hi:r.hi,lo:r.lo,source:"fallback-60" as const};
+ return{hi:r.hi,lo:r.lo,anchorIndex:Math.max(0,asOf-59),source:"fallback-60" as const};
 }
 function uniquePivots(ps:Pivot[],tol:number){
  const out:Pivot[]=[];
@@ -107,6 +116,33 @@ function equalLevels(ps:Pivot[],tol:number){
  }
  return reps.sort((a,b)=>a.index-b.index);
 }
+function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
+ const events:StructureEvent[]=[];
+ let structure:"bullish"|"bearish"|null=null;
+ let activeH:Pivot|null=null,activeL:Pivot|null=null;
+ const confirmedHighs=ps.filter(p=>p.type==="H").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
+ const confirmedLows=ps.filter(p=>p.type==="L").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
+ let hiPtr=0,loPtr=0;
+ for(let i=0;i<c.length;i++){
+  while(hiPtr<confirmedHighs.length&&(confirmedHighs[hiPtr].confirmedAt??Infinity)<=i)activeH=confirmedHighs[hiPtr++];
+  while(loPtr<confirmedLows.length&&(confirmedLows[loPtr].confirmedAt??Infinity)<=i)activeL=confirmedLows[loPtr++];
+  const disp=displacementAt(c,i,atrAt(c,i))>=.7;
+  const brokeBull=!!activeH&&c[i].close>activeH.price;
+  const brokeBear=!!activeL&&c[i].close<activeL.price;
+  if(brokeBull&&brokeBear){
+   activeH=null;activeL=null;
+   continue;
+  }
+  if(brokeBull){
+   events.push({index:i,price:activeH!.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});
+   structure="bullish";activeH=null;
+  }else if(brokeBear){
+   events.push({index:i,price:activeL!.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});
+   structure="bearish";activeL=null;
+  }
+ }
+ return events;
+}
 function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  const out:FVG[]=[];
  const endIndex=Math.min(asOf,c.length-1);
@@ -126,7 +162,7 @@ function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  }
  return out;
 }
-function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1):OB[]{
+function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEvent[]=[]):OB[]{
  const out:OB[]=[];
  const end=Math.min(asOf,c.length-1);
  for(let i=1;i<=end-1;i++){
@@ -139,14 +175,31 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1):OB[]{
    if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
   }
   if(bullBreak>0){
-   let m:number|undefined;
-   for(let j=bullBreak+1;j<=end;j++)if(c[j].low<=c[i].open){m=j;break}
-   out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
+   const linked=events.some(e=>e.direction==="bullish"&&e.index>=bullBreak&&e.index<=bullBreak+1);
+   if(linked){
+    let m:number|undefined,invalid:number|undefined;
+    for(let j=bullBreak+1;j<=end;j++){
+     if(m===undefined&&c[j].low<=c[i].open)m=j;
+     if(c[j].close<c[i].low){invalid=j;break}
+    }
+    // A block that breaks before it is mitigated is no longer a valid active OB.
+    if(m!==undefined||invalid===undefined){
+     out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
+    }
+   }
   }
   if(bearBreak>0){
-   let m:number|undefined;
-   for(let j=bearBreak+1;j<=end;j++)if(c[j].high>=c[i].open){m=j;break}
-   out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
+   const linked=events.some(e=>e.direction==="bearish"&&e.index>=bearBreak&&e.index<=bearBreak+1);
+   if(linked){
+    let m:number|undefined,invalid:number|undefined;
+    for(let j=bearBreak+1;j<=end;j++){
+     if(m===undefined&&c[j].high>=c[i].open)m=j;
+     if(c[j].close>c[i].high){invalid=j;break}
+    }
+    if(m!==undefined||invalid===undefined){
+     out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
+    }
+   }
   }
  }
  return out;
@@ -224,35 +277,11 @@ function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:C
 export function analyzeSMC(c:Candle[]):SMCResult{
  const empty:SMCResult={trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",status:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
  if(c.length<25)return empty;
- const a=atr(c),ps=labelPivots(pivots(c,3)),internal=labelPivots(pivots(c,1)),events:StructureEvent[]=[];let structure:"bullish"|"bearish"|null=null;let activeH:Pivot|null=null,activeL:Pivot|null=null;
- const confirmedHighs=ps.filter(p=>p.type==="H").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
- const confirmedLows=ps.filter(p=>p.type==="L").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
- let hiPtr=0,loPtr=0;
- for(let i=0;i<c.length;i++){
-  while(hiPtr<confirmedHighs.length&&(confirmedHighs[hiPtr].confirmedAt??Infinity)<=i)activeH=confirmedHighs[hiPtr++];
-  while(loPtr<confirmedLows.length&&(confirmedLows[loPtr].confirmedAt??Infinity)<=i)activeL=confirmedLows[loPtr++];
-  const disp=displacementAt(c,i,atrAt(c,i))>=.7;
-  const brokeBull=!!activeH&&c[i].close>activeH.price;
-  const brokeBear=!!activeL&&c[i].close<activeL.price;
-  if(brokeBull&&brokeBear){
-   // A single candle that closes through both active swing levels is ambiguous.
-   // Do not manufacture two opposing BOS/CHOCH events from the same OHLC bar.
-   activeH=null;
-   activeL=null;
-   continue;
-  }
-  if(brokeBull){
-   events.push({index:i,price:activeH!.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});
-   structure="bullish";
-   activeH=null;
-  }else if(brokeBear){
-   events.push({index:i,price:activeL!.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});
-   structure="bearish";
-   activeL=null;
-  }
- }
+ const a=atr(c),ps=labelPivots(pivots(c,3)),internal=labelPivots(pivots(c,1));
+ const events=detectStructureEvents(c,ps);
+ const internalEvents=detectStructureEvents(c,internal);
  const asOf=c.length-1;
- const fvgs=findFvgs(c,a,asOf),obs=findOrderBlocks(c,a,asOf),breakers=makeBreakers(obs,c,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.18,.0000001);
+ const fvgs=findFvgs(c,a,asOf),obs=findOrderBlocks(c,a,asOf,events),breakers=makeBreakers(obs,c,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.18,.0000001);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
  const liquidityHighs=uniquePivots([...equalHighs,...highs.slice(-6)],tol).slice(-8);
  const liquidityLows=uniquePivots([...equalLows,...lows.slice(-6)],tol).slice(-8);
@@ -273,9 +302,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const recentVolumes=c.slice(-21,-1);
  const volBase=recentVolumes.reduce((s,x)=>s+x.volume,0)/Math.max(1,recentVolumes.length);
  const volumeRatio=last.volume/Math.max(volBase,.0000001);
- const recentCandles=c.slice(-60);
- const totalVolume=recentCandles.reduce((s,x)=>s+x.volume,0);
- const vwap=recentCandles.reduce((s,x)=>s+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
+ const recentCandles=c.slice(Math.min(r.anchorIndex,asOf),asOf+1);
+ const totalVolume=recentCandles.reduce((sum,x)=>sum+x.volume,0);
+ const vwap=recentCandles.reduce((sum,x)=>sum+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
  const structureDirection=events.at(-1)?.direction??null;
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
  const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
@@ -306,7 +335,8 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   .filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*0.0005,.0000001));
  const targets=entry!==null&&risk?(uniqueTargets.length?uniqueTargets.slice(0,4):[1,2,3,4].map(x=>direction==="bullish"?entry+risk*x:entry-risk*x)):[];
  const confirmations:string[]=[];
- if(direction&&events.at(-1)?.direction===direction)confirmations.push("Structure aligned");
+ if(direction&&events.at(-1)?.direction===direction)confirmations.push("Swing structure aligned");
+ if(direction&&internalEvents.at(-1)?.direction===direction)confirmations.push("Internal structure aligned");
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
  if(selectedZone?.kind==="OB")confirmations.push("Qualified unmitigated order block");
  if(selectedZone?.kind==="FVG")confirmations.push("Qualified unfilled fair value gap");
