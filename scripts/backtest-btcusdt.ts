@@ -1,7 +1,10 @@
-import { writeFile } from "node:fs/promises";
+import { writeFile, mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { analyzeSMC, analyzeElliott, type Candle } from "../src/analysis/engine";
 
-const BASE = "https://fapi.binance.com/fapi/v1/klines";
+const ARCHIVE_BASE = "https://data.binance.vision/data/futures/um/daily/klines";
 const SYMBOL = process.env.SYMBOL ?? "BTCUSDT";
 const INTERVAL = "5m";
 const DAYS = Number(process.env.DAYS ?? 90);
@@ -10,38 +13,137 @@ const RISK_FRACTION = Number(process.env.RISK_FRACTION ?? 0.01);
 const FEE_RATE = Number(process.env.FEE_RATE ?? 0.0005); // per side; configure to your tier
 const SLIPPAGE = Number(process.env.SLIPPAGE ?? 0.0002); // adverse fraction per fill
 const WARMUP = 500;
-const LIMIT = 1500;
+const CONCURRENCY = 6;
+const execFileAsync = promisify(execFile);
 
-type BinanceKline = [
-  number, string, string, string, string, string,
-  number, string, string, string, string, string
-];
+type ArchiveRow = {
+  openTime: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  takerBuyVolume: number;
+};
 
-type Trade = { side: "LONG" | "SHORT"; entryTime: number; exitTime: number; entry: number; exit: number; stop: number; target: number; qty: number; pnl: number; r: number; reason: string };
+type Trade = {
+  side: "LONG" | "SHORT";
+  entryTime: number;
+  exitTime: number;
+  entry: number;
+  exit: number;
+  stop: number;
+  target: number;
+  qty: number;
+  pnl: number;
+  r: number;
+  reason: string;
+};
+
+function utcDateKey(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function addUtcDays(ms: number, days: number): number {
+  return ms + days * 24 * 60 * 60 * 1000;
+}
+
+function parseCsv(content: string, source: string): ArchiveRow[] {
+  const rows: ArchiveRow[] = [];
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const cols = line.split(",");
+    const openTime = Number(cols[0]);
+    if (!Number.isFinite(openTime)) continue; // skips the optional header row
+    const open = Number(cols[1]);
+    const high = Number(cols[2]);
+    const low = Number(cols[3]);
+    const close = Number(cols[4]);
+    const volume = Number(cols[5]);
+    const takerBuyVolume = Number(cols[9]);
+    if (![open, high, low, close, volume, takerBuyVolume].every(Number.isFinite)) {
+      throw new Error(`Invalid kline row in ${source}`);
+    }
+    rows.push({ openTime, open, high, low, close, volume, takerBuyVolume });
+  }
+  return rows;
+}
+
+async function downloadDailyArchive(dateKey: string, tempDir: string): Promise<ArchiveRow[]> {
+  const filename = `${SYMBOL}-${INTERVAL}-${dateKey}.zip`;
+  const url = `${ARCHIVE_BASE}/${SYMBOL}/${INTERVAL}/${filename}`;
+  const zipPath = join(tempDir, filename);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Binance Data Vision HTTP ${response.status} for ${dateKey}: ${body.slice(0, 300)}`);
+  }
+  await writeFile(zipPath, Buffer.from(await response.arrayBuffer()));
+
+  try {
+    const { stdout } = await execFileAsync("unzip", ["-p", zipPath], { maxBuffer: 8 * 1024 * 1024 });
+    return parseCsv(stdout, filename);
+  } finally {
+    await rm(zipPath, { force: true });
+  }
+}
 
 async function fetchCandles(): Promise<Candle[]> {
   const end = Date.now();
   const start = end - DAYS * 24 * 60 * 60 * 1000;
-  const all: Candle[] = [];
-  for (let cursor = start; cursor < end;) {
-    const url = new URL(BASE);
-    url.searchParams.set("symbol", SYMBOL);
-    url.searchParams.set("interval", INTERVAL);
-    url.searchParams.set("startTime", String(cursor));
-    url.searchParams.set("endTime", String(end));
-    url.searchParams.set("limit", String(LIMIT));
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Binance klines HTTP ${response.status}: ${await response.text()}`);
-    const rows = await response.json() as BinanceKline[];
-    if (!rows.length) break;
-    for (const r of rows) all.push({ time: r[0], open: Number(r[1]), high: Number(r[2]), low: Number(r[3]), close: Number(r[4]), volume: Number(r[5]), takerBuyVolume: Number(r[9]), closed: r[6] < end });
-    const next = rows[rows.length - 1][0] + 5 * 60_000;
-    if (next <= cursor) throw new Error("Binance pagination did not advance");
-    cursor = next;
-    if (rows.length < LIMIT) break;
+
+  // The current UTC day is intentionally excluded because its daily archive is not complete yet.
+  const firstDay = new Date(Date.UTC(
+    new Date(start).getUTCFullYear(),
+    new Date(start).getUTCMonth(),
+    new Date(start).getUTCDate()
+  )).getTime();
+  const lastDay = new Date(Date.UTC(
+    new Date(end).getUTCFullYear(),
+    new Date(end).getUTCMonth(),
+    new Date(end).getUTCDate()
+  )).getTime() - 24 * 60 * 60 * 1000;
+
+  const dates: string[] = [];
+  for (let day = firstDay; day <= lastDay; day = addUtcDays(day, 1)) {
+    dates.push(utcDateKey(day));
   }
-  const dedup = [...new Map(all.map(c => [c.time, c])).values()].sort((a, b) => a.time - b.time);
-  return dedup.filter(c => c.closed && c.time < end);
+  if (!dates.length) throw new Error("No complete UTC day available for the requested lookback");
+
+  const tempDir = await mkdtemp(join(process.cwd(), ".backtest-"));
+  try {
+    const all: ArchiveRow[] = [];
+    let nextIndex = 0;
+    async function worker() {
+      while (true) {
+        const index = nextIndex++;
+        if (index >= dates.length) return;
+        const dateKey = dates[index];
+        const rows = await downloadDailyArchive(dateKey, tempDir);
+        all.push(...rows);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, dates.length) }, () => worker()));
+
+    const dedup = [...new Map(all.map(r => [r.openTime, r])).values()]
+      .sort((a, b) => a.openTime - b.openTime)
+      .filter(r => r.openTime >= start && r.openTime < end);
+
+    return dedup.map(r => ({
+      time: r.openTime,
+      open: r.open,
+      high: r.high,
+      low: r.low,
+      close: r.close,
+      volume: r.volume,
+      takerBuyVolume: r.takerBuyVolume,
+      closed: true
+    }));
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 function applySlippage(price: number, side: "BUY" | "SELL"): number {
@@ -49,9 +151,13 @@ function applySlippage(price: number, side: "BUY" | "SELL"): number {
 }
 
 async function main() {
-  if (!(DAYS > 0 && INITIAL_EQUITY > 0 && RISK_FRACTION > 0 && RISK_FRACTION <= 0.1)) throw new Error("Invalid DAYS, INITIAL_EQUITY, or RISK_FRACTION");
+  if (!(DAYS > 0 && INITIAL_EQUITY > 0 && RISK_FRACTION > 0 && RISK_FRACTION <= 0.1)) {
+    throw new Error("Invalid DAYS, INITIAL_EQUITY, or RISK_FRACTION");
+  }
+
   const candles = await fetchCandles();
   if (candles.length <= WARMUP + 2) throw new Error(`Not enough candles: ${candles.length}`);
+
   let equity = INITIAL_EQUITY;
   let peak = equity;
   let maxDrawdown = 0;
@@ -64,11 +170,13 @@ async function main() {
     const window = candles.slice(Math.max(0, i - 500), i + 1);
     const signalCandle = candles[i];
     const next = candles[i + 1];
+
     if (active) {
       const bar = signalCandle;
       const long = active.side === "LONG";
       const stopHit = long ? bar.low <= active.stop : bar.high >= active.stop;
       const targetHit = long ? bar.high >= active.target : bar.low <= active.target;
+
       // Conservative intrabar assumption: if stop and target both touched, stop wins.
       if (stopHit || targetHit) {
         const rawExit = stopHit ? active.stop : active.target;
@@ -77,51 +185,121 @@ async function main() {
         const fees = (active.entry * active.qty + exit * active.qty) * FEE_RATE;
         const pnl = gross - fees;
         equity += pnl;
-        trades.push({ ...active, exitTime: bar.time, exit, pnl, r: pnl / Math.max(active.entry * active.qty * RISK_FRACTION, 1e-9), reason: stopHit ? "STOP (stop-first if ambiguous)" : "TARGET" });
+        trades.push({
+          ...active,
+          exitTime: bar.time,
+          exit,
+          pnl,
+          r: pnl / Math.max(active.entry * active.qty * RISK_FRACTION, 1e-9),
+          reason: stopHit ? "STOP (stop-first if ambiguous)" : "TARGET"
+        });
         active = null;
       }
     }
+
     if (!active) {
       const smc = analyzeSMC(window);
       const elliott = analyzeElliott(window);
       const setup = smc.setup;
       const wave = elliott.primary;
       const smcSide = setup.direction === "BUY" ? "LONG" : setup.direction === "SELL" ? "SHORT" : null;
-      const waveAligned = !!wave && ((smcSide === "LONG" && wave.direction === "bullish") || (smcSide === "SHORT" && wave.direction === "bearish"));
-      signals.push({ time: signalCandle.time, smc: setup.direction, status: setup.status, smcScore: smc.score, waveDirection: wave?.direction ?? null, waveQuality: wave?.quality ?? null, waveAligned });
+      const waveAligned = !!wave && (
+        (smcSide === "LONG" && wave.direction === "bullish") ||
+        (smcSide === "SHORT" && wave.direction === "bearish")
+      );
+
+      signals.push({
+        time: signalCandle.time,
+        smc: setup.direction,
+        status: setup.status,
+        smcScore: smc.score,
+        waveDirection: wave?.direction ?? null,
+        waveQuality: wave?.quality ?? null,
+        waveAligned
+      });
+
       // EliteWave acts as a direction/quality confirmation; no unconfirmed/no-trade wave is treated as alignment.
-      if (smcSide && setup.status === "ACTIVE" && waveAligned && wave && wave.quality >= 50 && setup.entry !== null && setup.stop !== null) {
+      if (
+        smcSide &&
+        setup.status === "ACTIVE" &&
+        waveAligned &&
+        wave &&
+        wave.quality >= 50 &&
+        setup.entry !== null &&
+        setup.stop !== null
+      ) {
         const side = smcSide;
         const rawEntry = next.open;
         const entry = applySlippage(rawEntry, side === "LONG" ? "BUY" : "SELL");
         const stop = setup.stop;
         const target = setup.targets.find(t => side === "LONG" ? t > entry : t < entry);
         const perUnitRisk = Math.abs(entry - stop);
-        if (target !== undefined && perUnitRisk > 0 && (side === "LONG" ? stop < entry : stop > entry)) {
+
+        if (
+          target !== undefined &&
+          perUnitRisk > 0 &&
+          (side === "LONG" ? stop < entry : stop > entry)
+        ) {
           const riskBudget = equity * RISK_FRACTION;
           const qty = riskBudget / perUnitRisk;
           active = { side, entryTime: next.time, entry, stop, target, qty };
         }
       }
     }
+
     peak = Math.max(peak, equity);
     maxDrawdown = Math.max(maxDrawdown, (peak - equity) / peak);
   }
+
   const wins = trades.filter(t => t.pnl > 0).length;
   const net = equity - INITIAL_EQUITY;
   const grossProfit = trades.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0);
   const grossLoss = Math.abs(trades.filter(t => t.pnl < 0).reduce((s, t) => s + t.pnl, 0));
+
   const report = {
     disclaimer: "Research backtest only; not a performance guarantee. Verify model semantics and execution assumptions before live use.",
-    config: { symbol: SYMBOL, market: "Binance USDT-M perpetual", interval: INTERVAL, days: DAYS, initialEquity: INITIAL_EQUITY, riskFraction: RISK_FRACTION, feeRatePerSide: FEE_RATE, slippageFractionPerFill: SLIPPAGE, warmupCandles: WARMUP, strategy: "SMC ACTIVE setup + aligned EliteWave primary count (quality >= 50)", execution: "signal on close; next candle open entry; stop-first on same-candle stop/target ambiguity; no overlapping positions" },
-    data: { candles: candles.length, firstOpenTime: candles[0].time, lastOpenTime: candles[candles.length - 1].time },
-    summary: { initialEquity: INITIAL_EQUITY, finalEquity: equity, netPnl: net, returnPct: net / INITIAL_EQUITY * 100, trades: trades.length, wins, losses: trades.length - wins, winRatePct: trades.length ? wins / trades.length * 100 : 0, profitFactor: grossLoss ? grossProfit / grossLoss : null, maxDrawdownPct: maxDrawdown * 100, openPositionAtEnd: !!active },
+    config: {
+      symbol: SYMBOL,
+      market: "Binance USDT-M perpetual",
+      interval: INTERVAL,
+      days: DAYS,
+      initialEquity: INITIAL_EQUITY,
+      riskFraction: RISK_FRACTION,
+      feeRatePerSide: FEE_RATE,
+      slippageFractionPerFill: SLIPPAGE,
+      warmupCandles: WARMUP,
+      strategy: "SMC ACTIVE setup + aligned EliteWave primary count (quality >= 50)",
+      execution: "signal on close; next candle open entry; stop-first on same-candle stop/target ambiguity; no overlapping positions",
+      dataSource: "Binance Data Vision public USD-M Futures daily kline archive"
+    },
+    data: {
+      candles: candles.length,
+      firstOpenTime: candles[0].time,
+      lastOpenTime: candles[candles.length - 1].time
+    },
+    summary: {
+      initialEquity: INITIAL_EQUITY,
+      finalEquity: equity,
+      netPnl: net,
+      returnPct: net / INITIAL_EQUITY * 100,
+      trades: trades.length,
+      wins,
+      losses: trades.length - wins,
+      winRatePct: trades.length ? wins / trades.length * 100 : 0,
+      profitFactor: grossLoss ? grossProfit / grossLoss : null,
+      maxDrawdownPct: maxDrawdown * 100,
+      openPositionAtEnd: !!active
+    },
     trades,
     signals
   };
+
   const out = `backtest-${SYMBOL}-${INTERVAL}-${DAYS}d-${Date.now()}.json`;
   await writeFile(out, JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ output: out, ...report.summary, candles: candles.length }, null, 2));
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
