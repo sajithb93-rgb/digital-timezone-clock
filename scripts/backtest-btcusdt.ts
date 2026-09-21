@@ -17,7 +17,7 @@ const CONCURRENCY = 6;
 const ARCHIVE_LAG_DAYS = Number(process.env.ARCHIVE_LAG_DAYS ?? 2);
 const MIN_TARGET_RR = Number(process.env.MIN_TARGET_RR ?? 1.5);
 const MAX_ENTRY_DEVIATION_ATR = Number(process.env.MAX_ENTRY_DEVIATION_ATR ?? 0.5);
-const ELLIOTT_MAX_AGE_BARS = Number(process.env.ELLIOTT_MAX_AGE_BARS ?? 72);
+const ELLIOTT_MAX_AGE_BARS = Number(process.env.ELLIOTT_MAX_AGE_BARS ?? 144);
 const execFileAsync = promisify(execFile);
 
 type ArchiveRow = {
