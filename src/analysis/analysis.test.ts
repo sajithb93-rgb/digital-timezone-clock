@@ -43,6 +43,30 @@ describe("analysis regression",()=>{
     expect(isSetupActive(zone,{time:2,open:106,high:107,low:103,close:104,volume:100,closed:true})).toBe(true);
   });
 
+  it("never emits two opposing structure events on the same candle",()=>{
+    const c=candles(120);
+    const m=analyzeSMC(c);
+    const byIndex=new Map<number,Set<string>>();
+    for(const e of m.events){
+      if(!byIndex.has(e.index))byIndex.set(e.index,new Set());
+      byIndex.get(e.index)!.add(e.direction);
+    }
+    for(const dirs of byIndex.values())expect(dirs.size).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps zone state bounded to the supplied analysis window",()=>{
+    const base=[
+      {time:0,open:100,high:101,low:99,close:100,volume:100,closed:true},
+      {time:1,open:100,high:100.5,low:99.5,close:100,volume:100,closed:true},
+      {time:2,open:100,high:105,low:100.2,close:104,volume:100,closed:true}
+    ];
+    const future={time:3,open:101,high:102,low:99,close:100,volume:100,closed:true};
+    const earlier=analyzeSMC([...candles(30),...base]);
+    const later=analyzeSMC([...candles(30),...base,future]);
+    expect(earlier.asOf).toBe(32);
+    expect(later.asOf).toBe(33);
+  });
+
   it("does not emit a trade setup without a valid entry zone",()=>{
     const s=analyzeSMC(candles(100));
     if(!s.entryZone) expect(s.setup.direction).toBe("WAIT");
