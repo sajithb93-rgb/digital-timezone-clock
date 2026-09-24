@@ -2,7 +2,7 @@
 
 import "./globals.css";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
@@ -38,7 +38,7 @@ export default function Home(){
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]);
- const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null);
+ const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null);\n const livePendingRef=useRef<Candle|null>(null);\n const liveCommitTimerRef=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
  const elliott=useMemo(()=>analyzeElliott(analysisCandles),[analysisCandles]);
@@ -60,15 +60,69 @@ export default function Home(){
  useEffect(()=>{
   let ws:WebSocket|undefined,stop=false,retry:ReturnType<typeof setTimeout>|undefined;
   setCandles([]);setAnalysisCandles([]);setConnected(false);setRestConnected(false);setBacktest(null);setLoading(true);setError("");setDerivatives(null);
+  if(liveCommitTimerRef.current){clearTimeout(liveCommitTimerRef.current);liveCommitTimerRef.current=undefined;}
+  livePendingRef.current=null;
+
+  const upsertCandle=(prev:Candle[],c:Candle[])=>{
+   const next=[...prev],last=next.at(-1);
+   if(last?.time===c[0].time)next[next.length-1]=c[0];else next.push(c[0]);
+   return next.length>350?next.slice(-350):next;
+  };
+  const flushLiveState=()=>{
+   const pending=livePendingRef.current;
+   livePendingRef.current=null;
+   liveCommitTimerRef.current=undefined;
+   if(!pending)return;
+   setCandles(prev=>upsertCandle(prev,[pending]));
+  };
+  const scheduleLiveStateCommit=()=>{
+   if(liveCommitTimerRef.current)return;
+   liveCommitTimerRef.current=setTimeout(flushLiveState,200);
+  };
+
   const connect=()=>{if(stop)return;ws=new WebSocket(`${marketConfig[marketType].ws}${symbol.toLowerCase()}@kline_${interval}`);
    ws.onopen=()=>setConnected(true);ws.onclose=()=>{setConnected(false);if(!stop)retry=setTimeout(connect,2500)};ws.onerror=()=>setConnected(false);
-   ws.onmessage=e=>{try{const k=JSON.parse(e.data).k;if(!k)return;const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V,closed:!!k.x};setCandles(p=>{const a=[...p],l=a.at(-1);if(l?.time===c.time)a[a.length-1]=c;else a.push(c);return a.length>350?a.slice(-350):a})}catch{}};
+   ws.onmessage=e=>{
+    try{
+     const k=JSON.parse(e.data).k;if(!k)return;
+     const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V,closed:!!k.x};
+     livePendingRef.current=c;
+
+     // Keep the chart itself real-time without forcing a React render per WebSocket update.
+     try{seriesRef.current?.update({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close});}catch{}
+
+     if(c.closed){
+      if(liveCommitTimerRef.current){clearTimeout(liveCommitTimerRef.current);liveCommitTimerRef.current=undefined;}
+      livePendingRef.current=null;
+      setCandles(prev=>upsertCandle(prev,[c]));
+      setAnalysisCandles(prev=>upsertCandle(prev,[c]).filter(x=>x.closed!==false));
+     }else{
+      scheduleLiveStateCommit();
+     }
+    }catch{}
+   };
   };
-  fetchKlines(symbol,interval,350,marketType).then(data=>{if(stop)return;setRestConnected(true);setCandles(data);setAnalysisCandles(data.filter(x=>x.closed!==false));setLoading(false);connect()}).catch(e=>{if(!stop){setRestConnected(false);setLoading(false);setError(e instanceof Error?e.message:"Market data error")}});
-  return()=>{stop=true;if(retry)clearTimeout(retry);ws?.close()};
+
+  fetchKlines(symbol,interval,350,marketType).then(data=>{
+   if(stop)return;
+   setRestConnected(true);
+   setCandles(data);
+   setAnalysisCandles(data.filter(x=>x.closed!==false));
+   setLoading(false);
+   connect();
+  }).catch(e=>{
+   if(!stop){setRestConnected(false);setLoading(false);setError(e instanceof Error?e.message:"Market data error")}
+  });
+  return()=>{
+   stop=true;
+   if(retry)clearTimeout(retry);
+   if(liveCommitTimerRef.current)clearTimeout(liveCommitTimerRef.current);
+   liveCommitTimerRef.current=undefined;
+   livePendingRef.current=null;
+   ws?.close();
+  };
  },[symbol,interval,marketType]);
 
- useEffect(()=>{if(!candles.length)return;const id=window.setTimeout(()=>setAnalysisCandles(candles.filter(x=>x.closed!==false)),750);return()=>window.clearTimeout(id)},[candles]);
 
  useEffect(()=>{let stop=false;const load=async()=>{try{const cfg=marketConfig[marketType==="spot"?"usdm":marketType];const [oi,pi,t]=await Promise.all([fetch(`${cfg.rest}/openInterest?symbol=${encodeURIComponent(symbol)}`),fetch(`${cfg.rest}/premiumIndex?symbol=${encodeURIComponent(symbol)}`),fetch(`${cfg.rest}/ticker/24hr?symbol=${encodeURIComponent(symbol)}`)]);if(!oi.ok||!pi.ok||!t.ok)throw new Error();const [o,p,tt]=await Promise.all([oi.json(),pi.json(),t.json()]);if(!stop)setDerivatives({openInterest:o.openInterest,fundingRate:p.lastFundingRate,change24h:tt.priceChangePercent})}catch{if(!stop)setDerivatives(null)}};if(symbol)load();const id=window.setInterval(load,15000);return()=>{stop=true;clearInterval(id)}},[symbol,marketType]);
 
@@ -114,7 +168,6 @@ export default function Home(){
   };
  },[]);
  useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval,candles.length]);
- useEffect(()=>{const s=seriesRef.current,l=candles.at(-1);if(!chartReady||!s||!l)return;s.update({time:Math.floor(l.time/1000) as any,open:l.open,high:l.high,low:l.low,close:l.close})},[candles,chartReady]);
 
  const quoteOptions=useMemo(()=>Array.from(new Set(pairs.map(p=>p.quoteAsset))).sort(),[pairs]);
  const filtered=pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch));
@@ -140,7 +193,7 @@ export default function Home(){
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail"><button title="Crosshair">⌖</button><button title="Trend line">╱</button><button title="Horizontal line">━</button><button title="Rectangle">□</button><button title="Fibonacci">F</button><span/><button title="Long setup">↗</button><button title="Short setup">↘</button></div><div className="chartarea" ref={chartRef}/>{chartReady&&<ChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={candles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail"><button title="Crosshair">⌖</button><button title="Trend line">╱</button><button title="Horizontal line">━</button><button title="Rectangle">□</button><button title="Fibonacci">F</button><span/><button title="Long setup">↗</button><button title="Short setup">↘</button></div><div className="chartarea" ref={chartRef}/>{chartReady&&<ChartAnnotationsMemo chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span><span className="chart-tip">Live Binance {marketConfig[marketType].label.toLowerCase()} data · analysis uses closed candles</span></div>
    </div>
 
@@ -175,6 +228,7 @@ export default function Home(){
 }
 
 function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;mode:Mode;tick:number;layers:any}){
+
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
  const ts=chart.timeScale(),lastIndex=candles.length-1,xOf=(i:number)=>{if(i<0||i>=candles.length)return null;try{const x=ts.timeToCoordinate?.(Math.floor(candles[i].time/1000) as any);if(x!=null)return x;const logical=ts.logicalToCoordinate?.(i);return logical??null}catch{return null}},yOf=(p:number)=>{try{const y=series.priceToCoordinate(p);return y??null}catch{return null}};
@@ -190,7 +244,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,mode,tick,layer
  return <div className="chart-overlay-wrap"><div className="analysis-debug">ANALYSIS · {candles.length} CANDLES · SMC {smc.events.length} BOS/CHOCH · FVG {smc.fvgs.length} · OB {smc.orderBlocks.length} · LIQ {smc.liquidityHighs.length+smc.liquidityLows.length} · ELLIOTT {elliott.primary?"READY":"—"}</div><svg className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>{mode!=="elliott"&&<>{zones}{structure}{liquidity}{trade}</>}{wave}{fib}</svg>{mode!=="elliott"&&<div className={`setup-panel ${smc.setup.direction.toLowerCase()}`}><div className="setup-head"><span>SMC SETUP</span><strong>{smc.setup.direction}</strong></div><div className="setup-grid"><span>Trend<b>{smc.trend}</b></span><span>Score<b>{smc.setup.confidence}/100</b></span><span>Entry<b>{smc.setup.entry!=null?smc.setup.entry.toFixed(4):"—"}</b></span><span>SL<b>{smc.stop!=null?smc.stop.toFixed(4):"—"}</b></span><span>TP1<b>{smc.targets?.[0]?.toFixed(4)||"—"}</b></span><span>R:R<b>{smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}</b></span></div></div>}</div>;
 }
 
-function MetricCard({title,children}:{title:string;children:ReactNode}){return <div className="panel-card metric-card"><div className="section-title">{title}</div>{children}</div>}
+const ChartAnnotationsMemo=memo(ChartAnnotations);\n\nfunction MetricCard({title,children}:{title:string;children:ReactNode}){return <div className="panel-card metric-card"><div className="section-title">{title}</div>{children}</div>}
 function Row({k,v}:{k:string;v:string}){return <div className="data-row"><span>{k}</span><b>{v}</b></div>}
 function ScoreRow({label,value}:{label:string;value:number}){return <div className="score-row"><div><span>{label}</span><b>{value}<small>/100</small></b></div><div className="score-track"><i style={{width:`${Math.max(0,Math.min(100,value))}%`}}/></div></div>}
 function Stat({k,v}:{k:string;v:string|number}){return <div className="stat-box"><span>{k}</span><b>{v}</b></div>}
