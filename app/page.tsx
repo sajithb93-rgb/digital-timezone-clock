@@ -277,7 +277,7 @@ export default function Home(){
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail"><button title="Crosshair">⌖</button><button title="Trend line">╱</button><button title="Horizontal line">━</button><button title="Rectangle">□</button><button title="Fibonacci">F</button><span/><button title="Long setup">↗</button><button title="Short setup">↘</button></div><div className="chartarea" ref={chartRef}/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail"><button title="Crosshair">⌖</button><button title="Trend line">╱</button><button title="Horizontal line">━</button><button title="Rectangle">□</button><button title="Fibonacci">F</button><span/><button title="Long setup">↗</button><button title="Short setup">↘</button></div><div className="chartarea" ref={chartRef}/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span>{mode==="orderflow"&&<span><i className="legend-dot liq-dot"/> Order Flow</span>}<span className="chart-tip">Live Binance {marketConfig[marketType].label.toLowerCase()} data · analysis uses closed candles</span></div>
    </div>
 
@@ -311,7 +311,7 @@ export default function Home(){
  </main>;
 }
 
-function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mode:Mode;tick:number;layers:any}){
+function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mtfReversal,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mtfReversal:any;mode:Mode;tick:number;layers:any}){
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
  const ts=chart.timeScale(),lastIndex=candles.length-1,xCache=new Map<number,number|null>(),yCache=new Map<number,number|null>();
@@ -328,6 +328,17 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const elite=elliott.primary;
  const eliteTrade=showElliott&&layers.trade&&elite&&elite.entry!=null&&elite.invalidation!=null?<>{(()=>{const p2=elite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(elite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-120,ye,"EW ENTRY "+elite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(elite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-100,y,"EW SL "+elite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(elite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-60,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
+ const mtfSignalMarker = layers.reversal && mtfReversal.confirmed && mtfReversal.direction !== "NONE" ? (() => {
+  const dirCls = mtfReversal.direction === "BUY" ? "reversal-buy" : "reversal-sell";
+  const idx = candles.length - 1;
+  const px = xOf(idx);
+  const py = yOf(candles[idx]?.close ?? 0);
+  const label = mtfReversal.direction + " REVERSAL · MTF 15m + 5m CONFIRMED · " + mtfReversal.score + "/100";
+  return <g className="reversal-chart-layer">
+    <circle cx={px} cy={py} r="11" className={dirCls+"-mtf-marker"}/>
+    {text(Math.max(8,Math.min(width-260,px+14)),Math.max(20,py-14),label,dirCls+"-mtf-label")}
+  </g>;
+ })() : null;
  const reversalMarker = layers.reversal && reversal.state !== "NONE" ? (() => {
   const sweepX=reversal.sweepIndex!=null?xOf(reversal.sweepIndex):null;
   const sweepY=reversal.sweepPrice!=null?yOf(reversal.sweepPrice):null;
@@ -415,6 +426,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     {showElliott&&<>{eliteTrade}{wave}{fib}</>}
     {orderFlowMarker}
     {reversalMarker}
+    {mtfSignalMarker}
    </svg>
    {smcPanel}
    {elitewavePanel}
