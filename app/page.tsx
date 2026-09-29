@@ -353,7 +353,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,mode,
    ):<div className="setup-empty">NO QUALIFIED 1–5 TRADE COUNT</div>}
   </div>
  ):null;
- const formatOF=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
+ const fmt=(n:number|null|undefined)=>n==null?"—":n.toLocaleString(undefined,{maximumFractionDigits:8});
  const orderFlowPanel=showOrderFlow?(
   <div className={`setup-panel orderflow-setup-panel ${orderFlow.direction==="SELL"?"bear":""}`}>
    <div className="setup-head"><span>ORDER FLOW SETUP</span><strong className={orderFlow.direction!=="WAIT"?"setup-active":"setup-wait"}>{orderFlow.direction!=="WAIT"?"CONFIRMED":"WAIT"}</strong></div>
