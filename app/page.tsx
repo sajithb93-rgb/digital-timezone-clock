@@ -324,7 +324,26 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,mode,
  const elite=elliott.primary;
  const eliteTrade=showElliott&&layers.trade&&elite&&elite.entry!=null&&elite.invalidation!=null?<>{(()=>{const p2=elite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(elite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-120,ye,"EW ENTRY "+elite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(elite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-100,y,"EW SL "+elite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(elite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-60,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
- const orderFlowMarker = showOrderFlow ? (() => { const last = candles.at(-1); const entry = orderFlow.entry ?? last?.close ?? null; const x = xOf(candles.length - 1); const y = entry != null ? yOf(entry) : null; if (!last || x == null || y == null) return null; const label = orderFlow.direction === "BUY" ? "OF BUY" : orderFlow.direction === "SELL" ? "OF SELL" : "OF WAIT"; return <g><circle cx={x} cy={y} r="6" className="marker-sweep"/>{text(Math.min(x + 8, width - 90), y, label, "sweep-label")}</g>; })() : null;
+ const orderFlowMarker = showOrderFlow ? (() => {
+  const bars=orderFlow.recentBars;
+  const latest=bars.at(-1);
+  const level=(price:number|null|undefined,cls:string,label:string)=>{if(price==null)return null;const y=yOf(price);if(y==null)return null;return <g><line x1={x0} x2={xLast} y1={y} y2={y} className={cls}/>{text(xLast-100,y,label,cls+"-label")}</g>};
+  return <g className="orderflow-chart-layer">
+   {bars.map((b:any,i:number)=>{const x=xOf(b.index),y=b.sweepPrice!=null?yOf(b.sweepPrice):null;if(x==null)return null;return <g key={"ofb"+b.index}>
+    {b.imbalance!=="NONE"&&<circle cx={x} cy={yOf(candles[b.index]?.close??0)??0} r="4" className={b.imbalance==="BUY"?"of-buy-marker":"of-sell-marker"}/>}
+    {b.absorption!=="NONE"&&<text x={x+5} y={(yOf(candles[b.index]?.close??0)??0)-8} className="orderflow-absorption-label">{b.absorption==="BUYER"?"ABS BUY":"ABS SELL"}</text>}
+    {b.liquiditySweep!=="NONE"&&y!=null&&<g><line x1={x-10} x2={x+10} y1={y} y2={y} className="orderflow-sweep-line"/><text x={x+7} y={y-5} className="orderflow-sweep-label">{b.liquiditySweep==="LOW"?"OF SWEEP LOW":"OF SWEEP HIGH"}</text></g>}
+   </g>})}
+   {latest&&<g>
+    {latest.microStructure!=="NEUTRAL"&&latest.index>=0&&<text x={Math.max(8,(xOf(latest.index)??xLast)-42)} y={latest.microStructure==="BULLISH"?22:height-22} className="orderflow-structure-label">{latest.microStructure==="BULLISH"?"OF BULL BREAK":"OF BEAR BREAK"}</text>}
+    {latest.deltaRatio!==0&&<text x={Math.max(8,xLast-170)} y={22} className="orderflow-delta-label">DELTA {(latest.deltaRatio*100).toFixed(1)}% · {latest.imbalance}</text>}
+   </g>}
+   {level(orderFlow.entry,"orderflow-entry-line","OF ENTRY "+(orderFlow.entry!=null?orderFlow.entry.toFixed(4):"—"))}
+   {level(orderFlow.stop,"orderflow-sl-line","OF SL "+(orderFlow.stop!=null?orderFlow.stop.toFixed(4):"—"))}
+   {(orderFlow.targets||[]).slice(0,3).map((p:number,i:number)=>level(p,"orderflow-tp-line","OF TP"+(i+1)+" "+p.toFixed(4)))}
+   {latest&&<g>{(()=>{const x=xOf(latest.index),y=yOf(candles[latest.index]?.close??0);if(x==null||y==null)return null;const label=orderFlow.direction==="BUY"?"OF BUY":orderFlow.direction==="SELL"?"OF SELL":"OF WAIT";return <><circle cx={x} cy={y} r="7" className={orderFlow.direction==="BUY"?"of-buy-marker":orderFlow.direction==="SELL"?"of-sell-marker":"of-wait-marker"}/>{text(Math.min(x+10,width-105),y,label,"orderflow-signal-label")}</>})()}</g>}
+  </g>;
+ })() : null;
  const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={f.label==="161.8%"||f.label==="261.8%"?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
  const wave=showElliott?[
   elliott.primary?drawWave(elliott.primary.points,"impulse-"):null,
