@@ -1,4 +1,4 @@
-import type { Candle, SMCResult } from "./engine";
+import { analyzeSMC, type Candle, type SMCResult } from "./engine";
 import type { OrderFlowResult } from "./orderflow";
 
 export type ReversalDirection = "BUY" | "SELL" | "NONE";
@@ -232,4 +232,104 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
   }
 
   return best ?? { ...EMPTY, asOf };
+}
+
+
+export type MTFReversalFrame = {
+  interval: string;
+  direction: ReversalDirection;
+  state: ReversalState;
+  score: number;
+  structure: "ALIGNED" | "OPPOSED" | "NEUTRAL" | "UNAVAILABLE";
+};
+
+export type MTFReversalResult = {
+  direction: ReversalDirection;
+  state: ReversalState;
+  score: number;
+  triggerTimeframe: string;
+  confirmationTimeframe: string;
+  contextTimeframe: string;
+  contextDirection: "Bullish" | "Bearish" | "Neutral";
+  frames: MTFReversalFrame[];
+  confirmed: boolean;
+  reason: string;
+};
+
+export function analyzeReversalMTF(frames: { interval: string; candles: Candle[] }[]): MTFReversalResult {
+  const wanted = new Map(frames.map(f => [f.interval, f.candles]));
+  const primaryCandles = wanted.get("15m") ?? [];
+  const triggerCandles = wanted.get("5m") ?? [];
+  const contextCandles = wanted.get("1h") ?? [];
+
+  const run = (candles: Candle[]): ReversalEngineResult => {
+    if (candles.length < 30) return { ...EMPTY, asOf: candles.length - 1 };
+    const smc = analyzeSMC(candles);
+    const flow = {
+      source: "CANDLE_ESTIMATE_FALLBACK" as const,
+      buyVolume: 0, sellVolume: 0, delta: 0, deltaRatio: 0, cumulativeDelta: 0,
+      buyerPressure: 50, sellerPressure: 50, pressure: "BALANCED" as const,
+      pressureTrend: "PRESSURE STABLE", imbalance: "NONE" as const, imbalanceRatio: 1,
+      absorption: "NONE" as const, absorptionStrength: 0, liquiditySweep: "NONE" as const,
+      liquiditySweepPrice: null, microStructure: "NEUTRAL" as const, direction: "WAIT" as const,
+      signal: "WAIT", confidence: 0, confirmations: [], entry: null, stop: null, targets: [],
+      recentBars: []
+    };
+    return analyzeReversal(candles, smc, flow);
+  };
+
+  const primary = run(primaryCandles);
+  const trigger = run(triggerCandles);
+
+  const contextSmc = contextCandles.length >= 30 ? analyzeSMC(contextCandles) : null;
+  const contextDirection = contextSmc?.trend ?? "Neutral";
+
+  const direction: ReversalDirection =
+    primary.direction !== "NONE" && trigger.direction === primary.direction
+      ? primary.direction
+      : primary.direction !== "NONE"
+        ? primary.direction
+        : trigger.direction;
+
+  const aligned = direction !== "NONE" && primary.direction === direction && trigger.direction === direction;
+  const opposedToContext =
+    (direction === "BUY" && contextDirection === "Bearish") ||
+    (direction === "SELL" && contextDirection === "Bullish");
+  const neutralContext = contextDirection === "Neutral";
+  const score = Math.max(0, Math.min(100, Math.round(
+    primary.score * 0.55 +
+    trigger.score * 0.30 +
+    (aligned ? 10 : 0) +
+    (opposedToContext ? 5 : neutralContext ? 2 : 0)
+  )));
+  const confirmed = aligned && primary.state === "CONFIRMED" && trigger.state !== "WATCH";
+  const state: ReversalState = confirmed ? "CONFIRMED" : score >= 65 && aligned ? "SETUP" : score >= 40 ? "WATCH" : "NONE";
+
+  const makeFrame = (interval: string, r: ReversalEngineResult, structure: MTFReversalFrame["structure"]): MTFReversalFrame => ({
+    interval, direction: r.direction, state: r.state, score: r.score, structure
+  });
+
+  const frames: MTFReversalFrame[] = [
+    makeFrame("1h", contextSmc ? { ...EMPTY, direction: contextDirection === "Bullish" ? "BUY" : contextDirection === "Bearish" ? "SELL" : "NONE", state: "NONE", score: contextSmc.score } : EMPTY,
+      direction === "NONE" || contextDirection === "Neutral" ? "NEUTRAL" : opposedToContext ? "OPPOSED" : "ALIGNED"),
+    makeFrame("15m", primary, primary.direction === direction ? "ALIGNED" : primary.direction === "NONE" ? "NEUTRAL" : "OPPOSED"),
+    makeFrame("5m", trigger, trigger.direction === direction ? "ALIGNED" : trigger.direction === "NONE" ? "NEUTRAL" : "OPPOSED"),
+  ];
+
+  return {
+    direction,
+    state,
+    score,
+    triggerTimeframe: "5m",
+    confirmationTimeframe: "15m",
+    contextTimeframe: "1h",
+    contextDirection,
+    frames,
+    confirmed,
+    reason: confirmed
+      ? direction + " MTF reversal confirmed: 15m structure + 5m trigger aligned" + (opposedToContext ? " against 1h context" : "")
+      : aligned
+        ? direction + " MTF reversal setup: 15m and 5m aligned, waiting for full confirmation"
+        : "Waiting for 5m + 15m directional alignment"
+  };
 }
