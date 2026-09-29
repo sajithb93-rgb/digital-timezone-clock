@@ -129,7 +129,7 @@ function analyzeBar(candles: Candle[], i: number, buy: number, sell: number): Or
   const lookbackStart = Math.max(0, i - 10);
   const history = candles.slice(lookbackStart, i);
 
-  if (history.length >= 4) {
+  if (history.length >= 3) {
     const previousHigh = Math.max(...history.map(x => x.high));
     const previousLow = Math.min(...history.map(x => x.low));
     if (c.high > previousHigh && c.close < previousHigh) {
