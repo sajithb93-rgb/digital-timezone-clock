@@ -256,8 +256,8 @@ export type MTFReversalResult = {
   reason: string;
 };
 
-export function analyzeReversalMTF(frames: { interval: string; candles: Candle[] }[]): MTFReversalResult {
-  const wanted = new Map(frames.map(f => [f.interval, f.candles]));
+export function analyzeReversalMTF(mtfFrames: { interval: string; candles: Candle[] }[]): MTFReversalResult {
+  const wanted = new Map(mtfFrames.map(f => [f.interval, f.candles]));
   const primaryCandles = wanted.get("15m") ?? [];
   const triggerCandles = wanted.get("5m") ?? [];
   const contextCandles = wanted.get("1h") ?? [];
