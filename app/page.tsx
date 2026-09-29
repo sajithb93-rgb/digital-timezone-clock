@@ -326,10 +326,60 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,mode,
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
  const orderFlowMarker = showOrderFlow ? (() => { const last = candles.at(-1); const entry = orderFlow.entry ?? last?.close ?? null; const x = xOf(candles.length - 1); const y = entry != null ? yOf(entry) : null; if (!last || x == null || y == null) return null; const label = orderFlow.direction === "BUY" ? "OF BUY" : orderFlow.direction === "SELL" ? "OF SELL" : "OF WAIT"; return <g><circle cx={x} cy={y} r="6" className="marker-sweep"/>{text(Math.min(x + 8, width - 90), y, label, "sweep-label")}</g>; })() : null;
  const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={f.label==="161.8%"||f.label==="261.8%"?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
- const wave=showElliott?<>{
-  elliott.primary&&drawWave(elliott.primary.points,"impulse-")
- }{elliott.correction&&drawWave(elliott.correction.points.slice(0,3),"abc-","wave-abc-label")}</>:null;
- return <div className="chart-overlay-wrap"><div className="analysis-debug">ANALYSIS · {candles.length} CLOSED CANDLES · SMC {smc.events.length} BOS/CHOCH · FVG {smc.fvgs.length} · OB {smc.orderBlocks.length} · LIQ {smc.liquidityHighs.length+smc.liquidityLows.length} · ELLIOTT {elliott.primary?(elliott.pattern+" "+elliott.degree):elliott.correction?(elliott.correctionPattern+" CANDIDATE"):"—"}</div><svg className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>{showSMC&&<>{zones}{structure}{liquidity}{trade}</>}{showElliott&&<>{eliteTrade}{wave}{fib}</>}{orderFlowMarker}</svg>{showSMC&&<div className={`setup-panel smc-setup-panel ${smc.setup.direction.toLowerCase()}`}><div className="setup-head"><span>SMC SETUP LEVELS</span><strong className={smc.setup.status==="ACTIVE"?"setup-active":"setup-wait"}>{smc.setup.status==="ACTIVE"?"ACTIVE":smc.setup.direction==="WAIT"?"WAIT":"WAIT · "+smc.setup.direction}</strong></div><div className="setup-grid"><span>Trend<b>{smc.trend}</b></span><span>Score<b>{smc.setup.confidence}/100</b></span><span>Entry<b>{smc.setup.entry!=null?smc.setup.entry.toFixed(4):"—"}</b></span><span>SL<b>{smc.stop!=null?smc.stop.toFixed(4):"—"}</b></span><span>TP1<b>{smc.targets?.[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{smc.targets?.[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{smc.targets?.[2]?.toFixed(4)||"—"}</b></span><span>R:R<b>{smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}</b></span></div></div>}{showElliott&&<div className={`setup-panel elitewave-setup-panel ${elite?.direction==="bearish"?"bear":""}`}><div className="setup-head"><span>ELITEWAVE COUNT LEVELS</span><strong className={elite?"setup-wait":""}>{elite?"HISTORICAL":"WAIT"}</strong></div>{elite&&elite.entry!=null&&elite.invalidation!=null?<><div className="setup-grid"><span>Pattern<b>{elliott.pattern}</b></span><span>Degree<b>{elliott.degree}</b></span><span>Phase<b>{elliott.phase}</b></span><span>Quality<b>{elliott.confidence}/100</b></span><span>W2 END<b>{elite.entry.toFixed(4)}</b></span><span>INVALIDATION<b>{elite.invalidation.toFixed(4)}</b></span><span>W3 END<b>{elite.targets?.[0]?.toFixed(4)||"—"}</b></span><span>W5 END<b>{elite.targets?.[1]?.toFixed(4)||"—"}</b></span><span>EXT TARGET<b>{elite.targets?.[2]?.toFixed(4)||"—"}</b></span><span>STATE<b>NOT LIVE</b></span></div><div className="setup-empty">{elliott.setupReason}</div></>:<div className="setup-empty">NO QUALIFIED 1–5 TRADE COUNT</div>}</div>} {showOrderFlow&&<div className={"setup-panel orderflow-setup-panel "+(orderFlow.direction==="SELL"?"bear":"")}><div className="setup-head"><span>ORDER FLOW SETUP</span><strong className={orderFlow.direction!=="WAIT"?"setup-active":"setup-wait"}>{orderFlow.direction!=="WAIT"?"CONFIRMED":"WAIT"}</strong></div><div className="setup-grid"><span>Signal<b>{orderFlow.direction}</b></span><span>Confidence<b>{orderFlow.confidence}/100</b></span><span>Buyer P<b>{orderFlow.buyerPressure.toFixed(1)}%</b></span><span>Seller P<b>{orderFlow.sellerPressure.toFixed(1)}%</b></span><span>Delta<b>{fmt(orderFlow.delta)}</b></span><span>Imbalance<b>{orderFlow.imbalance}</b></span><span>Absorption<b>{orderFlow.absorption}</b></span><span>Liquidity<b>{orderFlow.liquiditySweep}</b></span><span>Entry<b>{fmt(orderFlow.entry)}</b></span><span>SL<b>{fmt(orderFlow.stop)}</b></span><span>TP1<b>{orderFlow.targets[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{orderFlow.targets[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{orderFlow.targets[2]?.toFixed(4)||"—"}</b></span></div><div className="setup-empty">{orderFlow.confirmations.length?orderFlow.confirmations.join(" · "):orderFlow.signal}</div></div></div>;
+ const wave=showElliott?[
+  elliott.primary?drawWave(elliott.primary.points,"impulse-"):null,
+  elliott.correction?drawWave(elliott.correction.points.slice(0,3),"abc-","wave-abc-label"):null
+ ]:null;
+ const smcPanel=showSMC?(
+  <div className={`setup-panel smc-setup-panel ${smc.setup.direction.toLowerCase()}`}>
+   <div className="setup-head"><span>SMC SETUP LEVELS</span><strong className={smc.setup.status==="ACTIVE"?"setup-active":"setup-wait"}>{smc.setup.status==="ACTIVE"?"ACTIVE":smc.setup.direction==="WAIT"?"WAIT":"WAIT · "+smc.setup.direction}</strong></div>
+   <div className="setup-grid">
+    <span>Trend<b>{smc.trend}</b></span><span>Score<b>{smc.setup.confidence}/100</b></span><span>Entry<b>{smc.setup.entry!=null?smc.setup.entry.toFixed(4):"—"}</b></span><span>SL<b>{smc.stop!=null?smc.stop.toFixed(4):"—"}</b></span>
+    <span>TP1<b>{smc.targets?.[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{smc.targets?.[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{smc.targets?.[2]?.toFixed(4)||"—"}</b></span><span>R:R<b>{smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}</b></span>
+   </div>
+  </div>
+ ):null;
+ const elitewavePanel=showElliott?(
+  <div className={`setup-panel elitewave-setup-panel ${elite?.direction==="bearish"?"bear":""}`}>
+   <div className="setup-head"><span>ELITEWAVE COUNT LEVELS</span><strong className={elite?"setup-wait":""}>{elite?"HISTORICAL":"WAIT"}</strong></div>
+   {elite&&elite.entry!=null&&elite.invalidation!=null?(
+    <>
+     <div className="setup-grid">
+      <span>Pattern<b>{elliott.pattern}</b></span><span>Degree<b>{elliott.degree}</b></span><span>Phase<b>{elliott.phase}</b></span><span>Quality<b>{elliott.confidence}/100</b></span>
+      <span>W2 END<b>{elite.entry.toFixed(4)}</b></span><span>INVALIDATION<b>{elite.invalidation.toFixed(4)}</b></span><span>W3 END<b>{elite.targets?.[0]?.toFixed(4)||"—"}</b></span><span>W5 END<b>{elite.targets?.[1]?.toFixed(4)||"—"}</b></span><span>EXT TARGET<b>{elite.targets?.[2]?.toFixed(4)||"—"}</b></span><span>STATE<b>NOT LIVE</b></span>
+     </div>
+     <div className="setup-empty">{elliott.setupReason}</div>
+    </>
+   ):<div className="setup-empty">NO QUALIFIED 1–5 TRADE COUNT</div>}
+  </div>
+ ):null;
+ const orderFlowPanel=showOrderFlow?(
+  <div className={`setup-panel orderflow-setup-panel ${orderFlow.direction==="SELL"?"bear":""}`}>
+   <div className="setup-head"><span>ORDER FLOW SETUP</span><strong className={orderFlow.direction!=="WAIT"?"setup-active":"setup-wait"}>{orderFlow.direction!=="WAIT"?"CONFIRMED":"WAIT"}</strong></div>
+   <div className="setup-grid">
+    <span>Signal<b>{orderFlow.direction}</b></span><span>Confidence<b>{orderFlow.confidence}/100</b></span><span>Buyer P<b>{orderFlow.buyerPressure.toFixed(1)}%</b></span><span>Seller P<b>{orderFlow.sellerPressure.toFixed(1)}%</b></span>
+    <span>Delta<b>{fmt(orderFlow.delta)}</b></span><span>Imbalance<b>{orderFlow.imbalance}</b></span><span>Absorption<b>{orderFlow.absorption}</b></span><span>Liquidity<b>{orderFlow.liquiditySweep}</b></span>
+    <span>Entry<b>{fmt(orderFlow.entry)}</b></span><span>SL<b>{fmt(orderFlow.stop)}</b></span><span>TP1<b>{orderFlow.targets[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{orderFlow.targets[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{orderFlow.targets[2]?.toFixed(4)||"—"}</b></span>
+   </div>
+   <div className="setup-empty">{orderFlow.confirmations.length?orderFlow.confirmations.join(" · "):orderFlow.signal}</div>
+  </div>
+ ):null;
+ return (
+  <div className="chart-overlay-wrap">
+   <div className="analysis-debug">
+    ANALYSIS · {candles.length} CLOSED CANDLES · SMC {smc.events.length} BOS/CHOCH · FVG {smc.fvgs.length} · OB {smc.orderBlocks.length} · LIQ {smc.liquidityHighs.length+smc.liquidityLows.length} · ELLIOTT {elliott.primary?(elliott.pattern+" "+elliott.degree):elliott.correction?(elliott.correctionPattern+" CANDIDATE"):"—"}
+   </div>
+   <svg className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    {showSMC&&<>{zones}{structure}{liquidity}{trade}</>}
+    {showElliott&&<>{eliteTrade}{wave}{fib}</>}
+    {orderFlowMarker}
+   </svg>
+   {smcPanel}
+   {elitewavePanel}
+   {orderFlowPanel}
+  </div>
+ );
+}
 }
 
 const MemoizedChartAnnotations=memo(ChartAnnotations);
