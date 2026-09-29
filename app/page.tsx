@@ -380,7 +380,6 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,mode,
   </div>
  );
 }
-}
 
 const MemoizedChartAnnotations=memo(ChartAnnotations);
 
