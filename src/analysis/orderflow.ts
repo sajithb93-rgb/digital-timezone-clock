@@ -220,6 +220,10 @@ export function analyzeOrderFlow(candles: Candle[]): OrderFlowResult {
   const last = bars.at(-1);
   if (!last) return empty;
 
+  // Strategy pressure is based on the latest 12 closed bars; cumulative delta keeps the full closed history.
+  const flowBars = bars.slice(-12);
+  buyVolume = flowBars.reduce((sum, b) => sum + b.buyVolume, 0);
+  sellVolume = flowBars.reduce((sum, b) => sum + b.sellVolume, 0);
   const total = Math.max(buyVolume + sellVolume, 1e-12);
   const delta = buyVolume - sellVolume;
   const deltaRatio = delta / total;
