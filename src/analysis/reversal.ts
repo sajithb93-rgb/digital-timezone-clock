@@ -66,10 +66,9 @@ function body(c: Candle): number {
 function trueRange(candles: Candle[], i: number): number {
   if (i <= 0) return Math.max(candles[i].high - candles[i].low, 0);
   return Math.max(
-    candles[i].high - candles[i - 1].close > 0 ? candles[i].high - candles[i - 1].close : candles[i].high - candles[i].low,
+    candles[i].high - candles[i].low,
     Math.abs(candles[i].high - candles[i - 1].close),
     Math.abs(candles[i].low - candles[i - 1].close),
-    candles[i].high - candles[i].low,
   );
 }
 
