@@ -194,7 +194,10 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     source:useFootprint?"BINANCE_FOOTPRINT":allExact?"BINANCE_TAKER_FLOW":"CANDLE_ESTIMATE_FALLBACK",
     buyVolume,sellVolume,delta:safe(delta),deltaRatio:safe(deltaRatio),cumulativeDelta:safe(useFootprint?fpAll.reduce((s,f)=>s+f.delta,0):cumulativeDelta),
     buyerPressure:clamp(buyerPressure),sellerPressure:clamp(sellerPressure),pressure,pressureTrend,
-    imbalance:last.imbalance,imbalanceRatio:safe(lastImbalanceRatio),absorption:last.absorption,
+    imbalance:latestFootprint?(latestFootprint.stackedBuyImbalances>=2?"BUY":latestFootprint.stackedSellImbalances>=2?"SELL":"NONE"):last.imbalance,
+    imbalanceRatio:latestFootprint?Math.max(latestFootprint.maxBuyImbalanceRatio,latestFootprint.maxSellImbalanceRatio):safe(lastImbalanceRatio),
+    absorption:latestFootprint?.absorption??last.absorption,
+
     absorptionStrength:last.absorptionStrength,liquiditySweep:direction==="BUY"?(sweepLow?.liquiditySweep??"NONE"):direction==="SELL"?(sweepHigh?.liquiditySweep??"NONE"):"NONE",
     liquiditySweepPrice:direction==="BUY"?(sweepLow?.sweepPrice??null):direction==="SELL"?(sweepHigh?.sweepPrice??null):null,
     microStructure:last.microStructure,direction,signal,confidence:direction==="WAIT"?0:100,confirmations,
