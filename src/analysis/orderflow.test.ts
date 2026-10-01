@@ -150,6 +150,24 @@ describe("order flow strategy",()=>{
     expect(r.confidence).toBe(0);
   });
 
+  it("exposes diagnostic blockers instead of silently returning WAIT",()=>{
+    const rows=Array.from({length:11},(_,i)=>candle(i,100+i,102+i,99+i,101+i,100,70));
+    const r=analyzeOrderFlow(rows);
+    expect(r.diagnostics.some(d=>d.key==="history"&&!d.passed)).toBe(true);
+    expect(r.rejectionReason).toContain("12+ closed candles");
+  });
+
+  it("keeps recent sweep and absorption visible before full confirmation",()=>{
+    const rows=[
+      ...Array.from({length:10},(_,i)=>candle(i,100,102,99,101,100,50)),
+      candle(10,101,102,95,100.8,100,35),
+      candle(11,100.8,105,100,104.5,100,70)
+    ];
+    const r=analyzeOrderFlow(rows);
+    expect(r.liquiditySweep).toBe("LOW");
+    expect(r.absorption).not.toBe("NONE");
+  });
+
   it("sorts candles chronologically and rejects malformed candles",()=>{
     const r=analyzeOrderFlow([
       candle(2,102,104,101,103,100,60),
