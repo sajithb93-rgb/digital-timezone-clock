@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeOrderFlow } from "./orderflow";
 import type { Candle } from "./engine";
+import type { FootprintSnapshot } from "./footprint";
 
 function candle(i:number, open:number, high:number, low:number, close:number, volume:number, buy:number):Candle{
   return {time:i,open,high,low,close,volume,takerBuyVolume:buy,closed:true};
@@ -87,6 +88,23 @@ describe("order flow strategy",()=>{
     expect(r.direction).toBe("WAIT");
     expect(r.confidence).toBeLessThanOrEqual(60);
   });
+  it("uses footprint delta and stacked imbalance for confirmed-flow confirmation data",()=>{
+    const candles=Array.from({length:12},(_,i)=>candle(i,100,101,99,100.2,100,60));
+    const footprint:FootprintSnapshot[]=[];
+    for(let i=0;i<12;i++) footprint.push({
+      candleTime:i,intervalMs:60000,confirmed:true,levels:[],
+      buyVolume:60,sellVolume:40,delta:20,deltaRatio:0.2,poc:100,
+      stackedBuyImbalances:2,stackedSellImbalances:0,maxBuyImbalanceRatio:4,maxSellImbalanceRatio:0,
+      maxPositiveDelta:20,maxNegativeDelta:0,absorption:"BUYER",absorptionStrength:80
+    });
+    const r=analyzeOrderFlow(candles,footprint);
+    expect(r.source).toBe("BINANCE_FOOTPRINT");
+    expect(r.delta).toBe(240);
+    expect(r.cumulativeDelta).toBe(240);
+    expect(r.imbalance).toBe("BUY");
+    expect(r.absorption).toBe("BUYER");
+  });
+
   it("requires 12 closed candles before a 12-bar pressure setup can confirm",()=>{
     const rows=Array.from({length:11},(_,i)=>candle(i,100+i,102+i,99+i,101+i,100,70));
     const r=analyzeOrderFlow(rows);
