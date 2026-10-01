@@ -27,7 +27,7 @@ function flow(overrides: Partial<OrderFlowResult> = {}): OrderFlowResult {
     absorption:"BUYER",absorptionStrength:80,liquiditySweep:"LOW",liquiditySweepPrice:95,
     microStructure:"BULLISH",direction:"BUY",signal:"BUY CONFIRMATION",confidence:80,
     confirmations:["Liquidity sweep low","Buyer absorption"],entry:100,stop:94,targets:[109,112,118],
-    recentBars:[],
+    recentBars:[],footprint:null,footprintHistoryCount:0,
   };
   return {...base,...overrides};
 }
