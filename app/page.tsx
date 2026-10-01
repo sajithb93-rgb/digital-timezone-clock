@@ -85,7 +85,7 @@ export default function Home(){
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
- const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0);
+ const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0);
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
@@ -110,7 +110,7 @@ export default function Home(){
  useEffect(()=>{
   let stop=false;
   const scan=async()=>{
-   if(stop||!pairs.length||orderFlowScanBusy)return;
+   if(stop||!orderFlowScannerEnabled||!pairs.length||orderFlowScanBusy)return;
    setOrderFlowScanBusy(true);
    try{
     const candidates=pairs
@@ -136,13 +136,13 @@ export default function Home(){
       rows.push({symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:"Scanner data unavailable"});
      }
     }
-    if(!stop){setOrderFlowScanner(rows.sort((a,b)=>b.score-a.score));setOrderFlowScanUpdated(Date.now())}
+    if(!stop){setOrderFlowScanner(rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score));setOrderFlowScanUpdated(Date.now())}
    }finally{if(!stop)setOrderFlowScanBusy(false)}
   };
   scan();
   const id=window.setInterval(scan,120000);
   return()=>{stop=true;clearInterval(id)};
- },[marketType,quoteFilter,orderFlowScanTf,pairs.length,symbol,scanner.length]);
+ },[marketType,quoteFilter,orderFlowScanTf,orderFlowScannerEnabled,pairs.length,symbol,scanner.length]);
 
  useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:(await fetchKlines(symbol,tf,180,marketType)).filter(x=>x.closed!==false)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol,marketType]);
 
@@ -400,15 +400,20 @@ export default function Home(){
 
    <div className={`section-block reversal-engine-block reversal-${reversal.state.toLowerCase()}`}><div className="section-title">REVERSAL ENGINE</div><Row k="State" v={reversal.state}/><Row k="Direction" v={reversal.direction}/><Row k="Confluence" v={reversal.score+"/100"}/><Row k="MTF 15m / 5m" v={mtfReversal.direction+" · "+mtfReversal.score+"/100"}/><Row k="MTF State" v={mtfReversal.state}/><Row k="1h Context" v={mtfReversal.contextDirection}/><Row k="Liquidity Sweep" v={reversal.sweepIndex!=null?(reversal.direction==="BUY"?"SELL-SIDE LOW":"BUY-SIDE HIGH"):"None"}/><Row k="MSS / CHOCH" v={reversal.structureIndex!=null?"CONFIRMED":"WAITING"}/><Row k="Displacement" v={(reversal.displacementRatio?reversal.displacementRatio.toFixed(2):"0.00")+"× ATR"}/><Row k="FVG / OB" v={(reversal.fvg?"YES":"NO")+" / "+(reversal.orderBlock?"YES":"NO")}/><Row k="Order Flow" v={reversal.orderflowConfirmed?"CONFIRMED":"WAITING"}/><Row k="Delta Divergence" v={reversal.deltaDivergence?"YES":"NO"}/><Row k="Trigger" v={fmt(reversal.triggerPrice)}/><Row k="Invalidation" v={fmt(reversal.invalidation)}/>{reversal.evidence.filter(x=>x.active).length>0&&<div className="confirmation-list">{reversal.evidence.filter(x=>x.active).map(x=><div key={x.name}>✓ {x.name} · {x.points}</div>)}</div>}<p className="muted-copy">{reversal.reason}</p></div>
       <div className="panel-card mtf-card orderflow-scanner-card">
-    <div className="section-title">ORDER FLOW PAIR SCANNER <span>{orderFlowScanBusy?"SCANNING…":orderFlowScanUpdated?new Date(orderFlowScanUpdated).toLocaleTimeString():"—"}</span></div>
-    <div className="scanner-controls"><select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select><small>Top 6 volume/momentum candidates · closed candles only</small></div>
-    {orderFlowScanner.length===0&&!orderFlowScanBusy&&<div className="setup-empty">No scan results yet</div>}
-    {orderFlowScanner.map(x=><div className="scanner-row" key={x.symbol+"-"+x.timeframe}>
+    <div className="section-title">ORDER FLOW PAIR SCANNER <span>{orderFlowScannerEnabled?(orderFlowScanBusy?"SCANNING…":orderFlowScanUpdated?new Date(orderFlowScanUpdated).toLocaleTimeString():"—"):"OFF"}</span></div>
+    <div className="scanner-controls">
+      <label className="scanner-toggle"><input type="checkbox" checked={orderFlowScannerEnabled} onChange={e=>{setOrderFlowScannerEnabled(e.target.checked);if(!e.target.checked)setOrderFlowScanner([])}}/><b>{orderFlowScannerEnabled?"ON":"OFF"}</b><small>Show CONFIRMED setups only</small></label>
+      <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)} disabled={!orderFlowScannerEnabled}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select>
+      <small>Top 6 volume/momentum candidates · closed candles only · Binance footprint</small>
+    </div>
+    {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner OFF — no pair scan is running.</div>}
+    {orderFlowScannerEnabled&&orderFlowScanner.length===0&&!orderFlowScanBusy&&<div className="setup-empty">No CONFIRMED Order Flow setups found.</div>}
+    {orderFlowScannerEnabled&&orderFlowScanner.map(x=><div className="scanner-row" key={x.symbol+"-"+x.timeframe}>
       <span><b>{x.symbol}</b><small>{x.timeframe} · FP {x.footprintBars}/12</small></span>
-      <b className={x.state==="CONFIRMED"?"positive":x.direction==="BUY"?"positive":x.direction==="SELL"?"negative":""}>{x.state==="WAIT"?"WAIT":x.direction+" · "+x.state}</b>
+      <b className="positive">{x.direction} · CONFIRMED</b>
       <small>{x.score}/100</small>
     </div>)}
-    {orderFlowScanner.filter(x=>x.state==="SETUP"||x.state==="CONFIRMED").slice(0,3).map(x=><div className="scanner-reason" key={"reason-"+x.symbol}>{x.symbol}: {x.reason}</div>)}
+    {orderFlowScannerEnabled&&orderFlowScanner.slice(0,3).map(x=><div className="scanner-reason" key={"reason-"+x.symbol}>{x.symbol}: {x.reason}</div>)}
    </div>
 
 <details className="more-tools side-tools"><summary>More market data <span>MTF · Derivatives · Scanner · Status</span></summary><div className="panel-card mtf-card"><div className="section-title">MULTI-TIMEFRAME</div>{mtf.frames.map(f=><div className="mtf-row" key={f.interval}><span>{f.interval}</span><b className={f.trend==="Bullish"?"positive":f.trend==="Bearish"?"negative":""}>{f.available?f.trend:"UNAVAILABLE"}</b><small>{f.structure} · SMC/COMBINED {f.score}/100 · EW {f.elliottTrend} {f.elliottScore}/100</small></div>)}</div>
