@@ -78,44 +78,45 @@ async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:numb
 async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,intervalMsValue:number,signal?:AbortSignal,targetBars=12):Promise<AggTrade[]>{
  const cfg=marketConfig[marketType];
  const seen=new Set<number>();const out:AggTrade[]=[];
- // Start from the newest aggregate trades, then page forward by id only until
- // enough CLOSED candle buckets are covered. This avoids the previous fixed
- // 12-page scan for every pair while preserving the exact footprint inputs.
- const seedQ=new URLSearchParams({symbol:symbol.toUpperCase(),limit:"1000"});
- const seed=await binanceFetchJson(cfg.aggRest+"?"+seedQ.toString(),{signal});
- if(!Array.isArray(seed)||!seed.length)return [];
- const seedNorm=seed.map(normalizeAggTrade).filter((x):x is AggTrade=>!!x);
- const newestId=seedNorm.at(-1)?.id;
- if(newestId==null)return [];
- const targetStart=startTime;
- const currentBucket=Math.floor(endTime/intervalMsValue)*intervalMsValue;
- let fromId=Math.max(0,newestId-999);
+ // /aggTrades returns at most 1000 rows. Page BACKWARD by endTime so dense
+ // symbols can reach older candles; stop as soon as enough closed footprint
+ // buckets are covered instead of always downloading a fixed 12 pages.
+ let cursorEnd=endTime;
  let requests=0;
  const maxRequests=12;
- while(fromId<=newestId&&requests<maxRequests&&out.length<12000){
-  const q=new URLSearchParams({symbol:symbol.toUpperCase(),fromId:String(fromId),limit:"1000"});
-  const rows=await binanceFetchJson(cfg.aggRest+"?"+q.toString(),{signal});requests+=1;
+ const currentBucket=Math.floor(endTime/intervalMsValue)*intervalMsValue;
+ while(cursorEnd>=startTime&&requests<maxRequests&&out.length<12000){
+  const windowStart=Math.max(startTime,cursorEnd-60*60*1000+1);
+  const q=new URLSearchParams({
+   symbol:symbol.toUpperCase(),
+   limit:"1000",
+   startTime:String(windowStart),
+   endTime:String(cursorEnd)
+  });
+  const rows=await binanceFetchJson(cfg.aggRest+"?"+q.toString(),{signal});
+  requests+=1;
   if(!Array.isArray(rows)||!rows.length)break;
-  let maxId=fromId;
+  let earliestTime=cursorEnd;
   for(const raw of rows){
    const t=normalizeAggTrade(raw);if(!t)continue;
-   maxId=Math.max(maxId,t.id);
-   if(t.time>=targetStart&&t.time<=endTime&&!seen.has(t.id)){seen.add(t.id);out.push(t)}
+   earliestTime=Math.min(earliestTime,t.time);
+   if(t.time>=startTime&&t.time<=endTime&&!seen.has(t.id)){
+    seen.add(t.id);out.push(t);
+   }
   }
-  // We can stop as soon as the latest closed candle and 11 other closed
-  // footprint buckets are present. FootprintBook itself remains authoritative.
+  // Count only closed candle buckets. The current/forming bucket can never
+  // satisfy the confirmed-footprint requirement.
   const coveredClosedBuckets=new Set<number>();
   for(const t of out){
    const bucket=Math.floor(t.time/intervalMsValue)*intervalMsValue;
-   if(bucket<currentBucket&&bucket>=targetStart)coveredClosedBuckets.add(bucket);
+   if(bucket<currentBucket&&bucket>=startTime)coveredClosedBuckets.add(bucket);
   }
   if(coveredClosedBuckets.size>=targetBars)break;
-  if(maxId<=fromId)break;
-  fromId=maxId+1;
+  if(rows.length<1000||earliestTime>=cursorEnd)break;
+  cursorEnd=earliestTime-1;
  }
- return out.filter(t=>t.time>=targetStart&&t.time<=endTime).sort((a,b)=>a.time-b.time||a.id-b.id);
+ return out.filter(t=>t.time>=startTime&&t.time<=endTime).sort((a,b)=>a.time-b.time||a.id-b.id);
 }
-
 function intervalMs(interval:string):number{const units:Record<string,number>={m:60*1000,h:60*60*1000,d:24*60*60*1000};const n=Number(interval.slice(0,-1));return Math.max(60*1000,(Number.isFinite(n)?n:1)*(units[interval.slice(-1)]??60*1000));}
 export default function Home(){
  const [mode,setMode]=useState<Mode>("combined"),[isModePending,startModeTransition]=useTransition(),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m"),[marketType,setMarketType]=useState<MarketKind>("spot");
@@ -168,7 +169,7 @@ export default function Home(){
     // Scan every eligible Binance trading pair, but keep the REST queue bounded.
     // Binance documents that 429 means the request rate limit was exceeded and
     // recommends backing off rather than continuing to poll aggressively.
-    const workerCount=Math.min(3,total);
+    const workerCount=Math.min(2,total);
     let cursor=0;
     const scanOne=async(c:{pair:BinanceSymbol;rank:number;volume:number})=>{
       try{
