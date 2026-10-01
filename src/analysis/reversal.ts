@@ -273,7 +273,7 @@ export function analyzeReversalMTF(mtfFrames: { interval: string; candles: Candl
       absorption: "NONE" as const, absorptionStrength: 0, liquiditySweep: "NONE" as const,
       liquiditySweepPrice: null, microStructure: "NEUTRAL" as const, direction: "WAIT" as const,
       signal: "WAIT", confidence: 0, confirmations: [], entry: null, stop: null, targets: [],
-      recentBars: [], footprint: null, footprintHistoryCount: 0
+      recentBars: [], diagnostics: [], rejectionReason: "Fallback flow — order-flow confirmation intentionally unavailable", footprint: null, footprintHistoryCount: 0
     };
     return analyzeReversal(candles, smc, flow);
   };
