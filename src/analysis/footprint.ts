@@ -30,6 +30,8 @@ export type FootprintSnapshot = {
   poc: number | null;
   stackedBuyImbalances: number;
   stackedSellImbalances: number;
+  maxBuyImbalanceRatio: number;
+  maxSellImbalanceRatio: number;
   maxPositiveDelta: number;
   maxNegativeDelta: number;
   absorption: "BUYER" | "SELLER" | "NONE";
@@ -81,12 +83,22 @@ export function analyzeFootprintSnapshot(
   const ratio = (a: number, b: number) => a / Math.max(b, 1e-12);
   let stackedBuyImbalances = 0;
   let stackedSellImbalances = 0;
+  let maxBuyImbalanceRatio = 0;
+  let maxSellImbalanceRatio = 0;
   for (let i = 0; i < levels.length; i += 1) {
     const cur = levels[i];
     const below = levels[i - 1];
     const above = levels[i + 1];
-    if (below && ratio(cur.buyVolume, below.sellVolume) >= 3) stackedBuyImbalances += 1;
-    if (above && ratio(cur.sellVolume, above.buyVolume) >= 3) stackedSellImbalances += 1;
+    if (below) {
+      const r = ratio(cur.buyVolume, below.sellVolume);
+      maxBuyImbalanceRatio = Math.max(maxBuyImbalanceRatio, r);
+      if (r >= 3) stackedBuyImbalances += 1;
+    }
+    if (above) {
+      const r = ratio(cur.sellVolume, above.buyVolume);
+      maxSellImbalanceRatio = Math.max(maxSellImbalanceRatio, r);
+      if (r >= 3) stackedSellImbalances += 1;
+    }
   }
 
   const maxPositiveDelta = levels.reduce((m, x) => Math.max(m, x.delta), 0);
@@ -122,6 +134,8 @@ export function analyzeFootprintSnapshot(
     levels,
     stackedBuyImbalances,
     stackedSellImbalances,
+    maxBuyImbalanceRatio,
+    maxSellImbalanceRatio,
     maxPositiveDelta,
     maxNegativeDelta,
     absorption,
