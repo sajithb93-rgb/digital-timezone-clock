@@ -399,7 +399,7 @@ export default function Home(){
    </div>
 
    <div className={`section-block reversal-engine-block reversal-${reversal.state.toLowerCase()}`}><div className="section-title">REVERSAL ENGINE</div><Row k="State" v={reversal.state}/><Row k="Direction" v={reversal.direction}/><Row k="Confluence" v={reversal.score+"/100"}/><Row k="MTF 15m / 5m" v={mtfReversal.direction+" · "+mtfReversal.score+"/100"}/><Row k="MTF State" v={mtfReversal.state}/><Row k="1h Context" v={mtfReversal.contextDirection}/><Row k="Liquidity Sweep" v={reversal.sweepIndex!=null?(reversal.direction==="BUY"?"SELL-SIDE LOW":"BUY-SIDE HIGH"):"None"}/><Row k="MSS / CHOCH" v={reversal.structureIndex!=null?"CONFIRMED":"WAITING"}/><Row k="Displacement" v={(reversal.displacementRatio?reversal.displacementRatio.toFixed(2):"0.00")+"× ATR"}/><Row k="FVG / OB" v={(reversal.fvg?"YES":"NO")+" / "+(reversal.orderBlock?"YES":"NO")}/><Row k="Order Flow" v={reversal.orderflowConfirmed?"CONFIRMED":"WAITING"}/><Row k="Delta Divergence" v={reversal.deltaDivergence?"YES":"NO"}/><Row k="Trigger" v={fmt(reversal.triggerPrice)}/><Row k="Invalidation" v={fmt(reversal.invalidation)}/>{reversal.evidence.filter(x=>x.active).length>0&&<div className="confirmation-list">{reversal.evidence.filter(x=>x.active).map(x=><div key={x.name}>✓ {x.name} · {x.points}</div>)}</div>}<p className="muted-copy">{reversal.reason}</p></div>
-      <div className="panel-card mtf-card orderflow-scanner-card">
+      {showOrderFlow&&<div className="panel-card mtf-card orderflow-scanner-card">
     <div className="section-title">ORDER FLOW PAIR SCANNER <span>{orderFlowScannerEnabled?(orderFlowScanBusy?"SCANNING…":orderFlowScanUpdated?new Date(orderFlowScanUpdated).toLocaleTimeString():"—"):"OFF"}</span></div>
     <div className="scanner-controls">
       <label className="scanner-toggle"><input type="checkbox" checked={orderFlowScannerEnabled} onChange={e=>{setOrderFlowScannerEnabled(e.target.checked);if(!e.target.checked)setOrderFlowScanner([])}}/><b>{orderFlowScannerEnabled?"ON":"OFF"}</b><small>Show CONFIRMED setups only</small></label>
@@ -414,7 +414,7 @@ export default function Home(){
       <small>{x.score}/100</small>
     </div>)}
     {orderFlowScannerEnabled&&orderFlowScanner.slice(0,3).map(x=><div className="scanner-reason" key={"reason-"+x.symbol}>{x.symbol}: {x.reason}</div>)}
-   </div>
+   </div>}
 
 <details className="more-tools side-tools"><summary>More market data <span>MTF · Derivatives · Scanner · Status</span></summary><div className="panel-card mtf-card"><div className="section-title">MULTI-TIMEFRAME</div>{mtf.frames.map(f=><div className="mtf-row" key={f.interval}><span>{f.interval}</span><b className={f.trend==="Bullish"?"positive":f.trend==="Bearish"?"negative":""}>{f.available?f.trend:"UNAVAILABLE"}</b><small>{f.structure} · SMC/COMBINED {f.score}/100 · EW {f.elliottTrend} {f.elliottScore}/100</small></div>)}</div>
    <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(): "—"}</b><small>{marketType==="coinm"?"COIN-M":"USDⓈ-M"}</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&+derivatives.change24h>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
