@@ -373,7 +373,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
    {level(orderFlow.entry,"orderflow-entry-line","OF ENTRY "+(orderFlow.entry!=null?orderFlow.entry.toFixed(4):"—"))}
    {level(orderFlow.stop,"orderflow-sl-line","OF SL "+(orderFlow.stop!=null?orderFlow.stop.toFixed(4):"—"))}
    {(orderFlow.targets||[]).slice(0,3).map((p:number,i:number)=>level(p,"orderflow-tp-line","OF TP"+(i+1)+" "+p.toFixed(4)))}
-   {latest&&<g>{(()=>{const x=xOf(latest.index),y=yOf(candles[latest.index]?.close??0);if(x==null||y==null)return null;const label=orderFlow.direction==="BUY"?"OF BUY":orderFlow.direction==="SELL"?"OF SELL":"OF WAIT";return <><circle cx={x} cy={y} r="7" className={orderFlow.direction==="BUY"?"of-buy-marker":orderFlow.direction==="SELL"?"of-sell-marker":"of-wait-marker"}/>{text(Math.min(x+10,width-105),y,label,"orderflow-signal-label")}</>})()}</g>}
+   {latest&&orderFlow.direction!=="WAIT"&&<g>{(()=>{const x=xOf(latest.index),y=yOf(candles[latest.index]?.close??0);if(x==null||y==null)return null;const label=orderFlow.direction==="BUY"?"OF BUY CONFIRMED":"OF SELL CONFIRMED";return <><circle cx={x} cy={y} r="8" className={orderFlow.direction==="BUY"?"of-buy-marker":"of-sell-marker"}/>{text(Math.min(x+10,width-125),y,label,"orderflow-signal-label")}</>})()}</g>}
   </g>;
  })() : null;
  const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={f.label==="161.8%"||f.label==="261.8%"?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
