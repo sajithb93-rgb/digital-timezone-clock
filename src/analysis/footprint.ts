@@ -150,6 +150,8 @@ export class FootprintBook {
   private bars = new Map<number, MutableBar>();
   private seen = new Set<number>();
   private maxBars = 36;
+  private frozen = new Set<number>();
+  private readonly finalizationDelayMs = 1500;
 
   constructor(intervalMs: number, tickSize: number, maxBars = 36) {
     this.intervalMs = intervalMs;
@@ -160,12 +162,14 @@ export class FootprintBook {
   clear(): void {
     this.bars.clear();
     this.seen.clear();
+    this.frozen.clear();
   }
 
   add(trade: AggTrade): boolean {
     if (this.seen.has(trade.id)) return false;
     this.seen.add(trade.id);
     const time = bucketStart(trade.time, this.intervalMs);
+    if(this.frozen.has(time)) return false;
     let bar = this.bars.get(time);
     if (!bar) {
       bar = { candleTime: time, levels: new Map(), buyVolume: 0, sellVolume: 0, ids: new Set() };
@@ -208,6 +212,7 @@ export class FootprintBook {
       const oldBar=this.bars.get(old);
       if(oldBar)for(const id of oldBar.ids)this.seen.delete(id);
       this.bars.delete(old);
+      this.frozen.delete(old);
     }
   }
 
@@ -225,10 +230,12 @@ export class FootprintBook {
     })).sort((a, b) => a.price - b.price);
     const total = Math.max(bar.buyVolume + bar.sellVolume, 1e-12);
     const poc = levels.length ? levels.reduce((a, b) => a.totalVolume > b.totalVolume ? a : b).price : null;
+    const confirmed=now>=candleTime+this.intervalMs+this.finalizationDelayMs;
+    if(confirmed)this.frozen.add(candleTime);
     const base = {
       candleTime,
       intervalMs: this.intervalMs,
-      confirmed: now >= candleTime + this.intervalMs,
+      confirmed,
       levels,
       buyVolume: bar.buyVolume,
       sellVolume: bar.sellVolume,
