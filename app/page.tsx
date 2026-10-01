@@ -113,7 +113,6 @@ export default function Home(){
    if(stop||!pairs.length||orderFlowScanBusy)return;
    setOrderFlowScanBusy(true);
    try{
-    const cfg=marketConfig[marketType];
     const candidates=pairs
       .filter(p=>quoteFilter==="ALL"||p.quoteAsset===quoteFilter)
       .filter(p=>p.symbol!==symbol)
