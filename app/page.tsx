@@ -9,6 +9,7 @@ import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 import { analyzeOrderFlow, type OrderFlowResult } from "../src/analysis/orderflow";
+import { classifyOrderFlowSetup, type OrderFlowScanRow } from "../src/analysis/orderflowScanner";
 import { FootprintBook, normalizeAggTrade, type AggTrade, type FootprintSnapshot } from "../src/analysis/footprint";
 import { analyzeReversal, analyzeReversalMTF, type ReversalEngineResult } from "../src/analysis/reversal";
 
@@ -84,7 +85,7 @@ export default function Home(){
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
- const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]);
+ const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0);
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
@@ -106,6 +107,44 @@ export default function Home(){
 
  useEffect(()=>{let stop=false;setPairs([]);const cfg=marketConfig[marketType];const load=async()=>{try{const d=await binanceFetchJson(`${cfg.rest}/exchangeInfo`);const next=(d.symbols||[]).filter((x:any)=>x.status==="TRADING"&&(x.contractStatus==null||x.contractStatus==="TRADING")).map((x:any)=>{const filters=x.filters||[];const lot=filters.find((f:any)=>f.filterType==="LOT_SIZE")||filters.find((f:any)=>f.filterType==="MARKET_LOT_SIZE")||{};const notional=filters.find((f:any)=>f.filterType==="NOTIONAL")||filters.find((f:any)=>f.filterType==="MIN_NOTIONAL")||{};const priceFilter=filters.find((f:any)=>f.filterType==="PRICE_FILTER")||{};return{symbol:x.symbol,baseAsset:x.baseAsset,quoteAsset:x.quoteAsset,minQty:Number(lot.minQty)||0,maxQty:Number(lot.maxQty)||Infinity,stepSize:Number(lot.stepSize)||0,minNotional:Number(notional.minNotional)||Number(notional.notional)||0,maxNotional:Number(notional.maxNotional)||Infinity,tickSize:Number(priceFilter.tickSize)||0}});if(!stop){setPairs(next);setQuoteFilter(marketType==="coinm"?"ALL":"USDT");setSymbol(prev=>next.some((p:any)=>p.symbol===prev)?prev:(next[0]?.symbol||""))}}catch{if(!stop){setPairs([]);setSymbol("")}}};load();return()=>{stop=true}},[marketType]);
  useEffect(()=>{let stop=false;const cfg=marketConfig[marketType];const load=()=>binanceFetchJson(`${cfg.rest}/ticker/24hr`).then((d:any[])=>{if(stop||!Array.isArray(d))return;setScanner(d.filter(x=>typeof x.symbol==="string"&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:Number(x.priceChangePercent),quoteVolume:Number(x.quoteVolume)})).filter(x=>Number.isFinite(x.priceChangePercent)&&Number.isFinite(x.quoteVolume)).sort((a,b)=>Math.abs(b.priceChangePercent)-Math.abs(a.priceChangePercent)).slice(0,8))}).catch(()=>{});load();const id=window.setInterval(load,60000);return()=>{stop=true;clearInterval(id)}},[marketType]);
+ useEffect(()=>{
+  let stop=false;
+  const scan=async()=>{
+   if(stop||!pairs.length||orderFlowScanBusy)return;
+   setOrderFlowScanBusy(true);
+   try{
+    const cfg=marketConfig[marketType];
+    const candidates=pairs
+      .filter(p=>quoteFilter==="ALL"||p.quoteAsset===quoteFilter)
+      .filter(p=>p.symbol!==symbol)
+      .map(p=>({pair:p,rank:scanner.findIndex(x=>x.symbol===p.symbol)}))
+      .sort((a,b)=>(a.rank<0?999:a.rank)-(b.rank<0?999:b.rank))
+      .slice(0,6);
+    const rows:OrderFlowScanRow[]=[];
+    for(const c of candidates){
+     if(stop)break;
+     try{
+      const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,180,marketType)).filter(x=>x.closed!==false);
+      const tfMs=intervalMs(orderFlowScanTf);
+      const lookback=Math.min(3*60*60*1000,Math.max(tfMs*14,60*60*1000));
+      const trades=await fetchAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,undefined,3000);
+      const book=new FootprintBook(tfMs,c.pair.tickSize,36);
+      book.load(trades);
+      const fps=book.snapshots(candles,Date.now());
+      const result=analyzeOrderFlow(candles,fps);
+      rows.push(classifyOrderFlowSetup(c.pair.symbol,orderFlowScanTf,result));
+     }catch{
+      rows.push({symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:"Scanner data unavailable"});
+     }
+    }
+    if(!stop){setOrderFlowScanner(rows.sort((a,b)=>b.score-a.score));setOrderFlowScanUpdated(Date.now())}
+   }finally{if(!stop)setOrderFlowScanBusy(false)}
+  };
+  scan();
+  const id=window.setInterval(scan,120000);
+  return()=>{stop=true;clearInterval(id)};
+ },[marketType,quoteFilter,orderFlowScanTf,pairs.length,symbol,scanner.length]);
+
  useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:(await fetchKlines(symbol,tf,180,marketType)).filter(x=>x.closed!==false)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol,marketType]);
 
  useEffect(()=>{
@@ -365,6 +404,17 @@ export default function Home(){
    <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(): "—"}</b><small>{marketType==="coinm"?"COIN-M":"USDⓈ-M"}</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&+derivatives.change24h>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
 
    <div className="panel-card mtf-card"><div className="section-title">MARKET SCANNER</div>{scanner.map(x=><div className="scanner-row" key={x.symbol}><span>{x.symbol}</span><b className={x.priceChangePercent>=0?"positive":"negative"}>{x.priceChangePercent>=0?"+":""}{x.priceChangePercent.toFixed(2)}%</b><small>{(x.quoteVolume/1e6).toFixed(1)}M</small></div>)}</div>
+   <div className="panel-card mtf-card orderflow-scanner-card">
+    <div className="section-title">ORDER FLOW PAIR SCANNER <span>{orderFlowScanBusy?"SCANNING…":orderFlowScanUpdated?new Date(orderFlowScanUpdated).toLocaleTimeString():"—"}</span></div>
+    <div className="scanner-controls"><select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select><small>Top 6 volume/momentum candidates · closed candles only</small></div>
+    {orderFlowScanner.length===0&&!orderFlowScanBusy&&<div className="setup-empty">No scan results yet</div>}
+    {orderFlowScanner.map(x=><div className="scanner-row" key={x.symbol+"-"+x.timeframe}>
+      <span><b>{x.symbol}</b><small>{x.timeframe} · FP {x.footprintBars}/12</small></span>
+      <b className={x.state==="CONFIRMED"?"positive":x.direction==="BUY"?"positive":x.direction==="SELL"?"negative":""}>{x.state==="WAIT"?"WAIT":x.direction+" · "+x.state}</b>
+      <small>{x.score}/100</small>
+    </div>)}
+    {orderFlowScanner.filter(x=>x.state==="SETUP"||x.state==="CONFIRMED").slice(0,3).map(x=><div className="scanner-reason" key={"reason-"+x.symbol}>{x.symbol}: {x.reason}</div>)}
+   </div>
    <div className="panel-card feed-card"><div className="section-title">SYSTEM STATUS</div><div className="status-line"><span>{marketConfig[marketType].label} REST</span><b className={restConnected?"positive":"negative"}>{restConnected?"CONNECTED":loading?"CONNECTING":"OFFLINE"}</b></div><div className="status-line"><span>WebSocket</span><b className={connected?"positive":"negative"}>{connected?"LIVE":"RECONNECTING"}</b></div><div className="status-line"><span>SMC / Elliott</span><b className={analysisCandles.length>=30?"positive":analysisCandles.length>=25?"":"negative"}>{analysisCandles.length>=30?"READY":analysisCandles.length>=25?"SMC ONLY":"WAITING"}</b></div><div className="status-line"><span>Derivatives</span><b>{derivatives?"LIVE":"N/A"}</b></div><div className="status-line"><span>Execution</span><b>DISABLED</b></div></div></details>
   </aside></section>
   <footer className="footer"><span>QUANTSTRUCTURE · ADVANCED MARKET ANALYSIS WORKSTATION</span><span>Binance {marketConfig[marketType].label.toLowerCase()} data · all TRADING pairs exposed · analysis only</span></footer>
