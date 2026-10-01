@@ -146,17 +146,18 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const sellerAbsorption=recentBars.filter(b=>b.absorption==="SELLER").at(-1);
 
   // A confirmation must form in causal order: liquidity event -> absorption -> current closed-bar break.
-  const longContext=!!sweepLow&&!!buyerAbsorption&&buyerAbsorption.index>=sweepLow.index&&last.index-buyerAbsorption.index<=5;
-  const shortContext=!!sweepHigh&&!!sellerAbsorption&&sellerAbsorption.index>=sweepHigh.index&&last.index-sellerAbsorption.index<=5;
+  // Strict causal sequence: sweep -> candle absorption -> latest footprint absorption/imbalance -> pressure/delta -> current-bar structure break.
+  // The sweep must be recent and the candle absorption cannot precede it.
+  const longContext=!!sweepLow&&!!buyerAbsorption&&buyerAbsorption.index>sweepLow.index&&buyerAbsorption.index<=last.index&&last.index-buyerAbsorption.index<=5;
+  const shortContext=!!sweepHigh&&!!sellerAbsorption&&sellerAbsorption.index>sweepHigh.index&&sellerAbsorption.index<=last.index&&last.index-sellerAbsorption.index<=5;
 
   // The 12-bar pressure filter must actually have 12 closed bars behind it.
   // Otherwise a short initial dataset could be mislabeled as a "12-bar" setup.
   const sufficientHistory=closed.length>=12;
-  const footprintReady=!!latestFootprint&&latestFootprint.confirmed&&(latestFootprint.stackedBuyImbalances>=2||latestFootprint.stackedSellImbalances>=2);
-  const latestBuyConfirm=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio>=0.08&&latestFootprint.maxBuyImbalanceRatio>=3&&latestFootprint.stackedBuyImbalances>=2&&latestFootprint.absorption==="BUYER";
-  const latestSellConfirm=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio<=-0.08&&latestFootprint.maxSellImbalanceRatio>=3&&latestFootprint.stackedSellImbalances>=2&&latestFootprint.absorption==="SELLER";
-  const longConfirmed=sufficientHistory&&allExact&&useFootprint&&footprintReady&&longContext&&pressure==="BUYERS"&&latestBuyConfirm&&last.microStructure==="BULLISH";
-  const shortConfirmed=sufficientHistory&&allExact&&useFootprint&&footprintReady&&shortContext&&pressure==="SELLERS"&&latestSellConfirm&&last.microStructure==="BEARISH";
+  const latestBuyFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio>=0.08&&latestFootprint.maxBuyImbalanceRatio>=3&&latestFootprint.stackedBuyImbalances>=2&&latestFootprint.absorption==="BUYER";
+  const latestSellFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio<=-0.08&&latestFootprint.maxSellImbalanceRatio>=3&&latestFootprint.stackedSellImbalances>=2&&latestFootprint.absorption==="SELLER";
+  const longConfirmed=sufficientHistory&&allExact&&useFootprint&&longContext&&pressure==="BUYERS"&&latestBuyFootprint&&last.microStructure==="BULLISH";
+  const shortConfirmed=sufficientHistory&&allExact&&useFootprint&&shortContext&&pressure==="SELLERS"&&latestSellFootprint&&last.microStructure==="BEARISH";
 
   let direction:OrderFlowDirection="WAIT";
   if(longConfirmed&&!shortConfirmed)direction="BUY";
@@ -164,9 +165,9 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
 
   const confirmations:string[]=[];
   if(direction==="BUY"){
-    confirmations.push("Closed-candle confirmation","Binance taker flow","Sell-side liquidity sweep","Buyer absorption","12-bar buyer pressure","Positive delta","Buy imbalance ≥ 1.6×","Bullish micro-structure break");
+    confirmations.push("Closed-candle confirmation","Binance footprint flow","Sell-side liquidity sweep → buyer absorption","12-bar buyer pressure","Positive delta ≥ 0.08","2+ stacked buy imbalances","Max buy imbalance ≥ 3×","Current-bar bullish structure break");
   }else if(direction==="SELL"){
-    confirmations.push("Closed-candle confirmation","Binance taker flow","Buy-side liquidity sweep","Seller absorption","12-bar seller pressure","Negative delta","Sell imbalance ≥ 1.6×","Bearish micro-structure break");
+    confirmations.push("Closed-candle confirmation","Binance footprint flow","Buy-side liquidity sweep → seller absorption","12-bar seller pressure","Negative delta ≤ -0.08","2+ stacked sell imbalances","Max sell imbalance ≥ 3×","Current-bar bearish structure break");
   }
 
   let entry:number|null=null,stop:number|null=null,targets:number[]=[];
