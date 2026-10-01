@@ -488,8 +488,8 @@ export default function Home(){
         <button type="button" className="scanner-start-btn" onClick={()=>{setOrderFlowScanError("");setOrderFlowScanner([]);setOrderFlowScanProgress("");setOrderFlowScannerEnabled(true)}} disabled={orderFlowScannerEnabled}>START</button>
         <button type="button" className="scanner-stop-btn" onClick={()=>{setOrderFlowScannerEnabled(false);setOrderFlowScanBusy(false);setOrderFlowScanner([]);setOrderFlowScanProgress("Stopped");setOrderFlowScanError("")}} disabled={!orderFlowScannerEnabled&&!orderFlowScanBusy}>STOP</button>
       </div>
-      <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select>
-      <small>{orderFlowScanBusy?"Scanning "+(orderFlowScanProgress||"…"):orderFlowScanProgress||"Ready"} · ALL eligible pairs · closed candles only · Binance footprint</small>
+      <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)}>{(["1m","5m","15m"] as const).map(tf=><option key={tf}>{tf}</option>)}</select>
+      <small>{orderFlowScanBusy?"Scanning "+(orderFlowScanProgress||"…"):orderFlowScanProgress||"Ready"} · ALL eligible pairs · closed candles only · Binance footprint</small><div className="scanner-diagnostic"><b>{symbol} {orderFlowScanTf}</b><span>{orderFlow.rejectionReason}</span></div>
     </div>
     {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner STOPPED — press START to scan all eligible pairs.</div>}
     {orderFlowScannerEnabled&&orderFlowScanError&&<div className="setup-empty">Scanner error: {orderFlowScanError}</div>}
