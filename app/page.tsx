@@ -85,7 +85,7 @@ export default function Home(){
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
- const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0);
+ const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState("");
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
@@ -121,7 +121,12 @@ export default function Home(){
       .sort((a,b)=>(a.rank<0?999:a.rank)-(b.rank<0?999:b.rank))
       .slice(0,6);
     const rows:OrderFlowScanRow[]=[];
-    for(const c of candidates){
+    setOrderFlowScanProgress(`0/${candidates.length}`);
+    setOrderFlowScanError("");
+    for(let i=0;i<candidates.length;i+=1){
+     const c=candidates[i];
+     if(stop)break;
+     setOrderFlowScanProgress(`${i+1}/${candidates.length} · ${c.pair.symbol}`);
      if(stop)break;
      try{
       const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,180,marketType)).filter(x=>x.closed!==false);
@@ -137,8 +142,9 @@ export default function Home(){
       rows.push({symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:"Scanner data unavailable"});
      }
     }
-    if(!stop){setOrderFlowScanner(rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score));setOrderFlowScanUpdated(Date.now())}
-   }finally{if(!stop)setOrderFlowScanBusy(false)}
+    if(!stop){const confirmed=rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);setOrderFlowScanner(confirmed);setOrderFlowScanUpdated(Date.now());setOrderFlowScanProgress(`DONE · ${confirmed.length} confirmed`)}
+   }catch(e){if(!stop)setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
+   finally{if(!stop)setOrderFlowScanBusy(false)}
   };
   scan();
   const id=window.setInterval(scan,120000);
@@ -403,12 +409,13 @@ export default function Home(){
       {showOrderFlow&&<div className="panel-card mtf-card orderflow-scanner-card">
     <div className="section-title">ORDER FLOW PAIR SCANNER <span>{orderFlowScannerEnabled?(orderFlowScanBusy?"SCANNING…":orderFlowScanUpdated?new Date(orderFlowScanUpdated).toLocaleTimeString():"—"):"OFF"}</span></div>
     <div className="scanner-controls">
-      <label className="scanner-toggle"><input type="checkbox" checked={orderFlowScannerEnabled} onChange={e=>{setOrderFlowScannerEnabled(e.target.checked);if(!e.target.checked)setOrderFlowScanner([])}}/><b>{orderFlowScannerEnabled?"ON":"OFF"}</b><small>Show CONFIRMED setups only</small></label>
+      <label className="scanner-toggle"><input type="checkbox" checked={orderFlowScannerEnabled} onChange={e=>{setOrderFlowScannerEnabled(e.target.checked);if(!e.target.checked){setOrderFlowScanner([]);setOrderFlowScanProgress("");setOrderFlowScanError("")}}}/><b>{orderFlowScannerEnabled?"ON":"OFF"}</b><small>Show CONFIRMED setups only</small></label>
       <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)} disabled={!orderFlowScannerEnabled}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select>
-      <small>Top 6 volume/momentum candidates · closed candles only · Binance footprint</small>
+      <small>{orderFlowScanBusy?"Scanning "+(orderFlowScanProgress||"…"):orderFlowScanProgress||"Ready"} · Top 6 candidates · closed candles only · Binance footprint</small>
     </div>
     {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner OFF — no pair scan is running.</div>}
-    {orderFlowScannerEnabled&&orderFlowScanner.length===0&&!orderFlowScanBusy&&<div className="setup-empty">No CONFIRMED Order Flow setups found.</div>}
+    {orderFlowScannerEnabled&&orderFlowScanError&&<div className="setup-empty">Scanner error: {orderFlowScanError}</div>}
+    {orderFlowScannerEnabled&&orderFlowScanner.length===0&&!orderFlowScanBusy&&!orderFlowScanError&&<div className="setup-empty">No CONFIRMED Order Flow setups found.</div>}
     {orderFlowScannerEnabled&&orderFlowScanner.map(x=><div className="scanner-row" key={x.symbol+"-"+x.timeframe}>
       <span><b>{x.symbol}</b><small>{x.timeframe} · FP {x.footprintBars}/12</small></span>
       <b className="positive">{x.direction} · CONFIRMED</b>
