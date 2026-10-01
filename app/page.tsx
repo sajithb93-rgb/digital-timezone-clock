@@ -152,8 +152,9 @@ export default function Home(){
  useEffect(()=>{let stop=false;const cfg=marketConfig[marketType];const load=()=>binanceFetchJson(`${cfg.rest}/ticker/24hr`).then((d:any[])=>{if(stop||!Array.isArray(d))return;setScanner(d.filter(x=>typeof x.symbol==="string"&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:Number(x.priceChangePercent),quoteVolume:Number(x.quoteVolume)})).filter(x=>Number.isFinite(x.priceChangePercent)&&Number.isFinite(x.quoteVolume)).sort((a,b)=>b.quoteVolume-a.quoteVolume).slice(0,20))}).catch(()=>{});load();const id=window.setInterval(load,60000);return()=>{stop=true;clearInterval(id)}},[marketType]);
  useEffect(()=>{
   let stop=false;
+  const controller=new AbortController();
   const runId=++orderFlowScanRunRef.current;
-  const isCurrent=()=>!stop&&orderFlowScanRunRef.current===runId;
+  const isCurrent=()=>!stop&&!controller.signal.aborted&&orderFlowScanRunRef.current===runId;
   const scan=async()=>{
    if(!isCurrent()||!orderFlowScannerEnabled||!pairs.length)return;
    setOrderFlowScanBusy(true);
@@ -182,7 +183,7 @@ export default function Home(){
        if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
        const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType)).filter(x=>x.closed!==false);
        const lookback=Math.max(tfMs*14,60*60*1000);
-       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,undefined,12);
+       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,controller.signal,12);
        const book=new FootprintBook(tfMs,c.pair.tickSize,36);
        book.load(trades);
        const fps=book.snapshots(candles,Date.now());
@@ -222,7 +223,7 @@ export default function Home(){
   };
   scan();
   const id=window.setInterval(scan,180000);
-  return()=>{stop=true;clearInterval(id)};
+  return()=>{stop=true;controller.abort();clearInterval(id);if(orderFlowScanRunRef.current===runId)orderFlowScanRunRef.current+=1};
  },[marketType,quoteFilter,orderFlowScanTf,orderFlowScannerEnabled,pairs.length,symbol,scanner.length]);
 
  useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:(await fetchKlines(symbol,tf,180,marketType)).filter(x=>x.closed!==false)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol,marketType]);
@@ -483,11 +484,14 @@ export default function Home(){
       {showOrderFlow&&<div className="panel-card mtf-card orderflow-scanner-card">
     <div className="section-title">ORDER FLOW PAIR SCANNER <span>{orderFlowScannerEnabled?(orderFlowScanBusy?"SCANNING…":orderFlowScanUpdated?new Date(orderFlowScanUpdated).toLocaleTimeString():"—"):"OFF"}</span></div>
     <div className="scanner-controls">
-      <label className="scanner-toggle"><input type="checkbox" checked={orderFlowScannerEnabled} onChange={e=>{setOrderFlowScannerEnabled(e.target.checked);if(!e.target.checked){setOrderFlowScanner([]);setOrderFlowScanProgress("");setOrderFlowScanError("")}}}/><b>{orderFlowScannerEnabled?"ON":"OFF"}</b><small>Show CONFIRMED setups only</small></label>
-      <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)} disabled={!orderFlowScannerEnabled}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select>
+      <div className="scanner-buttons">
+        <button type="button" className="scanner-start-btn" onClick={()=>{setOrderFlowScanError("");setOrderFlowScanner([]);setOrderFlowScanProgress("");setOrderFlowScannerEnabled(true)}} disabled={orderFlowScannerEnabled}>START</button>
+        <button type="button" className="scanner-stop-btn" onClick={()=>{setOrderFlowScannerEnabled(false);setOrderFlowScanBusy(false);setOrderFlowScanner([]);setOrderFlowScanProgress("Stopped");setOrderFlowScanError("")}} disabled={!orderFlowScannerEnabled&&!orderFlowScanBusy}>STOP</button>
+      </div>
+      <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select>
       <small>{orderFlowScanBusy?"Scanning "+(orderFlowScanProgress||"…"):orderFlowScanProgress||"Ready"} · ALL eligible pairs · closed candles only · Binance footprint</small>
     </div>
-    {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner OFF — no pair scan is running.</div>}
+    {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner STOPPED — press START to scan all eligible pairs.</div>}
     {orderFlowScannerEnabled&&orderFlowScanError&&<div className="setup-empty">Scanner error: {orderFlowScanError}</div>}
     {orderFlowScannerEnabled&&orderFlowScanner.length>0&&<div className="scanner-live-confirmed">
       <div className="scanner-live-title"><span>CONFIRMED SETUPS</span><small>{orderFlowScanBusy?"LIVE · updating as pairs confirm":"SCAN COMPLETE"}</small></div>
