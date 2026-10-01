@@ -72,6 +72,7 @@ type MutableBar = {
   levels: Map<number, MutableLevel>;
   buyVolume: number;
   sellVolume: number;
+  ids: Set<number>;
 };
 
 export function analyzeFootprintSnapshot(
@@ -167,7 +168,7 @@ export class FootprintBook {
     const time = bucketStart(trade.time, this.intervalMs);
     let bar = this.bars.get(time);
     if (!bar) {
-      bar = { candleTime: time, levels: new Map(), buyVolume: 0, sellVolume: 0 };
+      bar = { candleTime: time, levels: new Map(), buyVolume: 0, sellVolume: 0, ids: new Set() };
       this.bars.set(time, bar);
     }
     const price = priceKey(trade.price, this.tickSize);
@@ -179,6 +180,7 @@ export class FootprintBook {
 
     // Binance aggTrade's m=true means buyer was the maker, so the aggressive
     // taker was the seller. m=false therefore represents aggressive buy flow.
+    bar.ids.add(trade.id);
     if (trade.isBuyerMaker) {
       level.sellVolume += trade.quantity;
       level.sellTrades += 1;
@@ -203,6 +205,8 @@ export class FootprintBook {
     while (times.length > this.maxBars) {
       const old = times.shift();
       if (old === undefined) break;
+      const oldBar=this.bars.get(old);
+      if(oldBar)for(const id of oldBar.ids)this.seen.delete(id);
       this.bars.delete(old);
     }
   }
