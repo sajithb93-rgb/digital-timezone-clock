@@ -57,7 +57,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300,marketType:Ma
 
 async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,signal?:AbortSignal,maxTrades=3000):Promise<AggTrade[]>{
  const cfg=marketConfig[marketType];const out:AggTrade[]=[];const seen=new Set<number>();let cursor=startTime;let requestCount=0;
- while(cursor<=endTime&&out.length<maxTrades&&requestCount<4){
+ while(cursor<=endTime&&out.length<maxTrades&&requestCount<8){
   const windowEnd=Math.min(endTime,cursor+60*60*1000-1);
   const q=new URLSearchParams({symbol:symbol.toUpperCase(),limit:"1000",startTime:String(cursor),endTime:String(windowEnd)});
   const rows=await binanceFetchJson(cfg.aggRest+"?"+q.toString(),{signal});requestCount+=1;
@@ -73,6 +73,42 @@ async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:numb
   cursor=lastTime+1;
  }
  return out.sort((a,b)=>a.time-b.time||a.id-b.id);
+}
+
+async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,signal?:AbortSignal,targetBars=12):Promise<AggTrade[]>{
+ const cfg=marketConfig[marketType];
+ const seen=new Set<number>();const out:AggTrade[]=[];
+ // Binance aggTrades are capped at 1000 rows/request. For a liquid symbol, a
+ // time-window request can fill all 1000 rows before one 5m candle is covered.
+ // Seed from the newest trades, then page backwards by aggregate-trade id so
+ // the scanner gets a dense history instead of repeatedly sampling the first
+ // part of each time window.
+ const seedQ=new URLSearchParams({symbol:symbol.toUpperCase(),limit:"1000"});
+ const seed=await binanceFetchJson(cfg.aggRest+"?"+seedQ.toString(),{signal});
+ if(!Array.isArray(seed)||!seed.length)return [];
+ const seedNorm=seed.map(normalizeAggTrade).filter((x):x is AggTrade=>!!x);
+ const newestId=seedNorm.at(-1)?.id;
+ if(newestId==null)return [];
+ const targetStart=startTime;
+ let fromId=Math.max(0,newestId-11999);
+ let requests=0;
+ while(fromId<=newestId&&requests<12&&out.length<12000){
+  const q=new URLSearchParams({symbol:symbol.toUpperCase(),fromId:String(fromId),limit:"1000"});
+  const rows=await binanceFetchJson(cfg.aggRest+"?"+q.toString(),{signal});requests+=1;
+  if(!Array.isArray(rows)||!rows.length)break;
+  let maxId=fromId;
+  for(const raw of rows){
+   const t=normalizeAggTrade(raw);if(!t)continue;
+   maxId=Math.max(maxId,t.id);
+   if(t.time>=targetStart&&t.time<=endTime&&!seen.has(t.id)){seen.add(t.id);out.push(t)}
+  }
+  if(maxId<=fromId)break;
+  fromId=maxId+1;
+  if(out.length>=12000)break;
+ }
+ // If the dense id window did not reach the requested start, keep only the
+ // available causal history; caller will report the actual footprint count.
+ return out.filter(t=>t.time>=targetStart&&t.time<=endTime).sort((a,b)=>a.time-b.time||a.id-b.id);
 }
 
 function intervalMs(interval:string):number{const units:Record<string,number>={m:60*1000,h:60*60*1000,d:24*60*60*1000};const n=Number(interval.slice(0,-1));return Math.max(60*1000,(Number.isFinite(n)?n:1)*(units[interval.slice(-1)]??60*1000));}
@@ -131,15 +167,17 @@ export default function Home(){
      try{
       const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,180,marketType)).filter(x=>x.closed!==false);
       const tfMs=intervalMs(orderFlowScanTf);
-      const lookback=Math.min(3*60*60*1000,Math.max(tfMs*14,60*60*1000));
-      const trades=await fetchAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,undefined,3000);
+      const supportedTf=orderFlowScanTf==="1m"||orderFlowScanTf==="5m"||orderFlowScanTf==="15m";
+      if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
+      const lookback=Math.max(tfMs*14,60*60*1000);
+      const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,undefined,12);
       const book=new FootprintBook(tfMs,c.pair.tickSize,36);
       book.load(trades);
       const fps=book.snapshots(candles,Date.now());
       const result=analyzeOrderFlow(candles,fps);
       rows.push(classifyOrderFlowSetup(c.pair.symbol,orderFlowScanTf,result));
-     }catch{
-      rows.push({symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:"Scanner data unavailable"});
+     }catch(e){
+      rows.push({symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:e instanceof Error?e.message:"Scanner data unavailable"});
      }
     }
     if(!stop){const confirmed=rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);setOrderFlowScanner(confirmed);setOrderFlowScanUpdated(Date.now());setOrderFlowScanProgress(`DONE · ${confirmed.length} confirmed`)}
