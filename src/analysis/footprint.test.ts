@@ -1,0 +1,40 @@
+import { describe, expect, it } from "vitest";
+import { FootprintBook, normalizeAggTrade } from "./footprint";
+
+describe("price-level footprint engine",()=>{
+  it("maps m=false to aggressive buy and m=true to aggressive sell",()=>{
+    const book=new FootprintBook(60_000,1,12);
+    const a=normalizeAggTrade({a:1,p:"100",q:"2",T:61_000,m:false});
+    const b=normalizeAggTrade({a:2,p:"100",q:"3",T:62_000,m:true});
+    expect(a&&b).toBeTruthy();
+    book.add(a!);book.add(b!);
+    const s=book.snapshot(60_000,undefined,120_000);
+    expect(s?.buyVolume).toBe(2);
+    expect(s?.sellVolume).toBe(3);
+    expect(s?.delta).toBe(-1);
+  });
+
+  it("deduplicates aggregate trade ids",()=>{
+    const book=new FootprintBook(60_000,0.1,12);
+    const t=normalizeAggTrade({a:7,p:"100.05",q:"1",T:61_000,m:false})!;
+    expect(book.add(t)).toBe(true);
+    expect(book.add(t)).toBe(false);
+    expect(book.snapshot(60_000,undefined,120_000)?.buyVolume).toBe(1);
+  });
+
+  it("does not mark an in-progress candle as confirmed",()=>{
+    const book=new FootprintBook(60_000,0.1,12);
+    book.add(normalizeAggTrade({a:1,p:"100",q:"1",T:61_000,m:false})!);
+    expect(book.snapshot(60_000,undefined,119_999)?.confirmed).toBe(false);
+    expect(book.snapshot(60_000,undefined,120_000)?.confirmed).toBe(true);
+  });
+
+  it("detects stacked buy imbalance using adjacent price levels",()=>{
+    const book=new FootprintBook(60_000,1,12);
+    book.add(normalizeAggTrade({a:1,p:"99",q:"1",T:61_000,m:true})!);
+    book.add(normalizeAggTrade({a:2,p:"100",q:"4",T:61_001,m:false})!);
+    book.add(normalizeAggTrade({a:3,p:"101",q:"5",T:61_002,m:false})!);
+    const s=book.snapshot(60_000,undefined,120_000)!;
+    expect(s.stackedBuyImbalances).toBeGreaterThanOrEqual(1);
+  });
+});
