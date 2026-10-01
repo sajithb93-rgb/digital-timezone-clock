@@ -7,6 +7,44 @@ function candle(i:number, open:number, high:number, low:number, close:number, vo
   return {time:i,open,high,low,close,volume,takerBuyVolume:buy,closed:true};
 }
 
+
+
+function confirmedFootprints(direction:"BUY"|"SELL", latestOverrides:Partial<FootprintSnapshot>={}):FootprintSnapshot[]{
+  return Array.from({length:12},(_,i)=>{
+    const buy=direction==="BUY"?60:40;
+    const sell=direction==="BUY"?40:60;
+    return {
+      candleTime:i,intervalMs:60000,confirmed:true,levels:[],
+      buyVolume:buy,sellVolume:sell,delta:buy-sell,deltaRatio:(buy-sell)/(buy+sell),poc:100,
+      stackedBuyImbalances:direction==="BUY"?2:0,stackedSellImbalances:direction==="SELL"?2:0,
+      maxBuyImbalanceRatio:direction==="BUY"?4:0,maxSellImbalanceRatio:direction==="SELL"?4:0,
+      maxPositiveDelta:direction==="BUY"?20:0,maxNegativeDelta:direction==="SELL"?-20:0,
+      absorption:direction==="BUY"?"BUYER":"SELLER",absorptionStrength:80,
+      ...(i===11?latestOverrides:{})
+    };
+  });
+}
+
+function fullLongCandles():Candle[]{
+  return [
+    ...Array.from({length:8},(_,i)=>candle(i,100,102,99,101,100,60)),
+    candle(8,101,103,95,100.5,100,55),
+    candle(9,100.5,101,95,100.5,100,30),
+    candle(10,100.5,103,99.5,102,100,65),
+    candle(11,102,106,101,105,100,70)
+  ];
+}
+
+function fullShortCandles():Candle[]{
+  return [
+    ...Array.from({length:8},(_,i)=>candle(i,100,102,99,101,100,40)),
+    candle(8,101,105,97,99.5,100,45),
+    candle(9,99.5,105,99,100,100,70),
+    candle(10,100,103,97,98,100,35),
+    candle(11,98,99,94,95,100,30)
+  ];
+}
+
 describe("order flow strategy",()=>{
   it("uses Binance taker-buy volume as buyer volume",()=>{
     const r=analyzeOrderFlow([
@@ -119,6 +157,67 @@ describe("order flow strategy",()=>{
       candle(1,101,103,100,102,100,60)
     ]);
     expect(r.recentBars.map(x=>x.time)).toEqual([1,2]);
+  });
+
+
+  it("confirms BUY only when the complete causal sequence is present",()=>{
+    const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
+    expect(r.direction).toBe("BUY");
+    expect(r.signal).toBe("BUY CONFIRMED — CLOSED CANDLE");
+    expect(r.confidence).toBe(100);
+    expect(r.confirmations).toContain("Sell-side liquidity sweep → buyer absorption");
+    expect(r.confirmations).toContain("2+ stacked buy imbalances");
+  });
+
+  it("confirms SELL only when the complete causal sequence is present",()=>{
+    const r=analyzeOrderFlow(fullShortCandles(),confirmedFootprints("SELL"));
+    expect(r.direction).toBe("SELL");
+    expect(r.signal).toBe("SELL CONFIRMED — CLOSED CANDLE");
+    expect(r.confidence).toBe(100);
+    expect(r.confirmations).toContain("Buy-side liquidity sweep → seller absorption");
+    expect(r.confirmations).toContain("2+ stacked sell imbalances");
+  });
+
+  it("returns WAIT when any critical BUY footprint confirmation is missing",()=>{
+    const base=fullLongCandles();
+    const cases:Partial<FootprintSnapshot>[]=[
+      {confirmed:false},
+      {stackedBuyImbalances:1},
+      {maxBuyImbalanceRatio:2.5},
+      {absorption:"SELLER"},
+      {deltaRatio:0.05}
+    ];
+    for(const overrides of cases){
+      const r=analyzeOrderFlow(base,confirmedFootprints("BUY",overrides));
+      expect(r.direction).toBe("WAIT");
+      expect(r.confidence).toBe(0);
+    }
+  });
+
+  it("returns WAIT when BUY causal context or current structure break is missing",()=>{
+    const fp=confirmedFootprints("BUY");
+    const noSweep=fullLongCandles().map((c,i)=>i===8?{...c,low:99.5}:c);
+    expect(analyzeOrderFlow(noSweep,fp).direction).toBe("WAIT");
+
+    const noAbsorption=fullLongCandles().map((c,i)=>i===9?{...c,close:c.open,low:c.open-0.5}:c);
+    expect(analyzeOrderFlow(noAbsorption,fp).direction).toBe("WAIT");
+
+    const noBreak=fullLongCandles().map((c,i)=>i===11?{...c,high:103,close:102.5}:c);
+    expect(analyzeOrderFlow(noBreak,fp).direction).toBe("WAIT");
+  });
+
+  it("returns WAIT when a valid BUY setup is still on an open latest candle",()=>{
+    const candles=fullLongCandles().map((c,i)=>i===11?{...c,closed:false}:c);
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.entry).toBeNull();
+  });
+
+  it("does not mix BUY and SELL footprint confirmations",()=>{
+    const mixed=confirmedFootprints("BUY",{stackedSellImbalances:2,maxSellImbalanceRatio:4,absorption:"SELLER",deltaRatio:-0.2});
+    const r=analyzeOrderFlow(fullLongCandles(),mixed);
+    expect(r.direction).toBe("WAIT");
+    expect(r.confidence).toBe(0);
   });
 
 });
