@@ -238,10 +238,11 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     buyerPressure:clamp(buyerPressure),sellerPressure:clamp(sellerPressure),pressure,pressureTrend,
     imbalance:latestFootprint?(latestFootprint.stackedBuyImbalances>=2?"BUY":latestFootprint.stackedSellImbalances>=2?"SELL":"NONE"):last.imbalance,
     imbalanceRatio:latestFootprint?Math.max(latestFootprint.maxBuyImbalanceRatio,latestFootprint.maxSellImbalanceRatio):safe(lastImbalanceRatio),
-    absorption:latestFootprint?.absorption??last.absorption,
+    absorption:(latestFootprint?.absorption&&latestFootprint.absorption!=="NONE")?latestFootprint.absorption:(buyerAbsorption&&(!sellerAbsorption||buyerAbsorption.index>=sellerAbsorption.index)?"BUYER":sellerAbsorption?"SELLER":last.absorption),
 
-    absorptionStrength:last.absorptionStrength,liquiditySweep:direction==="BUY"?(sweepLow?.liquiditySweep??"NONE"):direction==="SELL"?(sweepHigh?.liquiditySweep??"NONE"):"NONE",
-    liquiditySweepPrice:direction==="BUY"?(sweepLow?.sweepPrice??null):direction==="SELL"?(sweepHigh?.sweepPrice??null):null,
+    absorptionStrength:latestFootprint?.absorptionStrength||last.absorptionStrength,
+    liquiditySweep:((sweepLow&&sweepHigh)?(sweepLow.index>=sweepHigh.index?sweepLow:sweepHigh):sweepLow||sweepHigh)?.liquiditySweep??"NONE",
+    liquiditySweepPrice:((sweepLow&&sweepHigh)?(sweepLow.index>=sweepHigh.index?sweepLow:sweepHigh):sweepLow||sweepHigh)?.sweepPrice??null,
     microStructure:last.microStructure,direction,signal,confidence:direction==="WAIT"?0:100,confirmations,
     entry,stop,targets,recentBars,footprint:latestFootprint,footprintHistoryCount:fpRecent.length,diagnostics,rejectionReason:direction==="WAIT" ? rejectionReason : "All BUY/SELL confirmations passed"
   };
