@@ -136,8 +136,11 @@ export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
   const longContext=!!sweepLow&&!!buyerAbsorption&&buyerAbsorption.index>=sweepLow.index&&last.index-buyerAbsorption.index<=5;
   const shortContext=!!sweepHigh&&!!sellerAbsorption&&sellerAbsorption.index>=sweepHigh.index&&last.index-sellerAbsorption.index<=5;
 
-  const longConfirmed=allExact&&longContext&&pressure==="BUYERS"&&last.deltaRatio>=0.08&&last.imbalance==="BUY"&&last.microStructure==="BULLISH";
-  const shortConfirmed=allExact&&shortContext&&pressure==="SELLERS"&&last.deltaRatio<=-0.08&&last.imbalance==="SELL"&&last.microStructure==="BEARISH";
+  // The 12-bar pressure filter must actually have 12 closed bars behind it.
+  // Otherwise a short initial dataset could be mislabeled as a "12-bar" setup.
+  const sufficientHistory=closed.length>=12;
+  const longConfirmed=sufficientHistory&&allExact&&longContext&&pressure==="BUYERS"&&last.deltaRatio>=0.08&&last.imbalance==="BUY"&&last.microStructure==="BULLISH";
+  const shortConfirmed=sufficientHistory&&allExact&&shortContext&&pressure==="SELLERS"&&last.deltaRatio<=-0.08&&last.imbalance==="SELL"&&last.microStructure==="BEARISH";
 
   let direction:OrderFlowDirection="WAIT";
   if(longConfirmed&&!shortConfirmed)direction="BUY";
