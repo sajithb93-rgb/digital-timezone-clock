@@ -153,34 +153,52 @@ export default function Home(){
     const candidates=pairs
       .filter(p=>quoteFilter==="ALL"||p.quoteAsset===quoteFilter)
       .filter(p=>p.symbol!==symbol)
-      .map(p=>({pair:p,rank:scanner.findIndex(x=>x.symbol===p.symbol)}))
-      .sort((a,b)=>(a.rank<0?999:a.rank)-(b.rank<0?999:b.rank))
-      .slice(0,6);
+      .map(pair=>({pair,rank:scanner.findIndex(x=>x.symbol===pair.symbol),volume:scanner.find(x=>x.symbol===pair.symbol)?.quoteVolume??0}))
+      .sort((a,b)=>b.volume-a.volume||a.pair.symbol.localeCompare(b.pair.symbol));
     const rows:OrderFlowScanRow[]=[];
-    setOrderFlowScanProgress(`0/${candidates.length}`);
+    const total=candidates.length;
+    setOrderFlowScanProgress(`0/${total} · ALL PAIRS`);
     setOrderFlowScanError("");
-    for(let i=0;i<candidates.length;i+=1){
-     const c=candidates[i];
-     if(stop)break;
-     setOrderFlowScanProgress(`${i+1}/${candidates.length} · ${c.pair.symbol}`);
-     if(stop)break;
-     try{
-      const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,180,marketType)).filter(x=>x.closed!==false);
-      const tfMs=intervalMs(orderFlowScanTf);
-      const supportedTf=orderFlowScanTf==="1m"||orderFlowScanTf==="5m"||orderFlowScanTf==="15m";
-      if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
-      const lookback=Math.max(tfMs*14,60*60*1000);
-      const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,undefined,12);
-      const book=new FootprintBook(tfMs,c.pair.tickSize,36);
-      book.load(trades);
-      const fps=book.snapshots(candles,Date.now());
-      const result=analyzeOrderFlow(candles,fps);
-      rows.push(classifyOrderFlowSetup(c.pair.symbol,orderFlowScanTf,result));
-     }catch(e){
-      rows.push({symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:e instanceof Error?e.message:"Scanner data unavailable"});
-     }
+    if(!total){setOrderFlowScanner([]);setOrderFlowScanProgress("DONE · 0 eligible pairs");return}
+    // Scan every eligible Binance trading pair, but keep the REST queue bounded.
+    // Binance documents that 429 means the request rate limit was exceeded and
+    // recommends backing off rather than continuing to poll aggressively.
+    const workerCount=Math.min(2,total);
+    let cursor=0;
+    const scanOne=async(c:{pair:BinanceSymbol;rank:number;volume:number})=>{
+      try{
+       const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,180,marketType)).filter(x=>x.closed!==false);
+       const tfMs=intervalMs(orderFlowScanTf);
+       const supportedTf=orderFlowScanTf==="1m"||orderFlowScanTf==="5m"||orderFlowScanTf==="15m";
+       if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
+       const lookback=Math.max(tfMs*14,60*60*1000);
+       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,undefined,12);
+       const book=new FootprintBook(tfMs,c.pair.tickSize,36);
+       book.load(trades);
+       const fps=book.snapshots(candles,Date.now());
+       const result=analyzeOrderFlow(candles,fps);
+       return classifyOrderFlowSetup(c.pair.symbol,orderFlowScanTf,result);
+      }catch(e){
+       return {symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:e instanceof Error?e.message:"Scanner data unavailable"} as OrderFlowScanRow;
+      }
+    };
+    const worker=async()=>{
+      while(!stop){
+       const i=cursor++;
+       if(i>=total)break;
+       const row=await scanOne(candidates[i]);
+       rows[i]=row;
+       const done=rows.filter(Boolean).length;
+       setOrderFlowScanProgress(`${done}/${total} · ${candidates[i].pair.symbol}`);
+      }
+    };
+    await Promise.all(Array.from({length:workerCount},()=>worker()));
+    if(!stop){
+      const confirmed=rows.filter(Boolean).filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);
+      setOrderFlowScanner(confirmed);
+      setOrderFlowScanUpdated(Date.now());
+      setOrderFlowScanProgress(`DONE · ${total} pairs · ${confirmed.length} confirmed`);
     }
-    if(!stop){const confirmed=rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);setOrderFlowScanner(confirmed);setOrderFlowScanUpdated(Date.now());setOrderFlowScanProgress(`DONE · ${confirmed.length} confirmed`)}
    }catch(e){if(!stop)setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
    finally{if(!stop)setOrderFlowScanBusy(false)}
   };
