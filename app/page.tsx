@@ -75,14 +75,12 @@ async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:numb
  return out.sort((a,b)=>a.time-b.time||a.id-b.id);
 }
 
-async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,signal?:AbortSignal,targetBars=12):Promise<AggTrade[]>{
+async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,intervalMsValue:number,signal?:AbortSignal,targetBars=12):Promise<AggTrade[]>{
  const cfg=marketConfig[marketType];
  const seen=new Set<number>();const out:AggTrade[]=[];
- // Binance aggTrades are capped at 1000 rows/request. For a liquid symbol, a
- // time-window request can fill all 1000 rows before one 5m candle is covered.
- // Seed from the newest trades, then page backwards by aggregate-trade id so
- // the scanner gets a dense history instead of repeatedly sampling the first
- // part of each time window.
+ // Start from the newest aggregate trades, then page forward by id only until
+ // enough CLOSED candle buckets are covered. This avoids the previous fixed
+ // 12-page scan for every pair while preserving the exact footprint inputs.
  const seedQ=new URLSearchParams({symbol:symbol.toUpperCase(),limit:"1000"});
  const seed=await binanceFetchJson(cfg.aggRest+"?"+seedQ.toString(),{signal});
  if(!Array.isArray(seed)||!seed.length)return [];
@@ -90,9 +88,11 @@ async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTi
  const newestId=seedNorm.at(-1)?.id;
  if(newestId==null)return [];
  const targetStart=startTime;
- let fromId=Math.max(0,newestId-11999);
+ const currentBucket=Math.floor(endTime/intervalMsValue)*intervalMsValue;
+ let fromId=Math.max(0,newestId-999);
  let requests=0;
- while(fromId<=newestId&&requests<12&&out.length<12000){
+ const maxRequests=12;
+ while(fromId<=newestId&&requests<maxRequests&&out.length<12000){
   const q=new URLSearchParams({symbol:symbol.toUpperCase(),fromId:String(fromId),limit:"1000"});
   const rows=await binanceFetchJson(cfg.aggRest+"?"+q.toString(),{signal});requests+=1;
   if(!Array.isArray(rows)||!rows.length)break;
@@ -102,12 +102,17 @@ async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTi
    maxId=Math.max(maxId,t.id);
    if(t.time>=targetStart&&t.time<=endTime&&!seen.has(t.id)){seen.add(t.id);out.push(t)}
   }
+  // We can stop as soon as the latest closed candle and 11 other closed
+  // footprint buckets are present. FootprintBook itself remains authoritative.
+  const coveredClosedBuckets=new Set<number>();
+  for(const t of out){
+   const bucket=Math.floor(t.time/intervalMsValue)*intervalMsValue;
+   if(bucket<currentBucket&&bucket>=targetStart)coveredClosedBuckets.add(bucket);
+  }
+  if(coveredClosedBuckets.size>=targetBars)break;
   if(maxId<=fromId)break;
   fromId=maxId+1;
-  if(out.length>=12000)break;
  }
- // If the dense id window did not reach the requested start, keep only the
- // available causal history; caller will report the actual footprint count.
  return out.filter(t=>t.time>=targetStart&&t.time<=endTime).sort((a,b)=>a.time-b.time||a.id-b.id);
 }
 
@@ -163,16 +168,18 @@ export default function Home(){
     // Scan every eligible Binance trading pair, but keep the REST queue bounded.
     // Binance documents that 429 means the request rate limit was exceeded and
     // recommends backing off rather than continuing to poll aggressively.
-    const workerCount=Math.min(2,total);
+    const workerCount=Math.min(3,total);
     let cursor=0;
     const scanOne=async(c:{pair:BinanceSymbol;rank:number;volume:number})=>{
       try{
-       const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,180,marketType)).filter(x=>x.closed!==false);
        const tfMs=intervalMs(orderFlowScanTf);
        const supportedTf=orderFlowScanTf==="1m"||orderFlowScanTf==="5m"||orderFlowScanTf==="15m";
        if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
+       // Only 24 closed candles are needed for the causal Order Flow rules.
+       // Keep a little extra context without downloading 180 candles per pair.
+       const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType)).filter(x=>x.closed!==false);
        const lookback=Math.max(tfMs*14,60*60*1000);
-       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,undefined,12);
+       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,undefined,12);
        const book=new FootprintBook(tfMs,c.pair.tickSize,36);
        book.load(trades);
        const fps=book.snapshots(candles,Date.now());
@@ -203,7 +210,7 @@ export default function Home(){
    finally{if(!stop)setOrderFlowScanBusy(false)}
   };
   scan();
-  const id=window.setInterval(scan,120000);
+  const id=window.setInterval(scan,180000);
   return()=>{stop=true;clearInterval(id)};
  },[marketType,quoteFilter,orderFlowScanTf,orderFlowScannerEnabled,pairs.length,symbol,scanner.length]);
 
