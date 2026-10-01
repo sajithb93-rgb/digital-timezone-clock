@@ -87,4 +87,20 @@ describe("order flow strategy",()=>{
     expect(r.direction).toBe("WAIT");
     expect(r.confidence).toBeLessThanOrEqual(60);
   });
+  it("requires 12 closed candles before a 12-bar pressure setup can confirm",()=>{
+    const rows=Array.from({length:11},(_,i)=>candle(i,100+i,102+i,99+i,101+i,100,70));
+    const r=analyzeOrderFlow(rows);
+    expect(r.direction).toBe("WAIT");
+    expect(r.confidence).toBe(0);
+  });
+
+  it("sorts candles chronologically and rejects malformed candles",()=>{
+    const r=analyzeOrderFlow([
+      candle(2,102,104,101,103,100,60),
+      {time:3,open:103,high:102,low:101,close:102,volume:100,takerBuyVolume:60,closed:true},
+      candle(1,101,103,100,102,100,60)
+    ]);
+    expect(r.recentBars.map(x=>x.time)).toEqual([1,2]);
+  });
+
 });
