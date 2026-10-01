@@ -9,19 +9,20 @@ import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 import { analyzeOrderFlow, type OrderFlowResult } from "../src/analysis/orderflow";
+import { FootprintBook, normalizeAggTrade, type AggTrade, type FootprintSnapshot } from "../src/analysis/footprint";
 import { analyzeReversal, analyzeReversalMTF, type ReversalEngineResult } from "../src/analysis/reversal";
 
 type Mode="smc"|"elliott"|"combined"|"orderflow";
 type MarketKind="spot"|"usdm"|"coinm";
-type BinanceSymbol={symbol:string;baseAsset:string;quoteAsset:string;minQty:number;maxQty:number;stepSize:number;minNotional:number;maxNotional:number};
+type BinanceSymbol={symbol:string;baseAsset:string;quoteAsset:string;minQty:number;maxQty:number;stepSize:number;minNotional:number;maxNotional:number;tickSize:number};
 type Derivatives={openInterest:string;fundingRate:string;change24h:string}|null;
 type Ticker={symbol:string,priceChangePercent:number,quoteVolume:number};
 const intervals=["1m","5m","15m","1h","4h","1d"] as const;
 const mtfIntervals=["4h","1h","15m","5m"];
-const marketConfig:Record<MarketKind,{label:string;rest:string;ws:string}>={
- spot:{label:"SPOT",rest:"https://api.binance.com/api/v3",ws:"wss://stream.binance.com:9443/ws/"},
- usdm:{label:"USDⓈ-M FUTURES",rest:"https://fapi.binance.com/fapi/v1",ws:"wss://fstream.binance.com/ws/"},
- coinm:{label:"COIN-M FUTURES",rest:"https://dapi.binance.com/dapi/v1",ws:"wss://dstream.binance.com/ws/"}
+const marketConfig:Record<MarketKind,{label:string;rest:string;ws:string;aggRest:string}>={
+ spot:{label:"SPOT",rest:"https://api.binance.com/api/v3",ws:"wss://stream.binance.com:9443/ws/",aggRest:"https://api.binance.com/api/v3/aggTrades"},
+ usdm:{label:"USDⓈ-M FUTURES",rest:"https://fapi.binance.com/fapi/v1",ws:"wss://fstream.binance.com/ws/",aggRest:"https://fapi.binance.com/fapi/v1/aggTrades"},
+ coinm:{label:"COIN-M FUTURES",rest:"https://dapi.binance.com/dapi/v1",ws:"wss://dstream.binance.com/ws/",aggRest:"https://dapi.binance.com/dapi/v1/aggTrades"}
 };
 
 async function fetchKlines(symbol:string,interval:string,limit=300,marketType:MarketKind="spot"):Promise<Candle[]>{
@@ -32,6 +33,27 @@ async function fetchKlines(symbol:string,interval:string,limit=300,marketType:Ma
  return rows.map((x:any)=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5],takerBuyVolume:+x[9],closed:+x[6] <= Date.now()}));
 }
 
+async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,signal?:AbortSignal,maxTrades=15000):Promise<AggTrade[]>{
+ const cfg=marketConfig[marketType];const out:AggTrade[]=[];const seen=new Set<number>();let cursor=startTime;
+ while(cursor<=endTime&&out.length<maxTrades){
+  const windowEnd=Math.min(endTime,cursor+60*60*1000-1);let useFromId=false;let fromId:number|undefined;let guard=0;
+  while(cursor<=windowEnd&&out.length<maxTrades&&guard++<30){
+   const q=new URLSearchParams({symbol:symbol.toUpperCase(),limit:"1000"});
+   if(useFromId&&fromId!==undefined)q.set("fromId",String(fromId));else{q.set("startTime",String(cursor));q.set("endTime",String(windowEnd));}
+   const r=await fetch(cfg.aggRest+"?"+q.toString(),{signal});
+   if(!r.ok)throw new Error("Binance "+cfg.label+" aggTrades returned "+r.status);
+   const rows=await r.json();if(!Array.isArray(rows)||rows.length===0)break;
+   let lastId:number|undefined;let lastTime=cursor;
+   for(const raw of rows){const t=normalizeAggTrade(raw);if(!t)continue;lastId=t.id;lastTime=Math.max(lastTime,t.time);if(t.time<startTime||t.time>endTime||seen.has(t.id))continue;seen.add(t.id);out.push(t);if(out.length>=maxTrades)break;}
+   if(out.length>=maxTrades||rows.length<1000||lastId===undefined)break;
+   fromId=lastId+1;useFromId=true;cursor=lastTime;if(lastTime>=windowEnd)break;
+  }
+  cursor=windowEnd+1;
+ }
+ return out.sort((a,b)=>a.time-b.time||a.id-b.id);
+}
+
+function intervalMs(interval:string):number{const units:Record<string,number>={m:60*1000,h:60*60*1000,d:24*60*60*1000};const n=Number(interval.slice(0,-1));return Math.max(60*1000,(Number.isFinite(n)?n:1)*(units[interval.slice(-1)]??60*1000));}
 export default function Home(){
  const [mode,setMode]=useState<Mode>("combined"),[isModePending,startModeTransition]=useTransition(),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m"),[marketType,setMarketType]=useState<MarketKind>("spot");
  const [theme,setTheme]=useState<"tradingview"|"cyber">("tradingview");
@@ -39,16 +61,17 @@ export default function Home(){
 
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
- const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
+ const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]);
- const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null);
+ const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
  const elliott=useMemo(()=>analyzeElliott(analysisCandles),[analysisCandles]);
  const mtf=useMemo(()=>analyzeMTF(mtfCandles),[mtfCandles]);
  const flow=useMemo(()=>flowSnapshot(analysisCandles),[analysisCandles]);
- const orderFlow=useMemo(()=>analyzeOrderFlow(analysisCandles),[analysisCandles]);
+ const footprintSnapshots=useMemo<FootprintSnapshot[]>(()=>footprintBookRef.current?.snapshots(analysisCandles,Date.now())??[],[analysisCandles,footprintVersion]);
+ const orderFlow=useMemo(()=>analyzeOrderFlow(analysisCandles,footprintSnapshots),[analysisCandles,footprintSnapshots]);
  const reversal=useMemo<ReversalEngineResult>(()=>analyzeReversal(analysisCandles,smc,orderFlow),[analysisCandles,smc,orderFlow]);
  const mtfReversal=useMemo(()=>analyzeReversalMTF(mtfCandles),[mtfCandles]);
  const regime=useMemo(()=>detectRegime(analysisCandles),[analysisCandles]);
@@ -60,7 +83,7 @@ export default function Home(){
 
  useEffect(()=>{ const controller=new AbortController(); const load=async()=>{setNewsLoading(true);try{setNewsEvents(await fetchNewsEvents(controller.signal));setNewsError(false)}catch{setNewsEvents([]);setNewsError(true)}finally{if(!controller.signal.aborted)setNewsLoading(false)}}; load(); const refresh=window.setInterval(load,10*60*1000); const clock=window.setInterval(()=>setNewsNow(Date.now()),30*1000); return()=>{controller.abort();clearInterval(refresh);clearInterval(clock)}; },[]);
 
- useEffect(()=>{let stop=false;setPairs([]);const cfg=marketConfig[marketType];const load=async()=>{try{const r=await fetch(`${cfg.rest}/exchangeInfo`);if(!r.ok)throw new Error();const d=await r.json();const next=(d.symbols||[]).filter((x:any)=>x.status==="TRADING"&&(x.contractStatus==null||x.contractStatus==="TRADING")).map((x:any)=>{const filters=x.filters||[];const lot=filters.find((f:any)=>f.filterType==="LOT_SIZE")||filters.find((f:any)=>f.filterType==="MARKET_LOT_SIZE")||{};const notional=filters.find((f:any)=>f.filterType==="NOTIONAL")||filters.find((f:any)=>f.filterType==="MIN_NOTIONAL")||{};return{symbol:x.symbol,baseAsset:x.baseAsset,quoteAsset:x.quoteAsset,minQty:Number(lot.minQty)||0,maxQty:Number(lot.maxQty)||Infinity,stepSize:Number(lot.stepSize)||0,minNotional:Number(notional.minNotional)||Number(notional.notional)||0,maxNotional:Number(notional.maxNotional)||Infinity}});if(!stop){setPairs(next);setQuoteFilter(marketType==="coinm"?"ALL":"USDT");setSymbol(prev=>next.some((p:any)=>p.symbol===prev)?prev:(next[0]?.symbol||""))}}catch{if(!stop){setPairs([]);setSymbol("")}}};load();return()=>{stop=true}},[marketType]);
+ useEffect(()=>{let stop=false;setPairs([]);const cfg=marketConfig[marketType];const load=async()=>{try{const r=await fetch(`${cfg.rest}/exchangeInfo`);if(!r.ok)throw new Error();const d=await r.json();const next=(d.symbols||[]).filter((x:any)=>x.status==="TRADING"&&(x.contractStatus==null||x.contractStatus==="TRADING")).map((x:any)=>{const filters=x.filters||[];const lot=filters.find((f:any)=>f.filterType==="LOT_SIZE")||filters.find((f:any)=>f.filterType==="MARKET_LOT_SIZE")||{};const notional=filters.find((f:any)=>f.filterType==="NOTIONAL")||filters.find((f:any)=>f.filterType==="MIN_NOTIONAL")||{};const priceFilter=filters.find((f:any)=>f.filterType==="PRICE_FILTER")||{};return{symbol:x.symbol,baseAsset:x.baseAsset,quoteAsset:x.quoteAsset,minQty:Number(lot.minQty)||0,maxQty:Number(lot.maxQty)||Infinity,stepSize:Number(lot.stepSize)||0,minNotional:Number(notional.minNotional)||Number(notional.notional)||0,maxNotional:Number(notional.maxNotional)||Infinity,tickSize:Number(priceFilter.tickSize)||0}});if(!stop){setPairs(next);setQuoteFilter(marketType==="coinm"?"ALL":"USDT");setSymbol(prev=>next.some((p:any)=>p.symbol===prev)?prev:(next[0]?.symbol||""))}}catch{if(!stop){setPairs([]);setSymbol("")}}};load();return()=>{stop=true}},[marketType]);
  useEffect(()=>{let stop=false;const cfg=marketConfig[marketType];const load=()=>fetch(`${cfg.rest}/ticker/24hr`).then(r=>r.json()).then((d:any[])=>{if(stop||!Array.isArray(d))return;setScanner(d.filter(x=>typeof x.symbol==="string"&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:Number(x.priceChangePercent),quoteVolume:Number(x.quoteVolume)})).filter(x=>Number.isFinite(x.priceChangePercent)&&Number.isFinite(x.quoteVolume)).sort((a,b)=>Math.abs(b.priceChangePercent)-Math.abs(a.priceChangePercent)).slice(0,8))}).catch(()=>{});load();const id=window.setInterval(load,30000);return()=>{stop=true;clearInterval(id)}},[marketType]);
  useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:(await fetchKlines(symbol,tf,180,marketType)).filter(x=>x.closed!==false)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol,marketType]);
 
@@ -203,6 +226,22 @@ export default function Home(){
    try{oldSocket?.close(1000,"effect cleanup")}catch{}
   };
  },[symbol,interval,marketType]);
+
+ useEffect(()=>{
+  let stop=false;let socket:WebSocket|undefined;let retry:number|undefined;let flush:number|undefined;let attempt=0;
+  const tfMs=intervalMs(interval);const tick=selectedPair?.tickSize??0;const book=new FootprintBook(tfMs,tick,36);footprintBookRef.current=book;setFootprintVersion(v=>v+1);
+  const schedule=()=>{if(stop||retry)return;const delay=Math.min(15000,1000*Math.pow(2,Math.min(attempt++,4)));retry=window.setTimeout(()=>{retry=undefined;connect()},delay)};
+  const connect=()=>{if(stop)return;try{socket?.close()}catch{};socket=new WebSocket(marketConfig[marketType].ws+symbol.toLowerCase()+"@aggTrade");
+   socket.onopen=()=>{if(stop)return;attempt=0;setFootprintConnected(true)};
+   socket.onmessage=e=>{if(stop)return;try{const t=normalizeAggTrade(JSON.parse(e.data));if(t)book.add(t)}catch{}};
+   socket.onerror=()=>{if(!stop)setFootprintConnected(false)};
+   socket.onclose=()=>{if(stop)return;setFootprintConnected(false);schedule()};
+  };
+  const loadHistory=async()=>{if(!symbol||!selectedPair?.tickSize)return;try{const lookback=Math.min(6*60*60*1000,Math.max(tfMs*14,60*60*1000));const trades=await fetchAggTrades(symbol,marketType,Date.now()-lookback,Date.now()-1000);if(stop)return;book.load(trades);setFootprintVersion(v=>v+1);setFootprintConnected(true)}catch{if(!stop)setFootprintConnected(false)}};
+  void loadHistory();connect();
+  flush=window.setInterval(()=>setFootprintVersion(v=>v+1),1000);
+  return()=>{stop=true;if(retry)clearTimeout(retry);if(flush)clearInterval(flush);try{socket?.close(1000,"cleanup")}catch{};if(footprintBookRef.current===book)footprintBookRef.current=null;setFootprintConnected(false)};
+ },[symbol,interval,marketType,selectedPair?.tickSize]);
 
  const lastClosed=candles.at(-1)?.closed!==false?candles.at(-1):candles.at(-2);
  const lastClosedTime=lastClosed?.time??0;
