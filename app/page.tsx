@@ -153,7 +153,7 @@ export default function Home(){
  useEffect(()=>{
   let stop=false;
   const scan=async()=>{
-   if(stop||!orderFlowScannerEnabled||!pairs.length||orderFlowScanBusy)return;
+   if(stop||!orderFlowScannerEnabled||!pairs.length)return;
    setOrderFlowScanBusy(true);
    try{
     const candidates=pairs
