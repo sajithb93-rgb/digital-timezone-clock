@@ -57,6 +57,27 @@ describe("order flow strategy",()=>{
     expect(r.recentBars.find(x=>x.index===3)?.liquiditySweep).toBe("LOW");
   });
 
+  it("never confirms a signal from an open candle",()=>{ 
+    const r=analyzeOrderFlow([
+      candle(0,100,101,99,100.2,100,70),
+      candle(1,100.2,102,100,101.8,100,75),
+      {...candle(2,101.8,104,99,103,100,80),closed:false}
+    ]);
+    expect(r.direction).toBe("WAIT");
+    expect(r.entry).toBeNull();
+    expect(r.targets).toEqual([]);
+  });
+
+  it("does not confirm when Binance taker-flow data is unavailable",()=>{
+    const r=analyzeOrderFlow([
+      {time:0,open:100,high:101,low:99,close:100.5,volume:100,closed:true},
+      {time:1,open:100.5,high:102,low:100,close:101.5,volume:100,closed:true}
+    ]);
+    expect(r.source).toBe("CANDLE_ESTIMATE_FALLBACK");
+    expect(r.direction).toBe("WAIT");
+    expect(r.confidence).toBe(0);
+  });
+
   it("waits when long and short confluence is incomplete",()=>{
     const r=analyzeOrderFlow([
       candle(0,100,101,99,100.2,100,51),
