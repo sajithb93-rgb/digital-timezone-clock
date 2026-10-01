@@ -415,6 +415,21 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
    {latest&&orderFlow.direction!=="WAIT"&&<g>{(()=>{const x=xOf(latest.index),y=yOf(candles[latest.index]?.close??0);if(x==null||y==null)return null;const label=orderFlow.direction==="BUY"?"OF BUY CONFIRMED":"OF SELL CONFIRMED";return <><circle cx={x} cy={y} r="8" className={orderFlow.direction==="BUY"?"of-buy-marker":"of-sell-marker"}/>{text(Math.min(x+10,width-125),y,label,"orderflow-signal-label")}</>})()}</g>}
   </g>;
  })() : null;
+ const footprintOverlay = showOrderFlow && orderFlow.footprint ? (() => {
+  const fp=orderFlow.footprint;
+  const fpIndex=candles.findIndex(c=>c.time===fp.candleTime);
+  const sourceLevels=[...fp.levels].filter(l=>Number.isFinite(yOf(l.price))).sort((a,b)=>b.totalVolume-a.totalVolume).slice(0,24).sort((a,b)=>a.price-b.price);
+  const maxVol=Math.max(...sourceLevels.map(l=>l.totalVolume),1e-12);
+  const xBase=Math.min(Math.max(10,(xOf(fpIndex)??xLast)+18),Math.max(10,width-92));
+  return <g className="footprint-chart-layer">
+   {sourceLevels.map((l,i)=>{const y=yOf(l.price);if(y==null)return null;const buyW=Math.max(2,32*(l.buyVolume/maxVol));const sellW=Math.max(2,32*(l.sellVolume/maxVol));return <g key={"fp"+i}>
+    <rect x={xBase-buyW} y={y-3} width={buyW} height="5" rx="1" className="footprint-buy"/>
+    <rect x={xBase+2} y={y-3} width={sellW} height="5" rx="1" className="footprint-sell"/>
+    <text x={xBase+sellW+5} y={y+3} className="footprint-value">{l.delta>0?"+" : ""}{l.delta.toFixed(2)}</text>
+   </g>})}
+   {fp.poc!=null&&(()=>{const y=yOf(fp.poc);return y==null?null:<g><line x1={Math.max(0,xBase-38)} x2={Math.min(width,xBase+62)} y1={y} y2={y} className="footprint-poc"/>{text(xBase+3,y,"POC","footprint-poc-label")}</g>})()}
+  </g>;
+ })() : null;
  const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={f.label==="161.8%"||f.label==="261.8%"?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
  const wave=showElliott?[
   elliott.primary?drawWave(elliott.primary.points,"impulse-"):null,
@@ -448,8 +463,9 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   <div className={`setup-panel orderflow-setup-panel ${orderFlow.direction==="SELL"?"bear":""}`}>
    <div className="setup-head"><span>ORDER FLOW SETUP</span><strong className={orderFlow.direction!=="WAIT"?"setup-active":"setup-wait"}>{orderFlow.direction!=="WAIT"?"CONFIRMED":"WAIT"}</strong></div>
    <div className="setup-grid">
-    <span>Signal<b>{orderFlow.direction}</b></span><span>Confidence<b>{orderFlow.confidence}/100</b></span><span>Buyer P<b>{orderFlow.buyerPressure.toFixed(1)}%</b></span><span>Seller P<b>{orderFlow.sellerPressure.toFixed(1)}%</b></span>
-    <span>Delta<b>{fmt(orderFlow.delta)}</b></span><span>Imbalance<b>{orderFlow.imbalance}</b></span><span>Absorption<b>{orderFlow.absorption}</b></span><span>Liquidity<b>{orderFlow.liquiditySweep}</b></span>
+    <span>Source<b>{orderFlow.source==="BINANCE_FOOTPRINT"?"FOOTPRINT":"WAIT"}</b></span><span>Signal<b>{orderFlow.direction}</b></span><span>Confidence<b>{orderFlow.confidence}/100</b></span><span>FP Bars<b>{orderFlow.footprintHistoryCount}/12</b></span>
+    <span>Buyer P<b>{orderFlow.buyerPressure.toFixed(1)}%</b></span><span>Seller P<b>{orderFlow.sellerPressure.toFixed(1)}%</b></span><span>Delta<b>{fmt(orderFlow.delta)}</b></span><span>FP Imbalance<b>{orderFlow.footprint?("B "+orderFlow.footprint.stackedBuyImbalances+" / S "+orderFlow.footprint.stackedSellImbalances):"—"}</b></span>
+    <span>Absorption<b>{orderFlow.absorption}</b></span><span>Liquidity<b>{orderFlow.liquiditySweep}</b></span><span>POC<b>{orderFlow.footprint?.poc!=null?orderFlow.footprint.poc.toFixed(4):"—"}</b></span><span>FP Δ<b>{orderFlow.footprint?orderFlow.footprint.deltaRatio.toFixed(3):"—"}</b></span>
     <span>Entry<b>{fmt(orderFlow.entry)}</b></span><span>SL<b>{fmt(orderFlow.stop)}</b></span><span>TP1<b>{orderFlow.targets[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{orderFlow.targets[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{orderFlow.targets[2]?.toFixed(4)||"—"}</b></span>
    </div>
    <div className="setup-empty">{orderFlow.confirmations.length?orderFlow.confirmations.join(" · "):orderFlow.signal}</div>
@@ -458,12 +474,13 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  return (
   <div className="chart-overlay-wrap">
    <div className="analysis-debug">
-    ANALYSIS · {candles.length} CLOSED CANDLES · SMC {smc.events.length} BOS/CHOCH · FVG {smc.fvgs.length} · OB {smc.orderBlocks.length} · LIQ {smc.liquidityHighs.length+smc.liquidityLows.length} · REVERSAL {reversal.state} {reversal.direction} {reversal.score}/100 · MTF {mtfReversal.state} {mtfReversal.direction} {mtfReversal.score}/100 · ELLIOTT {elliott.primary?(elliott.pattern+" "+elliott.degree):elliott.correction?(elliott.correctionPattern+" CANDIDATE"):"—"}
+    ANALYSIS · {candles.length} CLOSED CANDLES · SMC {smc.events.length} BOS/CHOCH · FVG {smc.fvgs.length} · OB {smc.orderBlocks.length} · LIQ {smc.liquidityHighs.length+smc.liquidityLows.length} · REVERSAL {reversal.state} {reversal.direction} {reversal.score}/100 · MTF {mtfReversal.state} {mtfReversal.direction} {mtfReversal.score}/100 · FOOTPRINT {orderFlow.footprintHistoryCount}/12 · ELLIOTT {elliott.primary?(elliott.pattern+" "+elliott.degree):elliott.correction?(elliott.correctionPattern+" CANDIDATE"):"—"}
    </div>
    <svg className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
     {showSMC&&<>{zones}{structure}{liquidity}{trade}</>}
     {showElliott&&<>{eliteTrade}{wave}{fib}</>}
     {orderFlowMarker}
+    {footprintOverlay}
     {reversalMarker}
     {mtfSignalMarker}
    </svg>
