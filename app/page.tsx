@@ -467,7 +467,7 @@ export default function Home(){
     <div className="scanner-controls">
       <label className="scanner-toggle"><input type="checkbox" checked={orderFlowScannerEnabled} onChange={e=>{setOrderFlowScannerEnabled(e.target.checked);if(!e.target.checked){setOrderFlowScanner([]);setOrderFlowScanProgress("");setOrderFlowScanError("")}}}/><b>{orderFlowScannerEnabled?"ON":"OFF"}</b><small>Show CONFIRMED setups only</small></label>
       <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)} disabled={!orderFlowScannerEnabled}>{intervals.map(tf=><option key={tf}>{tf}</option>)}</select>
-      <small>{orderFlowScanBusy?"Scanning "+(orderFlowScanProgress||"…"):orderFlowScanProgress||"Ready"} · Top 6 candidates · closed candles only · Binance footprint</small>
+      <small>{orderFlowScanBusy?"Scanning "+(orderFlowScanProgress||"…"):orderFlowScanProgress||"Ready"} · ALL eligible pairs · closed candles only · Binance footprint</small>
     </div>
     {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner OFF — no pair scan is running.</div>}
     {orderFlowScannerEnabled&&orderFlowScanError&&<div className="setup-empty">Scanner error: {orderFlowScanError}</div>}
