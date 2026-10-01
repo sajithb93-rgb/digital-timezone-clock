@@ -73,7 +73,7 @@ type MutableBar = {
 };
 
 export function analyzeFootprintSnapshot(
-  snapshot: Omit<FootprintSnapshot, "absorption" | "absorptionStrength">,
+  snapshot: Omit<FootprintSnapshot, "absorption" | "absorptionStrength" | "stackedBuyImbalances" | "stackedSellImbalances" | "maxPositiveDelta" | "maxNegativeDelta">,
   candle: Candle | undefined,
   tickSize: number,
 ): FootprintSnapshot {
