@@ -102,6 +102,7 @@ export default function Home(){
  const selectedPair=pairs.find(p=>p.symbol===symbol); const risk=useMemo(()=>riskPlan(account,riskPercent,smc.setup.status==="ACTIVE"?smc.setup.entry:null,smc.setup.status==="ACTIVE"?smc.stop:null,selectedPair,smc.setup.direction),[account,riskPercent,smc.setup.status,smc.setup.entry,smc.stop,selectedPair,smc.setup.direction]);
  const newsRisk:NewsRisk=useMemo(()=>newsError?{level:"HIGH",blocked:true,message:"News calendar unavailable — trading blocked until news data is available"}:getNewsRisk(newsEvents,newsNow,30),[newsError,newsEvents,newsNow]);
  const combinedParts=[smc.score,elliott.score,mtf.score].filter(v=>v>0); const combined=combinedParts.length?Math.round(combinedParts.reduce((s,v)=>s+v,0)/combinedParts.length):0;
+ const showOrderFlow=mode==="orderflow";
 
  useEffect(()=>{ const controller=new AbortController(); const load=async()=>{setNewsLoading(true);try{setNewsEvents(await fetchNewsEvents(controller.signal));setNewsError(false)}catch{setNewsEvents([]);setNewsError(true)}finally{if(!controller.signal.aborted)setNewsLoading(false)}}; load(); const refresh=window.setInterval(load,10*60*1000); const clock=window.setInterval(()=>setNewsNow(Date.now()),30*1000); return()=>{controller.abort();clearInterval(refresh);clearInterval(clock)}; },[]);
 
