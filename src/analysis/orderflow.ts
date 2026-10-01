@@ -82,7 +82,7 @@ function emptyResult():OrderFlowResult{
     buyerPressure:0,sellerPressure:0,pressure:"BALANCED",pressureTrend:"NEUTRAL",imbalance:"NONE",imbalanceRatio:0,
     absorption:"NONE",absorptionStrength:0,liquiditySweep:"NONE",liquiditySweepPrice:null,microStructure:"NEUTRAL",
     direction:"WAIT",signal:"WAIT — no confirmed closed-candle order-flow setup",confidence:0,confirmations:[],
-    entry:null,stop:null,targets:[],recentBars:[]};
+    entry:null,stop:null,targets:[],recentBars:[],footprint:null,footprintHistoryCount:0};
 }
 
 /**
