@@ -91,7 +91,15 @@ function emptyResult():OrderFlowResult{
  * - historical bars are never modified by future candles.
  */
 export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
-  const closed=candles.filter(c=>c.closed!==false);
+  // Normalize the feed so causal analysis cannot be broken by bad ordering,
+  // duplicate timestamps, malformed OHLC, or impossible candles.
+  const byTime=new Map<number,Candle>();
+  for(const c of candles){
+    if(!Number.isFinite(c.time)||!Number.isFinite(c.open)||!Number.isFinite(c.high)||!Number.isFinite(c.low)||!Number.isFinite(c.close)||!Number.isFinite(c.volume))continue;
+    if(c.volume<0||c.high<c.low||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))continue;
+    byTime.set(c.time,c);
+  }
+  const closed=[...byTime.values()].filter(c=>c.closed!==false).sort((x,y)=>x.time-y.time);
   if(!closed.length)return emptyResult();
 
   let cumulativeDelta=0,allExact=true;
@@ -144,7 +152,7 @@ export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
 
   let entry:number|null=null,stop:number|null=null,targets:number[]=[];
   if(direction!=="WAIT"){
-    entry=last.time===closed.at(-1)!.time?closed.at(-1)!.close:null;
+    entry=closed.at(-1)!.close;
     const buffer=avg(closed.slice(-5).map(c=>barRange(c)))*0.10;
     if(direction==="BUY"){
       const base=sweepLow?.sweepPrice??Math.min(...closed.slice(-5).map(c=>c.low));
@@ -168,7 +176,8 @@ export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
     buyVolume,sellVolume,delta:safe(delta),deltaRatio:safe(deltaRatio),cumulativeDelta:safe(cumulativeDelta),
     buyerPressure:clamp(buyerPressure),sellerPressure:clamp(sellerPressure),pressure,pressureTrend,
     imbalance:last.imbalance,imbalanceRatio:safe(lastImbalanceRatio),absorption:last.absorption,
-    absorptionStrength:last.absorptionStrength,liquiditySweep:last.liquiditySweep,liquiditySweepPrice:last.sweepPrice,
+    absorptionStrength:last.absorptionStrength,liquiditySweep:direction==="BUY"?(sweepLow?.liquiditySweep??"NONE"):direction==="SELL"?(sweepHigh?.liquiditySweep??"NONE"):"NONE",
+    liquiditySweepPrice:direction==="BUY"?(sweepLow?.sweepPrice??null):direction==="SELL"?(sweepHigh?.sweepPrice??null):null,
     microStructure:last.microStructure,direction,signal,confidence:direction==="WAIT"?0:100,confirmations,
     entry,stop,targets,recentBars
   };
