@@ -1,11 +1,12 @@
 import type { Candle } from "./engine";
+import type { FootprintSnapshot } from "./footprint";
 
 export type OrderFlowPressure = "BUYERS" | "SELLERS" | "BALANCED";
 export type OrderFlowDirection = "BUY" | "SELL" | "WAIT";
 export type OrderFlowAbsorption = "BUYER" | "SELLER" | "NONE";
 export type LiquiditySweep = "HIGH" | "LOW" | "NONE";
 export type MicroStructure = "BULLISH" | "BEARISH" | "NEUTRAL";
-export type OrderFlowDataSource = "BINANCE_TAKER_FLOW" | "CANDLE_ESTIMATE_FALLBACK";
+export type OrderFlowDataSource = "BINANCE_FOOTPRINT" | "BINANCE_TAKER_FLOW" | "CANDLE_ESTIMATE_FALLBACK";
 
 export type OrderFlowBar = {
   index:number; time:number; buyVolume:number; sellVolume:number; delta:number; deltaRatio:number;
@@ -22,6 +23,7 @@ export type OrderFlowResult = {
   liquiditySweepPrice:number|null; microStructure:MicroStructure; direction:OrderFlowDirection;
   signal:string; confidence:number; confirmations:string[]; entry:number|null; stop:number|null;
   targets:number[]; recentBars:OrderFlowBar[];
+  footprint: FootprintSnapshot|null; footprintHistoryCount:number;
 };
 
 function clamp(n:number,lo=0,hi=100){return Math.max(lo,Math.min(hi,Math.round(n)))}
@@ -90,7 +92,7 @@ function emptyResult():OrderFlowResult{
  * - confirmation is evaluated only on the latest closed candle;
  * - historical bars are never modified by future candles.
  */
-export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
+export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]=[]):OrderFlowResult{
   // Normalize the feed so causal analysis cannot be broken by bad ordering,
   // duplicate timestamps, malformed OHLC, or impossible candles.
   const byTime=new Map<number,Candle>();
@@ -114,10 +116,19 @@ export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
   if(!last)return emptyResult();
 
   const flowBars=bars.slice(-12);
-  const buyVolume=flowBars.reduce((s,b)=>s+b.buyVolume,0);
-  const sellVolume=flowBars.reduce((s,b)=>s+b.sellVolume,0);
+  const candleBuyVolume=flowBars.reduce((s,b)=>s+b.buyVolume,0);
+  const candleSellVolume=flowBars.reduce((s,b)=>s+b.sellVolume,0);
+  const candleTotal=Math.max(candleBuyVolume+candleSellVolume,1e-12);
+  const candleDelta=candleBuyVolume-candleSellVolume;
+
+  const fpRecent=footprints.filter(f=>f.confirmed).slice(-12);
+  const latestFootprint=fpRecent.find(f=>f.candleTime===last.time) ?? null;
+  const useFootprint=!!latestFootprint && fpRecent.length>=12;
+  const buyVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.buyVolume,0):candleBuyVolume;
+  const sellVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.sellVolume,0):candleSellVolume;
   const total=Math.max(buyVolume+sellVolume,1e-12);
-  const delta=buyVolume-sellVolume,deltaRatio=delta/total;
+  const delta=useFootprint?buyVolume-sellVolume:candleDelta;
+  const deltaRatio=delta/total;
   const buyerPressure=buyVolume/total*100,sellerPressure=sellVolume/total*100;
   const pressure:OrderFlowPressure=deltaRatio>=0.08?"BUYERS":deltaRatio<=-0.08?"SELLERS":"BALANCED";
 
@@ -139,8 +150,11 @@ export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
   // The 12-bar pressure filter must actually have 12 closed bars behind it.
   // Otherwise a short initial dataset could be mislabeled as a "12-bar" setup.
   const sufficientHistory=closed.length>=12;
-  const longConfirmed=sufficientHistory&&allExact&&longContext&&pressure==="BUYERS"&&last.deltaRatio>=0.08&&last.imbalance==="BUY"&&last.microStructure==="BULLISH";
-  const shortConfirmed=sufficientHistory&&allExact&&shortContext&&pressure==="SELLERS"&&last.deltaRatio<=-0.08&&last.imbalance==="SELL"&&last.microStructure==="BEARISH";
+  const footprintReady=useFootprint&&latestFootprint.confirmed&&latestFootprint.stackedBuyImbalances>=2||useFootprint&&latestFootprint.confirmed&&latestFootprint.stackedSellImbalances>=2;
+  const latestBuyConfirm=!!latestFootprint&&latestFootprint.deltaRatio>=0.08&&latestFootprint.stackedBuyImbalances>=2&&latestFootprint.absorption==="BUYER";
+  const latestSellConfirm=!!latestFootprint&&latestFootprint.deltaRatio<=-0.08&&latestFootprint.stackedSellImbalances>=2&&latestFootprint.absorption==="SELLER";
+  const longConfirmed=sufficientHistory&&allExact&&useFootprint&&footprintReady&&longContext&&pressure==="BUYERS"&&latestBuyConfirm&&last.microStructure==="BULLISH";
+  const shortConfirmed=sufficientHistory&&allExact&&useFootprint&&footprintReady&&shortContext&&pressure==="SELLERS"&&latestSellConfirm&&last.microStructure==="BEARISH";
 
   let direction:OrderFlowDirection="WAIT";
   if(longConfirmed&&!shortConfirmed)direction="BUY";
@@ -175,13 +189,13 @@ export function analyzeOrderFlow(candles:Candle[]):OrderFlowResult{
   const lastImbalanceRatio=Math.max(last.buyVolume,last.sellVolume)/Math.max(Math.min(last.buyVolume,last.sellVolume),1e-12);
 
   return {
-    source:allExact?"BINANCE_TAKER_FLOW":"CANDLE_ESTIMATE_FALLBACK",
+    source:useFootprint?"BINANCE_FOOTPRINT":allExact?"BINANCE_TAKER_FLOW":"CANDLE_ESTIMATE_FALLBACK",
     buyVolume,sellVolume,delta:safe(delta),deltaRatio:safe(deltaRatio),cumulativeDelta:safe(cumulativeDelta),
     buyerPressure:clamp(buyerPressure),sellerPressure:clamp(sellerPressure),pressure,pressureTrend,
     imbalance:last.imbalance,imbalanceRatio:safe(lastImbalanceRatio),absorption:last.absorption,
     absorptionStrength:last.absorptionStrength,liquiditySweep:direction==="BUY"?(sweepLow?.liquiditySweep??"NONE"):direction==="SELL"?(sweepHigh?.liquiditySweep??"NONE"):"NONE",
     liquiditySweepPrice:direction==="BUY"?(sweepLow?.sweepPrice??null):direction==="SELL"?(sweepHigh?.sweepPrice??null):null,
     microStructure:last.microStructure,direction,signal,confidence:direction==="WAIT"?0:100,confirmations,
-    entry,stop,targets,recentBars
+    entry,stop,targets,recentBars,footprint:latestFootprint,footprintHistoryCount:fpRecent.length
   };
 }
