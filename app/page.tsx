@@ -128,7 +128,7 @@ export default function Home(){
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState("");
- const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null);
+ const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
  const elliott=useMemo(()=>analyzeElliott(analysisCandles),[analysisCandles]);
@@ -152,9 +152,14 @@ export default function Home(){
  useEffect(()=>{let stop=false;const cfg=marketConfig[marketType];const load=()=>binanceFetchJson(`${cfg.rest}/ticker/24hr`).then((d:any[])=>{if(stop||!Array.isArray(d))return;setScanner(d.filter(x=>typeof x.symbol==="string"&&Number(x.quoteVolume)>10000000).map(x=>({symbol:x.symbol,priceChangePercent:Number(x.priceChangePercent),quoteVolume:Number(x.quoteVolume)})).filter(x=>Number.isFinite(x.priceChangePercent)&&Number.isFinite(x.quoteVolume)).sort((a,b)=>b.quoteVolume-a.quoteVolume).slice(0,20))}).catch(()=>{});load();const id=window.setInterval(load,60000);return()=>{stop=true;clearInterval(id)}},[marketType]);
  useEffect(()=>{
   let stop=false;
+  const runId=++orderFlowScanRunRef.current;
+  const isCurrent=()=>!stop&&orderFlowScanRunRef.current===runId;
   const scan=async()=>{
-   if(stop||!orderFlowScannerEnabled||!pairs.length)return;
+   if(!isCurrent()||!orderFlowScannerEnabled||!pairs.length)return;
    setOrderFlowScanBusy(true);
+   // Start a fresh live-confirmed list for this scan run. Confirmed pairs are
+   // added immediately as each worker finishes instead of waiting for all pairs.
+   setOrderFlowScanner([]);
    try{
     const candidates=pairs
       .filter(p=>quoteFilter==="ALL"||p.quoteAsset===quoteFilter)
@@ -167,17 +172,14 @@ export default function Home(){
     setOrderFlowScanError("");
     if(!total){setOrderFlowScanner([]);setOrderFlowScanProgress("DONE · 0 eligible pairs");return}
     // Scan every eligible Binance trading pair, but keep the REST queue bounded.
-    // Binance documents that 429 means the request rate limit was exceeded and
-    // recommends backing off rather than continuing to poll aggressively.
     const workerCount=Math.min(2,total);
     let cursor=0;
+    let doneCount=0;
     const scanOne=async(c:{pair:BinanceSymbol;rank:number;volume:number})=>{
       try{
        const tfMs=intervalMs(orderFlowScanTf);
        const supportedTf=orderFlowScanTf==="1m"||orderFlowScanTf==="5m"||orderFlowScanTf==="15m";
        if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
-       // Only 24 closed candles are needed for the causal Order Flow rules.
-       // Keep a little extra context without downloading 180 candles per pair.
        const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType)).filter(x=>x.closed!==false);
        const lookback=Math.max(tfMs*14,60*60*1000);
        const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,undefined,12);
@@ -191,24 +193,32 @@ export default function Home(){
       }
     };
     const worker=async()=>{
-      while(!stop){
+      while(isCurrent()){
        const i=cursor++;
        if(i>=total)break;
        const row=await scanOne(candidates[i]);
+       if(!isCurrent())break;
        rows[i]=row;
-       const done=rows.filter(Boolean).length;
-       setOrderFlowScanProgress(`${done}/${total} · ${candidates[i].pair.symbol}`);
+       doneCount+=1;
+       if(row.state==="CONFIRMED"){
+        setOrderFlowScanner(prev=>{
+         if(orderFlowScanRunRef.current!==runId)return prev;
+         const next=[...prev.filter(x=>x.symbol!==row.symbol),row];
+         return next.sort((a,b)=>b.score-a.score||a.symbol.localeCompare(b.symbol));
+        });
+       }
+       setOrderFlowScanProgress(`${doneCount}/${total} · ${candidates[i].pair.symbol}`);
       }
     };
     await Promise.all(Array.from({length:workerCount},()=>worker()));
-    if(!stop){
+    if(isCurrent()){
       const confirmed=rows.filter(Boolean).filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);
       setOrderFlowScanner(confirmed);
       setOrderFlowScanUpdated(Date.now());
       setOrderFlowScanProgress(`DONE · ${total} pairs · ${confirmed.length} confirmed`);
     }
-   }catch(e){if(!stop)setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
-   finally{if(!stop)setOrderFlowScanBusy(false)}
+   }catch(e){if(isCurrent())setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
+   finally{if(isCurrent())setOrderFlowScanBusy(false)}
   };
   scan();
   const id=window.setInterval(scan,180000);
@@ -479,13 +489,16 @@ export default function Home(){
     </div>
     {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner OFF — no pair scan is running.</div>}
     {orderFlowScannerEnabled&&orderFlowScanError&&<div className="setup-empty">Scanner error: {orderFlowScanError}</div>}
+    {orderFlowScannerEnabled&&orderFlowScanner.length>0&&<div className="scanner-live-confirmed">
+      <div className="scanner-live-title"><span>CONFIRMED SETUPS</span><small>{orderFlowScanBusy?"LIVE · updating as pairs confirm":"SCAN COMPLETE"}</small></div>
+      {orderFlowScanner.map(x=><div className="scanner-row scanner-confirmed-row" key={x.symbol+"-"+x.timeframe}>
+        <span><b>{x.symbol}</b><small>{x.timeframe} · FP {x.footprintBars}/12</small></span>
+        <b className="positive">{x.direction} · CONFIRMED</b>
+        <small>{x.score}/100</small>
+      </div>)}
+    </div>}
     {orderFlowScannerEnabled&&orderFlowScanner.length===0&&!orderFlowScanBusy&&!orderFlowScanError&&<div className="setup-empty">No CONFIRMED Order Flow setups found.</div>}
-    {orderFlowScannerEnabled&&orderFlowScanner.map(x=><div className="scanner-row" key={x.symbol+"-"+x.timeframe}>
-      <span><b>{x.symbol}</b><small>{x.timeframe} · FP {x.footprintBars}/12</small></span>
-      <b className="positive">{x.direction} · CONFIRMED</b>
-      <small>{x.score}/100</small>
-    </div>)}
-    {orderFlowScannerEnabled&&orderFlowScanner.slice(0,3).map(x=><div className="scanner-reason" key={"reason-"+x.symbol}>{x.symbol}: {x.reason}</div>)}
+    {orderFlowScannerEnabled&&orderFlowScanner.length===0&&orderFlowScanBusy&&<div className="setup-empty">Scanning… confirmed setups will appear here as soon as each pair is confirmed.</div>}
    </div>}
 
 <details className="more-tools side-tools"><summary>More market data <span>MTF · Derivatives · Scanner · Status</span></summary><div className="panel-card mtf-card"><div className="section-title">MULTI-TIMEFRAME</div>{mtf.frames.map(f=><div className="mtf-row" key={f.interval}><span>{f.interval}</span><b className={f.trend==="Bullish"?"positive":f.trend==="Bearish"?"negative":""}>{f.available?f.trend:"UNAVAILABLE"}</b><small>{f.structure} · SMC/COMBINED {f.score}/100 · EW {f.elliottTrend} {f.elliottScore}/100</small></div>)}</div>
