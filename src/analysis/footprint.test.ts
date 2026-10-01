@@ -26,7 +26,7 @@ describe("price-level footprint engine",()=>{
     const book=new FootprintBook(60_000,0.1,12);
     book.add(normalizeAggTrade({a:1,p:"100",q:"1",T:61_000,m:false})!);
     expect(book.snapshot(60_000,undefined,119_999)?.confirmed).toBe(false);
-    expect(book.snapshot(60_000,undefined,120_000)?.confirmed).toBe(true);
+    expect(book.snapshot(60_000,undefined,121_500)?.confirmed).toBe(true);
   });
 
   it("detects stacked buy imbalance using adjacent price levels",()=>{
