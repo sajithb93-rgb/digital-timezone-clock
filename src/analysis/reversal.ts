@@ -127,7 +127,7 @@ function chooseZone(smc: SMCResult, direction: ReversalDirection, sweepIndex: nu
 
 function findRelevantFvg(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, anchorIndex: number): ReversalEngineResult["fvg"] {
   const wanted = direction === "BUY" ? "bullish" : "bearish";
-  const item = smc.fvgs.filter(x => x.type === wanted && !x.filled && x.to >= sweepIndex && x.to <= anchorIndex && anchorIndex - x.to <= 12).at(-1);
+  const item = smc.fvgs.filter(x => x.type === wanted && !x.filled && !x.partial && x.to >= sweepIndex && x.to <= anchorIndex && anchorIndex - x.to <= 12).at(-1);
   return item ? { low: item.low, high: item.high, index: item.to } : null;
 }
 
@@ -188,7 +188,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
   for (const direction of ["BUY", "SELL"] as const) {
     const sweepType = direction === "BUY" ? "low" : "high";
     const structureDirection = direction === "BUY" ? "bullish" : "bearish";
-    const sweep = smc.sweeps.filter(s => s.type === sweepType && s.index >= lookbackStart && s.index <= asOf).sort((a, b) => b.index - a.index)[0] ?? null;
+    const sweep = smc.sweeps.filter(s => s.confirmed && s.type === sweepType && s.index >= lookbackStart && s.index <= asOf).sort((a, b) => b.index - a.index)[0] ?? null;
     if (!sweep) continue;
 
     // Reversal causality uses a strict three-stage sequence:
