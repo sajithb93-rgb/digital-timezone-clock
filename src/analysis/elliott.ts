@@ -136,8 +136,10 @@ function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean):Ne
   };
 
   let best:Pivot[]|null=null;
+  const expectedTypes=bullish?["L","H","L","H","L","H"]:["H","L","H","L","H","L"];
   for(let i=0;i<=internal.length-4;i++){
     const candidate=[boundaryStart,...internal.slice(i,i+4),boundaryEnd];
+    if(candidate.some((p,j)=>p.type!==expectedTypes[j]))continue;
     const prices=candidate.map(p=>p.price);
     if(validateNestedImpulse(prices,bullish).valid){
       best=candidate;
