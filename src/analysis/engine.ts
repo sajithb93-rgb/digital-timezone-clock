@@ -54,7 +54,8 @@ function pivots(c:Candle[],w=3):Pivot[]{
 }
 
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
-export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}\nexport function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{\n return sweepIndex>=0\n  &&swingBreakIndex>sweepIndex\n  &&swingBreakIndex-sweepIndex<=maxGap\n  &&internalBreakIndex!==null\n  &&internalBreakIndex>=swingBreakIndex\n  &&internalBreakIndex-swingBreakIndex<=maxGap;\n}
+export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}
+export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{\n return sweepIndex>=0\n  &&swingBreakIndex>sweepIndex\n  &&swingBreakIndex-sweepIndex<=maxGap\n  &&internalBreakIndex!==null\n  &&internalBreakIndex>=swingBreakIndex\n  &&internalBreakIndex-swingBreakIndex<=maxGap;\n}
 export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
  if(sweepIndex<0||sweepIndex>asOf||sweepIndex>=c.length)return false;
  const sweepCandle=c[sweepIndex];
@@ -197,8 +198,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bullBreak+1;j<=end;j++){
-     if(m===undefined&&c[j].low<=c[i].open)m=j;     if(c[j].close<c[i].low){invalid=j;break}
-    }
+     if(m===undefined&&c[j].low<=c[i].open)m=j;     if(c[j].close<c[i].low){invalid=j;break}    }
     // If the block is invalidated before its first mitigation, discard it.
     // Once mitigated, keep it only as historical/mitigated state.
     if(invalid===undefined||(m!==undefined&&m<invalid)){
@@ -397,8 +397,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const hasSwing=confirmations.includes("Swing structure aligned");
  const hasInternal=confirmations.includes("Internal structure aligned"); const hasSweep=confirmations.includes("Liquidity sweep + displacement");
  const hasPD=confirmations.includes("Premium/discount aligned");
- const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap");
- // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
+ const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap"); // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
  // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
  const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&internalCausal&&selectedZone?.linked===true&&zoneCausal;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
