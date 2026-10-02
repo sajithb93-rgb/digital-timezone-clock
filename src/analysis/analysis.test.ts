@@ -53,6 +53,12 @@ describe("analysis regression",()=>{
     expect(inverse.positionSize).toBe(20);
   });
 
+  it("floors quantity from the exchange minQty step origin",()=>{
+    const r=riskPlan(1000,1,100,99.2,{minQty:0.15,maxQty:10,stepSize:0.1,minNotional:0},"BUY");
+    expect(r.valid).toBe(true);
+    expect(r.positionSize).toBe(1.15);
+  });
+
   it("rejects risk when stop is on the wrong side",()=>{
     expect(riskPlan(1000,1,100,105,{}, "BUY").valid).toBe(false);
     expect(riskPlan(1000,1,100,95,{}, "SELL").valid).toBe(false);
