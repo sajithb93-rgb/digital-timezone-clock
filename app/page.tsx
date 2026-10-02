@@ -516,7 +516,7 @@ export default function Home(){
     if(!stop)setFootprintConnected(false);
    }finally{
     historyLoading=false;
-    if(!stop)setFootprintVersion(v=>v+1);
+    if(!stop){setFootprintHistoryReady(true);setFootprintVersion(v=>v+1);}
    }
   };
   void loadHistory();connect();
