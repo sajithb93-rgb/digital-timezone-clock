@@ -470,7 +470,7 @@ function diagonalCandidates(c:Candle[],bull:boolean){
     const w5Direction=bull?p5>p4:p5<p4;
     // Elliott's Wave 3 may not be the shortest of Waves 1, 3 and 5.
     // Compare against both actionary waves, not just the smaller one.
-    const w3NotShortest=w3>=Math.min(w1,w5);
+    const w3NotShortest=w3>Math.min(w1,w5);
     if(!(positiveLengths&&w2Valid&&w3BeyondW1&&overlap&&w3NotShortest&&w5Direction))continue;
     const contracting=w3<w1&&w4<w2&&w5<w3,expanding=w3>w1&&w4>w2&&w5>w3;
     // A diagonal still needs a coherent contracting or expanding structure.
