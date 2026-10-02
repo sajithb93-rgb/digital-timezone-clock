@@ -14,7 +14,7 @@ export function normalizeCandleSeries<T extends CandleLike>(candles:T[],stopAtOp
  const ambiguous=new Set<number>();
  for(const x of candles){
   if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
-  if(x.time<=0||x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+  if(x.time<0||x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
   if(ambiguous.has(x.time))continue;
   const prev=byTime.get(x.time);
   if(!prev){byTime.set(x.time,x);continue;}
