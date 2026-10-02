@@ -490,9 +490,9 @@ export default function Home(){
    try{
     const cfg=marketConfig[marketType==="spot"?"usdm":marketType];
     const [o,p,tt]=await Promise.all([
-      binanceFetchJson(`${cfg.rest}`/openInterest?symbol=${encodeURIComponent(symbol)}`,{signal:controller.signal}),
-      binanceFetchJson(`${cfg.rest}`/premiumIndex?symbol=${encodeURIComponent(symbol)}`,{signal:controller.signal}),
-      binanceFetchJson(`${cfg.rest}`/ticker/24hr?symbol=${encodeURIComponent(symbol)}`,{signal:controller.signal})
+      binanceFetchJson(cfg.rest+"/openInterest?symbol="+encodeURIComponent(symbol),{signal:controller.signal}),
+      binanceFetchJson(cfg.rest+"/premiumIndex?symbol="+encodeURIComponent(symbol),{signal:controller.signal}),
+      binanceFetchJson(cfg.rest+"/ticker/24hr?symbol="+encodeURIComponent(symbol),{signal:controller.signal})
     ]);
     if(!stop)setDerivatives({openInterest:o.openInterest,fundingRate:p.lastFundingRate,change24h:tt.priceChangePercent})
    }catch{if(!stop&&!controller.signal.aborted)setDerivatives(null)}
