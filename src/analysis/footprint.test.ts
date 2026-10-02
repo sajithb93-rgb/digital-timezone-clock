@@ -38,6 +38,44 @@ describe("price-level footprint engine",()=>{
     expect(s.stackedBuyImbalances).toBeGreaterThanOrEqual(1);
   });
 
+  it("preserves fractional tick prices such as 0.25 when bucketing levels",()=>{
+    const book=new FootprintBook(60_000,0.25,12);
+    book.add(normalizeAggTrade({a:1,p:"100.24",q:"1",T:61_000,m:false})!);
+    book.add(normalizeAggTrade({a:2,p:"100.26",q:"1",T:61_001,m:true})!);
+    const s=book.snapshot(60_000,undefined,120_000)!;
+    expect(s.levels.map(x=>x.price)).toContain(100.25);
+    expect(s.levels.some(x=>x.price===100.3)).toBe(false);
+  });
+
+  it("does not build a stacked imbalance across a missing price step",()=>{
+    const snapshot:any={
+      candleTime:60_000,intervalMs:60_000,confirmed:true,
+      levels:[
+        {price:99,buyVolume:0,sellVolume:1,delta:-1,totalVolume:1,buyTrades:0,sellTrades:1},
+        {price:100,buyVolume:4,sellVolume:0,delta:4,totalVolume:4,buyTrades:1,sellTrades:0},
+        {price:102,buyVolume:30,sellVolume:0,delta:30,totalVolume:30,buyTrades:1,sellTrades:0}
+      ],
+      buyVolume:34,sellVolume:1,delta:33,deltaRatio:33/35,poc:102
+    };
+    const result=analyzeFootprintSnapshot(snapshot,undefined,1);
+    expect(result.stackedBuyImbalances).toBe(1);
+    expect(result.maxBuyImbalanceRatio).toBe(4);
+  });
+
+  it("does not classify zero-opposing-volume flow as buyer absorption",()=>{
+    const snapshot:any={
+      candleTime:60_000,intervalMs:60_000,confirmed:true,
+      levels:[
+        {price:99.1,buyVolume:0,sellVolume:10,delta:-10,totalVolume:10,buyTrades:0,sellTrades:2}
+      ],
+      buyVolume:0,sellVolume:10,delta:-10,deltaRatio:-1,poc:99.1
+    };
+    const candle={time:60_000,open:100,high:101,low:99,close:100.8,volume:10,closed:true};
+    const result=analyzeFootprintSnapshot(snapshot,candle,0.1);
+    expect(result.absorption).toBe("NONE");
+    expect(result.absorptionStrength).toBe(0);
+  });
+
   it("does not count separated imbalance levels as a stacked run",()=>{
     const snapshot:any={
       candleTime:60_000,intervalMs:60_000,confirmed:true,
