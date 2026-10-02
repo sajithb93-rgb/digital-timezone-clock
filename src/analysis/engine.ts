@@ -156,24 +156,40 @@ function labelPivots(ps:Pivot[]){
  return out;
 }
 function dealingRange(ps:Pivot[],c:Candle[],asOf:number){
- const confirmed=ps.filter(p=>(p.confirmedAt??p.index)<=asOf).sort((a,b)=>a.index-b.index);
- const rangeMinWidth=Math.max(atrAt(c,asOf,14)*2,.0000001);
+ const endIndex=Math.min(asOf,c.length-1);
+ const confirmed=ps
+  .filter(p=>(p.confirmedAt??p.index)<=endIndex&&p.index<=endIndex)
+  .sort((a,b)=>(a.confirmedAt??a.index)-(b.confirmedAt??b.index));
+ const rangeMinWidth=Math.max(atrAt(c,endIndex,14)*2,.0000001);
+ // Prefer the latest confirmed alternating swing pair that is wide enough
+ // to represent the active dealing range rather than micro-structure noise.
  for(let i=confirmed.length-1;i>0;i--){
   const a=confirmed[i],b=confirmed[i-1];
   if(a.type===b.type)continue;
   const high=a.type==="H"?a:b;
   const low=a.type==="L"?a:b;
-  // A dealing range must have enough price separation to be meaningful.
-  // Reject tiny adjacent swings that would make Premium/Discount flip
-  // on insignificant noise.
-  if(high.price>low.price&&high.price-low.price>=rangeMinWidth)return{
-   hi:high.price,lo:low.price,
-   anchorIndex:Math.min(high.index,low.index),
-   source:"confirmed-swing" as const
-  };
+  if(high.index> endIndex||low.index> endIndex)continue;
+  if(high.price>low.price&&high.price-low.price>=rangeMinWidth){
+   return{
+    hi:high.price,
+    lo:low.price,
+    anchorIndex:Math.min(high.index,low.index),
+    source:"confirmed-swing" as const
+   };
+  }
  }
- const r=range(c,asOf);
- return{hi:r.hi,lo:r.lo,anchorIndex:Math.max(0,asOf-59),source:"fallback-60" as const};
+ // If no meaningful swing pair exists, use only closed candles. The anchor
+ // is the actual first candle included, not an assumed asOf-59 index.
+ const closed=c.slice(0,endIndex+1).filter(x=>x.closed!==false).slice(-60);
+ if(!closed.length)return{hi:0,lo:0,anchorIndex:0,source:"fallback-60" as const};
+ const hi=Math.max(...closed.map(x=>x.high));
+ const lo=Math.min(...closed.map(x=>x.low));
+ return{
+  hi,
+  lo,
+  anchorIndex:Math.max(0,endIndex-(closed.length-1)),
+  source:"fallback-60" as const
+ };
 }
 function uniquePivots(ps:Pivot[],tol:number){
  const out:Pivot[]=[];
