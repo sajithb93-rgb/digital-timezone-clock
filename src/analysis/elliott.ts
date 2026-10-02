@@ -461,13 +461,15 @@ function diagonalCandidates(c:Candle[],bull:boolean){
     const w1=abs(p1-p0),w2=abs(p2-p1),w3=abs(p3-p2),w4=abs(p4-p3),w5=abs(p5-p4);
     const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
     const w3BeyondW1=bull?p3>p1:p3<p1;
-    const overlap=bull?p4<=p1&&p4>p2:p4>=p1&&p4<p2;
-    const w4NotPassW2=bull?p4>p2:p4<p2;
+    // For a diagonal, Wave 4 must enter Wave-1 price territory. It is not
+    // required to remain beyond the Wave-2 endpoint; imposing that extra
+    // restriction rejects valid deeper diagonal corrections.
+    const overlap=bull?p4<=p1&&p4>p0:p4>=p1&&p4<p0;
     const w5Direction=bull?p5>p4:p5<p4;
     // Elliott's Wave 3 may not be the shortest of Waves 1, 3 and 5.
     // Compare against both actionary waves, not just the smaller one.
     const w3NotShortest=w3>=w1&&w3>=w5;
-    if(!(w1>0&&w2>0&&w2Valid&&w3BeyondW1&&overlap&&w4NotPassW2&&w3NotShortest&&w5Direction))continue;
+    if(!(w1>0&&w2>0&&w2Valid&&w3BeyondW1&&overlap&&w3NotShortest&&w5Direction))continue;
     const contracting=w3<w1&&w4<w2&&w5<w3,expanding=w3>w1&&w4>w2&&w5>w3;
     // A diagonal still needs a coherent contracting or expanding structure.
     // Allowing "mixed" geometry to qualify creates false positives that only
