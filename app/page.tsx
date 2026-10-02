@@ -333,15 +333,11 @@ export default function Home(){
    if(uiFlushTimer){clearTimeout(uiFlushTimer);uiFlushTimer=undefined}
    pendingRealtimeCandle=null;
   };
-  const updateChartCandle=(c:Candle)=>{
-   const s=seriesRef.current;
-   if(!s)return;
-   try{s.update({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})}catch{}
-  };
   const flushRealtimeCandle=(c:Candle)=>{
    if(stop)return;
+   // The candles-state effect owns series updates; avoid a second direct
+   // Lightweight Charts update for the same realtime candle.
    setCandles(prev=>mergeCandles([c],prev,true));
-   updateChartCandle(c);
    pendingRealtimeCandle=null;
    if(uiFlushTimer){clearTimeout(uiFlushTimer);uiFlushTimer=undefined}
   };
