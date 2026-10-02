@@ -87,14 +87,16 @@ function displacementRatio(candles: Candle[], index: number): number {
 }
 
 function findDeltaDivergence(candles: Candle[], flow: OrderFlowResult, direction: ReversalDirection): boolean {
-  if (flow.recentBars.length < 6 || candles.length < 12) return false;
+  // Divergence compares equal-length recent and prior flow windows. A shorter
+  // history must not silently fall back to a one-bar baseline.
+  if (flow.recentBars.length < 12 || candles.length < 12) return false;
   const recentBars = flow.recentBars.slice(-6);
+  const priorBars = flow.recentBars.slice(-12, -6);
   const recentCandles = candles.slice(-6);
   const priorCandles = candles.slice(-12, -6);
-  if (recentCandles.length < 6 || priorCandles.length < 6) return false;
+  if (recentBars.length < 6 || priorBars.length < 6 || recentCandles.length < 6 || priorCandles.length < 6) return false;
   const recentDelta = recentBars.reduce((sum, b) => sum + b.deltaRatio, 0) / recentBars.length;
-  const priorBars = flow.recentBars.slice(0, Math.max(1, flow.recentBars.length - 6));
-  const priorDelta = priorBars.reduce((sum, b) => sum + b.deltaRatio, 0) / Math.max(1, priorBars.length);
+  const priorDelta = priorBars.reduce((sum, b) => sum + b.deltaRatio, 0) / priorBars.length;
   const recentLow = Math.min(...recentCandles.map(c => c.low));
   const priorLow = Math.min(...priorCandles.map(c => c.low));
   const recentHigh = Math.max(...recentCandles.map(c => c.high));
