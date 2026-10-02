@@ -400,11 +400,17 @@ function diagonalCandidates(c:Candle[],bull:boolean){
     const overlap=bull?p4<=p1&&p4>p2:p4>=p1&&p4<p2;
     const w4NotPassW2=bull?p4>p2:p4<p2;
     const w5Direction=bull?p5>p4:p5<p4;
-    const w3NotShortest=w3>=Math.min(w1,w5);
+    // Elliott's Wave 3 may not be the shortest of Waves 1, 3 and 5.
+    // Compare against both actionary waves, not just the smaller one.
+    const w3NotShortest=w3>=w1&&w3>=w5;
     if(!(w1>0&&w2>0&&w2Valid&&w3BeyondW1&&overlap&&w4NotPassW2&&w3NotShortest&&w5Direction))continue;
     const contracting=w3<w1&&w4<w2&&w5<w3,expanding=w3>w1&&w4>w2&&w5>w3;
+    // A diagonal still needs a coherent contracting or expanding structure.
+    // Allowing "mixed" geometry to qualify creates false positives that only
+    // satisfy the Wave-4 overlap rule.
+    if(!contracting&&!expanding)continue;
     const symmetry=1-Math.min(1,abs(w3/w1-w5/w3));
-    let quality=60+(contracting||expanding?13:5)+Math.round(symmetry*8);
+    let quality=60+13+Math.round(symmetry*8);
     const nested=internalEvidence(c,q[2].index,q[3].index,bull);
     if(nested.score>=60)quality+=5;
     const dir=bull?1:-1,risk=abs(p2-p0);
