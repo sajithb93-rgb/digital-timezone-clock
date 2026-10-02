@@ -60,8 +60,15 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
 async function fetchKlines(symbol:string,interval:string,limit=300,marketType:MarketKind="spot",signal?:AbortSignal):Promise<Candle[]>{
  const cfg=marketConfig[marketType];
  const init=signal?{signal}:undefined;
- const rows=await binanceFetchJson(`${cfg.rest}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`,init);
- return rows.map((x:any)=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5],takerBuyVolume:+x[9],closed:+x[6] <= Date.now()}));
+ const rows=await binanceFetchJson(cfg.rest+"/klines?symbol="+encodeURIComponent(symbol)+"&interval="+interval+"&limit="+limit,init);
+ if(!Array.isArray(rows))throw new Error("Binance kline response is invalid");
+ return rows.map((x:any)=>{
+   if(!Array.isArray(x)||x.length<10)return null;
+   const time=Number(x[0]),open=Number(x[1]),high=Number(x[2]),low=Number(x[3]),close=Number(x[4]),volume=Number(x[5]),takerBuyVolume=Number(x[9]),closeTime=Number(x[6]);
+   if(![time,open,high,low,close,volume,closeTime].every(Number.isFinite))return null;
+   if(time<=0||volume<0||high<low||high<Math.max(open,close)||low>Math.min(open,close)||closeTime<time)return null;
+   return {time,open,high,low,close,volume,takerBuyVolume:Number.isFinite(takerBuyVolume)?takerBuyVolume:undefined,closed:closeTime<=Date.now()};
+ }).filter((x:Candle|null):x is Candle=>x!==null).sort((a,b)=>a.time-b.time);
 }
 
 async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,signal?:AbortSignal,maxTrades=3000):Promise<AggTrade[]>{
