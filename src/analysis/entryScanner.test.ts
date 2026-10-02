@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classifySMCEntry, classifyElliottEntry } from "./entryScanner";
 
-const baseSMC:any={trend:"Bullish",asOf:12,setup:{direction:"BUY",status:"ACTIVE",entry:100,stop:98,targets:[104],rr:2,confidence:85,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned","Internal structure aligned"]},events:[{index:10,direction:"bullish"}],entryZone:{low:99,high:101},sweeps:[{index:8,type:"low"}],premiumDiscount:"Discount",targets:[104]};
+const baseSMC:any={trend:"Bullish",asOf:12,setup:{direction:"BUY",status:"ACTIVE",entry:100,stop:98,targets:[104],rr:2,confidence:85,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned","Internal structure aligned"]},events:[{index:10,direction:"bullish",type:"BOS"}],entryZone:{low:99,high:101},sweeps:[{index:8,type:"low"}],premiumDiscount:"Discount",targets:[104]};
 
 const baseEW:any={
   primary:{direction:"bullish",entry:100,invalidation:98,targets:[104],strict:true,quality:80,kind:"Impulse"},
@@ -11,11 +11,11 @@ const baseEW:any={
 
 describe("entry scanners",()=>{
  it("confirms an active SMC setup",()=>{const r=classifySMCEntry("BTCUSDT","5m",baseSMC);expect(r.state).toBe("CONFIRMED");expect(r.direction).toBe("BUY");expect(r.entry).toBe(100)});
- it("rejects an ACTIVE SMC setup when sweep occurs after the structure break",()=>{
-   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,events:[{index:8,direction:"bullish"}],sweeps:[{index:10,type:"low"}]});
+ it("does not confirm an ACTIVE SMC setup on CHOCH alone",()=>{\n   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,events:[{index:10,direction:"bullish",type:"CHOCH"}]});\n   expect(r.state).not.toBe("CONFIRMED");\n });\n it("rejects an ACTIVE SMC setup when sweep occurs after the structure break",()=>{
+   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,events:[{index:8,direction:"bullish",type:"BOS"}],sweeps:[{index:10,type:"low"}]});
    expect(r.state).not.toBe("CONFIRMED");
  });
- it("does not confirm SMC when the sweep-to-structure gap is stale",()=>{\n   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,asOf:30,events:[{index:24,direction:"bullish"}],sweeps:[{index:8,type:"low"}]});\n   expect(r.state).not.toBe("CONFIRMED");\n });\n it("does not confirm SMC when internal structure confirmation is missing",()=>{\n   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned"]}});\n   expect(r.state).not.toBe("CONFIRMED");\n });\n it("does not confirm SMC when active entry is missing",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT",entry:null,stop:null,targets:[],rr:null}});expect(r.state).not.toBe("CONFIRMED")});
+ it("does not confirm SMC when the sweep-to-structure gap is stale",()=>{\n   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,asOf:30,events:[{index:24,direction:"bullish",type:"BOS"}],sweeps:[{index:8,type:"low"}]});\n   expect(r.state).not.toBe("CONFIRMED");\n });\n it("does not confirm SMC when internal structure confirmation is missing",()=>{\n   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned"]}});\n   expect(r.state).not.toBe("CONFIRMED");\n });\n it("does not confirm SMC when active entry is missing",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT",entry:null,stop:null,targets:[],rr:null}});expect(r.state).not.toBe("CONFIRMED")});
  it("requires live price to remain between entry and target",()=>{
   expect(classifyElliottEntry("BTCUSDT","5m",baseEW,102).state).toBe("CONFIRMED");
   expect(classifyElliottEntry("BTCUSDT","5m",baseEW,110).state).not.toBe("CONFIRMED");
