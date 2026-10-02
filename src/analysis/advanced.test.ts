@@ -7,6 +7,13 @@ function candle(i:number):Candle {
 }
 
 describe("risk sizing precision",()=>{
+  it("rejects risk percentages above the hard safety limit",()=>{
+    const r=riskPlan(1000,12,100,98,{},"BUY");
+    expect(r.valid).toBe(false);
+    expect(r.positionSize).toBe(0);
+    expect(r.reason).toContain("<= 10");
+  });
+
   it("returns exchange-step quantities without floating-point residue",()=>{
     const r=riskPlan(1000,1,100,98,{minQty:0.001,maxQty:10,stepSize:0.1,minNotional:0}, "BUY");
     expect(r.valid).toBe(true);
