@@ -191,14 +191,26 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const sweep = smc.sweeps.filter(s => s.type === sweepType && s.index >= lookbackStart && s.index <= asOf).sort((a, b) => b.index - a.index)[0] ?? null;
     if (!sweep) continue;
 
-    const choch = smc.events.filter(e => e.type === "CHOCH" && e.direction === structureDirection && e.index >= sweep.index && e.index <= asOf).sort((a, b) => b.index - a.index)[0] ?? null;
+    // Reversal causality uses a strict three-stage sequence:
+    // sweep -> CHOCH -> displacement. The structure shift must happen after
+    // the sweep and within the same 12-bar causal window.
+    const choch = smc.events
+      .filter(e =>
+        e.type === "CHOCH"
+        && e.direction === structureDirection
+        && e.index > sweep.index
+        && e.index <= asOf
+        && e.index - sweep.index <= 12
+      )
+      .sort((a, b) => b.index - a.index)[0] ?? null;
     const priorEvent = choch ? smc.events.filter(e => e.index < choch.index).at(-1) ?? null : null;
     const opposingStructure = !!priorEvent && priorEvent.direction !== structureDirection;
     const anchor = choch?.index ?? sweep.index;
 
     let bestDisplacement = 0;
     let bestDisplacementIndex = anchor;
-    for (let i = Math.max(0, anchor); i <= asOf && i - anchor <= 12; i += 1) {
+    const displacementStart = choch ? choch.index + 1 : anchor;
+    for (let i = Math.max(0, displacementStart); i <= asOf && i - anchor <= 12; i += 1) {
       const ratio = displacementRatio(closed, i);
       if (ratio > bestDisplacement) {
         bestDisplacement = ratio;
