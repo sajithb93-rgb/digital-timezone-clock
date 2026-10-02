@@ -262,6 +262,21 @@ describe("analysis regression",()=>{
     expect(isValidTradeGeometry("SELL",100,102,[97],1.5)).toBe(true);
   });
 
+  it("rejects malformed target arrays instead of silently filtering invalid values",()=>{
+    expect(isValidTradeGeometry("BUY",100,98,[103,Number.NaN],1.5)).toBe(false);
+    expect(isValidTradeGeometry("BUY",100,98,[103,-105],1.5)).toBe(false);
+  });
+
+  it("makes SMC analysis independent of feed ordering and duplicate timestamps",()=>{
+    const base=candles(80);
+    const duplicate={...base[40],close:base[40].close+0.25};
+    const ordered=analyzeSMC(base);
+    const reversed=analyzeSMC([...base,duplicate].reverse());
+    expect(reversed.asOf).toBe(ordered.asOf);
+    expect(reversed.premiumDiscountRange).toEqual(ordered.premiumDiscountRange);
+    expect(reversed.premiumDiscount).toBe(ordered.premiumDiscount);
+  });
+
   it("requires an order block to link to a structure break at or after displacement",()=>{
     expect(isOrderBlockCausal(10,12,12)).toBe(true);
     expect(isOrderBlockCausal(10,12,11)).toBe(false);
