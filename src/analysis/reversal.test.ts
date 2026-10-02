@@ -86,7 +86,7 @@ describe("reversal engine",()=>{
     expect(r.reason).toContain("structural MTF mode");
   });
 
-  it("ignores the forming candle",()=>{
+  it("does not use the signal candle high/low as an already-reached reversal target",()=>{\n    const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));\n    candles[31]=candle(31,100,101,95,99);\n    candles[32]=candle(32,99,100,96,98);\n    candles[33]=candle(33,98,106,97,105);\n    candles[34]=candle(34,105,130,103,107);\n    const r=analyzeReversal(candles,smc({\n      sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],\n      events:[\n        {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},\n        {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}\n      ],\n      fvgs:[{from:32,to:33,low:101,high:103,type:"bullish",filled:false,size:1}],\n      orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}],\n    }),flow());\n    expect(r.targets.every(t=>t<130)).toBe(true);\n  });\n\n  it("ignores the forming candle",()=>{
     const candles = Array.from({length:30},(_,i)=>candle(i,100,101,99,100));
     candles[29]={...candle(29,100,112,94,111),closed:false};
     const r=analyzeReversal(candles,smc({asOf:28,sweeps:[{index:28,price:94,type:"low",confirmed:true,displacement:true}]}),flow());
