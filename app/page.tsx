@@ -289,6 +289,8 @@ export default function Home(){
   let retryTimer:ReturnType<typeof setTimeout>|undefined;
   let staleTimer:ReturnType<typeof setTimeout>|undefined;
   let stableTimer:ReturnType<typeof setTimeout>|undefined;
+  let uiFlushTimer:ReturnType<typeof setTimeout>|undefined;
+  let pendingRealtimeCandle:Candle|null=null;
   let reconnectAttempt=0;
   let establishedOnce=false;
   let restSyncInFlight=false;
@@ -313,6 +315,22 @@ export default function Home(){
    if(retryTimer){clearTimeout(retryTimer);retryTimer=undefined}
    if(staleTimer){clearTimeout(staleTimer);staleTimer=undefined}
    if(stableTimer){clearTimeout(stableTimer);stableTimer=undefined}
+   if(uiFlushTimer){clearTimeout(uiFlushTimer);uiFlushTimer=undefined}
+   pendingRealtimeCandle=null;
+  };
+  const flushRealtimeCandle=(c:Candle)=>{
+   if(stop)return;
+   setCandles(prev=>mergeCandles([c],prev,true));
+   pendingRealtimeCandle=null;
+   if(uiFlushTimer){clearTimeout(uiFlushTimer);uiFlushTimer=undefined}
+  };
+  const queueRealtimeCandle=(c:Candle)=>{
+   pendingRealtimeCandle=c;
+   if(uiFlushTimer)return;
+   uiFlushTimer=setTimeout(()=>{
+    uiFlushTimer=undefined;
+    if(pendingRealtimeCandle)flushRealtimeCandle(pendingRealtimeCandle);
+   },500);
   };
 
   const armStaleTimer=(socket:WebSocket)=>{
@@ -375,7 +393,8 @@ export default function Home(){
      const c={time:Number(k.t),open:Number(k.o),high:Number(k.h),low:Number(k.l),close:Number(k.c),volume:Number(k.v),takerBuyVolume:Number(k.V),closed:!!k.x};
      if(![c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite)
        ||c.time<=0||c.volume<0||c.high<c.low||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))return;
-     setCandles(prev=>mergeCandles([c],prev,true));
+     if(c.closed)flushRealtimeCandle(c);
+     else queueRealtimeCandle(c);
      if(c.closed){
       setAnalysisCandles(prev=>{
        const byTime=new Map<number,Candle>();
