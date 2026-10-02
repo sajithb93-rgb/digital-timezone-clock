@@ -14,6 +14,13 @@ describe("news filter",()=>{
     expect(r.minutesToEvent).toBe(10);
   });
 
+  it("falls back safely for invalid news buffer values",()=>{
+    const now=1_000_000;
+    const event={title:"Upcoming CPI",country:"USD",impact:"high" as const,date:now+5*60_000};
+    expect(getNewsRisk([event],now,-30).blocked).toBe(false);
+    expect(getNewsRisk([event],now,Number.NaN).blocked).toBe(true);
+  });
+
   it("does not misclassify arbitrary numeric strings containing 3 as high impact",()=>{
     const rows=normalizeNews([
       {title:"Routine release",country:"USD",impact:"13",date:"2026-10-02T10:00:00Z"},
