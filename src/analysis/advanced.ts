@@ -119,6 +119,14 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
   return{structure,liquidity,zones,location,momentum,volume,total};
 }
 
+function floorToStep(value:number,step:number){
+  if(!Number.isFinite(value)||!Number.isFinite(step)||step<=0)return 0;
+  let decimals=0,scaled=step;
+  while(decimals<12&&Math.abs(Math.round(scaled)-scaled)>1e-10){scaled*=10;decimals+=1;}
+  const floored=Math.floor(value/step+1e-12)*step;
+  return Number(floored.toFixed(decimals));
+}
+
 export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null,constraints:RiskConstraints={},direction:"BUY"|"SELL"|"WAIT"="WAIT") {
   const validAccount=Number.isFinite(account)&&account>0;
   const validRisk=Number.isFinite(riskPercent)&&riskPercent>0;
@@ -149,7 +157,7 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   let positionSize=desiredPositionSize;
   const {minQty=0,maxQty=Infinity,stepSize=0,minNotional=0,maxNotional=Infinity}=constraints;
   if(Number.isFinite(maxQty)&&maxQty>0)positionSize=Math.min(positionSize,maxQty);
-  if(Number.isFinite(stepSize)&&stepSize>0)positionSize=Math.floor((positionSize/stepSize)+1e-12)*stepSize;
+  if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize);
   if(positionSize<Math.max(0,minQty)){
     return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Below exchange minimum quantity"};
   }
@@ -160,7 +168,7 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   }
   if(Number.isFinite(maxNotional)&&maxNotional>0&&notional>maxNotional){
     positionSize=Math.min(positionSize,maxNotional/entry);
-    if(Number.isFinite(stepSize)&&stepSize>0)positionSize=Math.floor((positionSize/stepSize)+1e-12)*stepSize;
+    if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize);
   }
   const finalNotional=entry*positionSize;
   if(positionSize<Math.max(0,minQty)){
