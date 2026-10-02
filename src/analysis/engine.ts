@@ -247,12 +247,19 @@ export function classifyStructureBreak(
 export function classifyProtectedStructureBreak(
  previousDirection:"bullish"|"bearish"|null,
  brokenSide:"high"|"low",
- protectedSide:"high"|"low"|null
+ protectedSide:"high"|"low"|null,
+ protectedIndex?:number,
+ brokenIndex?:number
 ):"BOS"|"CHOCH"|null{
  if(previousDirection===null)return "BOS";
  const continuationSide=previousDirection==="bullish"?"high":"low";
  if(brokenSide===continuationSide)return "BOS";
- if(protectedSide===brokenSide)return "CHOCH";
+ // A counter-trend break is CHOCH only when the actual protected pivot was
+ // broken. Merely breaking a newer, unprotected pivot on the same side must
+ // not be promoted to CHOCH.
+ if(protectedSide===brokenSide){
+  if(protectedIndex===undefined||brokenIndex===undefined||protectedIndex===brokenIndex)return "CHOCH";
+ }
  return null;
 }
 function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
@@ -273,6 +280,9 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
  for(let i=0;i<c.length;i++){
   while(hiPtr<confirmedHighs.length&&(confirmedHighs[hiPtr].confirmedAt??Infinity)<=i)activeH=confirmedHighs[hiPtr++];
   while(loPtr<confirmedLows.length&&(confirmedLows[loPtr].confirmedAt??Infinity)<=i)activeL=confirmedLows[loPtr++];
+  // Structure events are confirmed from closed candles only. An open candle
+  // must never print BOS/CHOCH or mutate protected structure state.
+  if(c[i].closed===false)continue;
   const disp=displacementAt(c,i)>=.7;
   const brokeBull=!!activeH&&c[i].close>activeH.price;
   const brokeBear=!!activeL&&c[i].close<activeL.price;
@@ -282,7 +292,13 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
    continue;
   }
   if(brokeBull){
-   const type=classifyProtectedStructureBreak(structure,"high",protectedHigh?"high":protectedLow?"low":null);
+   const type=classifyProtectedStructureBreak(
+     structure,
+     "high",
+     protectedHigh?"high":protectedLow?"low":null,
+     protectedHigh?.index??protectedLow?.index,
+     activeH?.index
+    );
    if(type){
     events.push({index:i,price:activeH!.price,type,direction:"bullish",strength:disp?"displacement":"normal"});
     structure="bullish";
@@ -298,7 +314,13 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
     protectedHigh=null;
    }
   }else if(brokeBear){
-   const type=classifyProtectedStructureBreak(structure,"low",protectedHigh?"high":protectedLow?"low":null);
+   const type=classifyProtectedStructureBreak(
+     structure,
+     "low",
+     protectedHigh?"high":protectedLow?"low":null,
+     protectedHigh?.index??protectedLow?.index,
+     activeL?.index
+    );
    if(type){
     events.push({index:i,price:activeL!.price,type,direction:"bearish",strength:disp?"displacement":"normal"});
     structure="bearish";
