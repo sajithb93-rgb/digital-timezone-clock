@@ -89,7 +89,8 @@ export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,int
 }
 export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
  let closedEnd=Math.min(asOf,c.length-1);
- while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ const firstUnclosed=c.slice(0,closedEnd+1).findIndex(x=>x.closed===false);
+ if(firstUnclosed>=0)closedEnd=firstUnclosed-1;
  if(sweepIndex<0||sweepIndex>closedEnd||sweepIndex>=c.length)return false;
  const sweepCandle=c[sweepIndex];
  if(sweepCandle.closed===false)return false;
@@ -105,7 +106,8 @@ export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,
 }
 export function findLatestValidLiquiditySweep(c:Candle[],level:number,type:"high"|"low",startIndex:number,asOf=c.length-1):Sweep|null{
  let closedEnd=Math.min(asOf,c.length-1);
- while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ const firstUnclosed=c.slice(0,closedEnd+1).findIndex(x=>x.closed===false);
+ if(firstUnclosed>=0)closedEnd=firstUnclosed-1;
  if(startIndex>closedEnd)return null;
  let latest:Sweep|null=null;
  for(let i=Math.max(0,startIndex);i<=closedEnd;i++){
@@ -341,7 +343,8 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
 export function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  const out:FVG[]=[];
  let closedEnd=Math.min(asOf,c.length-1);
- while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ const firstUnclosed=c.slice(0,closedEnd+1).findIndex(x=>x.closed===false);
+ if(firstUnclosed>=0)closedEnd=firstUnclosed-1;
  const end=closedEnd;
  for(let i=1;i<end;i++){
   const left=c[i-1],middle=c[i],right=c[i+1];
@@ -425,7 +428,8 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
 export function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
  const out:Breaker[]=[];
  let endIndex=Math.min(asOf,c.length-1);
- while(endIndex>=0&&c[endIndex].closed===false)endIndex--;
+ const firstUnclosed=c.slice(0,endIndex+1).findIndex(x=>x.closed===false);
+ if(firstUnclosed>=0)endIndex=firstUnclosed-1;
  for(const o of obs){
   const mitigation=o.mitigationIndex;
   // A breaker can only form after a confirmed, closed-candle mitigation.
@@ -544,8 +548,10 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   byTime.set(x.time,x);
  }
  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
- let closedEnd=normalized.length-1;
- while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ // An open candle creates a causal boundary. Never consume later candles
+ // from a feed that already contains a forming-bar gap.
+ const firstUnclosed=normalized.findIndex(x=>x.closed===false);
+ const closedEnd=firstUnclosed>=0?firstUnclosed-1:normalized.length-1;
  if(closedEnd<24)return empty;
  const data=normalized.slice(0,closedEnd+1);
  const a=atr(data),ps=labelPivots(pivots(data,3)),internal=labelPivots(pivots(data,1));
