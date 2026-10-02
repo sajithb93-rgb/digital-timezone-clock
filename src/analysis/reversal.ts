@@ -113,7 +113,7 @@ function chooseZone(smc: SMCResult, direction: ReversalDirection, sweepIndex: nu
   // Reversal zones must belong to the post-sweep leg. A pre-sweep OB/FVG can
   // be valid SMC structure but cannot be used as causal reversal confirmation.
   const zones = [
-    ...smc.fvgs.filter(x => x.type === wanted && !x.filled && x.to >= sweepIndex && x.to <= triggerIndex && triggerIndex - x.to <= 12).map(x => ({ low: x.low, high: x.high, index: x.to })),
+    ...smc.fvgs.filter(x => x.type === wanted && !x.filled && !x.partial && x.to >= sweepIndex && x.to <= triggerIndex && triggerIndex - x.to <= 12).map(x => ({ low: x.low, high: x.high, index: x.to })),
     ...smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index >= sweepIndex && x.index <= triggerIndex && triggerIndex - x.index <= 20).map(x => ({ low: x.low, high: x.high, index: x.index })),
   ];
   if (!zones.length) return null;
