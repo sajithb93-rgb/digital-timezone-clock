@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateDiagonalWave, validateImpulseWave } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isPostSweepZoneCausal, isSetupActive, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -48,6 +48,31 @@ describe("analysis regression",()=>{
     const m=analyzeSMC(c);
     expect(m.asOf).toBe(39);
     expect(isSetupActive({low:99,high:101,type:"entry"},c.at(-1))).toBe(false);
+  });
+
+  it("invalidates a liquidity sweep after a later close through the swept level",()=>{
+    const highSweep=[
+      {...candles(1)[0],time:0,open:100,high:101,low:99,close:100,closed:true},
+      {...candles(1)[0],time:1,open:100,high:105,low:99.5,close:103,closed:true},
+      {...candles(1)[0],time:2,open:103,high:104,low:101,close:106,closed:true}
+    ];
+    expect(isValidLiquiditySweep(highSweep,1,104,"high",2)).toBe(false);
+    expect(isValidLiquiditySweep(highSweep,1,104,"high",1)).toBe(true);
+
+    const lowSweep=[
+      {...candles(1)[0],time:0,open:100,high:101,low:99,close:100,closed:true},
+      {...candles(1)[0],time:1,open:100,high:100.5,low:95,close:97,closed:true},
+      {...candles(1)[0],time:2,open:97,high:99,low:96,close:94,closed:true}
+    ];
+    expect(isValidLiquiditySweep(lowSweep,1,96,"low",2)).toBe(false);
+    expect(isValidLiquiditySweep(lowSweep,1,96,"low",1)).toBe(true);
+  });
+
+  it("requires an entry zone to belong to the same post-sweep structure leg",()=>{
+    expect(isPostSweepZoneCausal(20,25,30)).toBe(false);
+    expect(isPostSweepZoneCausal(26,25,30)).toBe(true);
+    expect(isPostSweepZoneCausal(20,19,30)).toBe(true);
+    expect(isPostSweepZoneCausal(10,1,30,12)).toBe(false);
   });
 
   it("never emits two opposing structure events on the same candle",()=>{
