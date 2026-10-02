@@ -206,6 +206,40 @@ describe("order flow strategy",()=>{
     expect(r.confirmations).toContain("2+ stacked sell imbalances");
   });
 
+  it("rejects a BUY when the computed stop is not below entry",()=>{
+    const candles=[
+      ...Array.from({length:7},(_,i)=>candle(i,108,110,105,109,100,50)),
+      candle(7,109,111,100,106,100,50),
+      candle(8,103,104,100,103,100,40),
+      candle(9,103,104,101,102.5,100,40),
+      candle(10,102.5,103.5,101.5,103.2,100,60),
+      candle(11,103.2,104.5,102,104.2,100,65)
+    ];
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.entry).toBeNull();
+    expect(r.stop).toBeNull();
+    expect(r.targets).toEqual([]);
+    expect(r.signal).toContain("WAIT");
+  });
+
+  it("rejects a SELL when the computed stop is not above entry",()=>{
+    const candles=[
+      ...Array.from({length:7},(_,i)=>candle(i,91,95,90,92,100,50)),
+      candle(7,92,100,91,94,100,50),
+      candle(8,97,98,96,97,100,70),
+      candle(9,97,97,96.5,96.8,100,60),
+      candle(10,96.8,97,96.2,96.7,100,60),
+      candle(11,96.7,97,95.2,95.4,100,65)
+    ];
+    const r=analyzeOrderFlow(candles,confirmedFootprints("SELL"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.entry).toBeNull();
+    expect(r.stop).toBeNull();
+    expect(r.targets).toEqual([]);
+    expect(r.signal).toContain("WAIT");
+  });
+
   it("returns WAIT when any critical BUY footprint confirmation is missing",()=>{
     const base=fullLongCandles();
     const cases:Partial<FootprintSnapshot>[]=[
