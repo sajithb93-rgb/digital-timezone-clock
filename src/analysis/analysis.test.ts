@@ -44,6 +44,15 @@ describe("analysis regression",()=>{
     expect(riskPlan(1000,1,100,95,{}, "WAIT").valid).toBe(false);
   });
 
+  it("sizes COIN-M inverse contracts using contract size",()=>{
+    const linear=riskPlan(1000,1,100,95,{minQty:1,maxQty:100,stepSize:1,contractSize:1,inverseContract:false},"BUY");
+    const inverse=riskPlan(1000,1,100,95,{minQty:1,maxQty:1000,stepSize:1,contractSize:100,inverseContract:true},"BUY");
+    expect(linear.valid).toBe(true);
+    expect(linear.positionSize).toBe(2);
+    expect(inverse.valid).toBe(true);
+    expect(inverse.positionSize).toBe(20);
+  });
+
   it("rejects risk when stop is on the wrong side",()=>{
     expect(riskPlan(1000,1,100,105,{}, "BUY").valid).toBe(false);
     expect(riskPlan(1000,1,100,95,{}, "SELL").valid).toBe(false);
