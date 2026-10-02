@@ -2,8 +2,6 @@
 
 // Build repair: ensure Vercel deploys the valid EliteWave source.
 
-import "./globals.css";
-
 import { memo, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
@@ -341,6 +339,7 @@ export default function Home(){
   let pendingRealtimeCandle:Candle|null=null;
   let reconnectAttempt=0;
   let establishedOnce=false;
+  let hasInitialData=false;
   let restSyncInFlight=false;
   const MAX_RECONNECT_DELAY=30000;
   const STALE_AFTER_MS=45000;
@@ -408,6 +407,7 @@ export default function Home(){
     if(stop)return;
     setRestConnected(true);
     setError("");
+    hasInitialData=data.length>=2;
     setCandles(prev=>mergeCandles(data,prev,true));
     setAnalysisCandles(prev=>normalizeCandleSeries(mergeCandles(data,prev,true),true));
     setChartDataRevision(v=>v+1);
@@ -440,7 +440,10 @@ export default function Home(){
     if(stableTimer)clearTimeout(stableTimer);
     stableTimer=setTimeout(()=>{if(!stop&&ws===socket)reconnectAttempt=0},10000);
     armStaleTimer(socket);
-    if(establishedOnce)void syncFromRest();
+    // A WebSocket connection without a successful REST snapshot must still
+    // backfill chart history immediately; otherwise a 15m chart may remain
+    // blank until enough new candles are created.
+    if(establishedOnce||!hasInitialData)void syncFromRest();
     establishedOnce=true;
    };
 
@@ -475,6 +478,7 @@ export default function Home(){
   fetchKlines(symbol,interval,350,marketType,controller.signal).then(data=>{
    if(stop)return;
    setRestConnected(true);
+   hasInitialData=data.length>=2;
    setCandles(data);
    setAnalysisCandles(normalizeCandleSeries(data,true));
    setChartDataRevision(v=>v+1);
@@ -483,8 +487,12 @@ export default function Home(){
   }).catch(e=>{
    if(stop)return;
    setRestConnected(false);
+   hasInitialData=false;
    setLoading(false);
    setError(e instanceof Error?e.message:"Market data error");
+   // Retry the REST snapshot independently so a transient Binance/API failure
+   // cannot leave the chart permanently empty while the WebSocket reconnects.
+   window.setTimeout(()=>{if(!stop&&!hasInitialData)void syncFromRest()},5000);
    scheduleReconnect();
   });
 
