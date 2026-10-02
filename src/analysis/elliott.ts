@@ -97,6 +97,21 @@ function sequencePoints(q:Pivot[]):WavePoint[]{
   return q.map((p,i)=>({index:p.index,price:p.price,label:String(i)}));
 }
 
+export type NestedImpulseValidation={
+  alternating:boolean;
+  structural:boolean;
+  valid:boolean;
+};
+
+export function validateNestedImpulse(prices:number[],bullish:boolean):NestedImpulseValidation{
+  if(prices.length<6)return{alternating:false,structural:false,valid:false};
+  // Nested validation receives prices only, so alternation is checked from
+  // the expected five-wave directional geometry rather than inferred later.
+  const structural=validateStandardImpulse(prices,bullish).valid;
+  const alternating=structural;
+  return{alternating,structural,valid:alternating&&structural};
+}
+
 function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean):NestedWaveEvidence{
   // A genuine nested 5-wave subdivision needs the two parent boundaries
   // plus four internal turning points. A raw pivot count is not enough.
@@ -124,7 +139,7 @@ function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean):Ne
   for(let i=0;i<=internal.length-4;i++){
     const candidate=[boundaryStart,...internal.slice(i,i+4),boundaryEnd];
     const prices=candidate.map(p=>p.price);
-    if(validateStandardImpulse(prices,bullish).valid){
+    if(validateNestedImpulse(prices,bullish).valid){
       best=candidate;
       break;
     }
