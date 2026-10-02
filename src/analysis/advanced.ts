@@ -99,7 +99,7 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   const validStop=typeof stop==="number"&&Number.isFinite(stop)&&stop>0;
   const boundedRisk=validRisk?Math.min(riskPercent,10):0;
   const riskAmount=validAccount?account*boundedRisk/100:0;
-  if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop){
+  if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop||direction==="WAIT"){
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid account, risk, entry or stop"};
   }
   if((direction==="BUY"&&stop>=entry)||(direction==="SELL"&&stop<=entry)){
