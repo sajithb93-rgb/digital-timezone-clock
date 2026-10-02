@@ -294,8 +294,9 @@ export function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
  const end=closedEnd;
  for(let i=1;i<end;i++){
-
-  const left=c[i-1],right=c[i+1];
+  const left=c[i-1],middle=c[i],right=c[i+1];
+  // A 3-candle FVG is confirmed only when all three candles are closed.
+  if(left.closed===false||middle.closed===false||right.closed===false)continue;
   const bull=left.high<right.low;
   const bear=left.low>right.high;
   if(!bull&&!bear)continue;
@@ -305,7 +306,10 @@ export function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
   let fillIndex:number|undefined;
   let partialFillIndex:number|undefined;
   for(let j=i+2;j<=end;j++){
-   const entered=bull ? c[j].low<high : c[j].high>low;
+   if(c[j].closed===false)break;
+   // Touching/entering the gap counts as partial fill; reaching the far
+   // boundary counts as full fill.
+   const entered=bull ? c[j].low<=high : c[j].high>=low;
    const fullyFilled=bull ? c[j].low<=low : c[j].high>=high;
    if(partialFillIndex===undefined&&entered)partialFillIndex=j;
    if(fullyFilled){fillIndex=j;break}
