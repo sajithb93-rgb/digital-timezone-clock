@@ -157,6 +157,12 @@ describe("analysis regression",()=>{
     expect(e.primary?.strict).toBe(true);
   });
 
+  it("validates live Elliott continuation with the required X-A-B-C geometry",()=>{
+    expect(validateZigzag([165,150,158,145],false).valid).toBe(true);
+    expect(validateFlat([165,150,164,146],false).valid).toBe(true);
+    expect(validateZigzag([100,115,107,121],true).valid).toBe(true);
+  });
+
   it("keeps corrective structures separate from the primary impulse count",()=>{
     expect(validateZigzag([200,150,170,130],false).valid).toBe(true);
     expect(validateFlat([200,150,195,145],false).valid).toBe(true);
