@@ -263,7 +263,8 @@ async function main() {
   };
 
   for (let i = WARMUP; i < candles.length - 1; i++) {
-    const window = candles.slice(Math.max(0, i - 500), i + 1);
+    const windowStart = Math.max(0, i - 500);
+    const window = candles.slice(windowStart, i + 1);
     const signalCandle = candles[i];
     const next = candles[i + 1];
 
@@ -275,7 +276,8 @@ async function main() {
       const setup = smc.setup;
       const wave = elliott.primary;
       const waveEndIndex = wave?.points.at(-1)?.index ?? -Infinity;
-      const waveAge = Number.isFinite(waveEndIndex) ? i - waveEndIndex : Infinity;
+      const waveGlobalIndex = Number.isFinite(waveEndIndex) ? windowStart + waveEndIndex : -Infinity;
+      const waveAge = Number.isFinite(waveGlobalIndex) ? i - waveGlobalIndex : Infinity;
       const waveFresh = !!wave && waveAge >= 0 && waveAge <= ELLIOTT_MAX_AGE_BARS;
       const waveValid = !!wave && elliott.setupState !== "INVALIDATED";
 
@@ -291,7 +293,8 @@ async function main() {
           (setup.direction === "SELL" && wave.direction === "bearish")
         ),
         waveAgeBars: Number.isFinite(waveAge) ? waveAge : null,
-        waveState: elliott.setupState
+        waveState: elliott.setupState,
+        waveEndGlobalIndex: Number.isFinite(waveGlobalIndex) ? waveGlobalIndex : null
       });
 
       if (elliott.setupState === "INVALIDATED") {
@@ -364,13 +367,14 @@ async function main() {
           continue;
         }
 
-        const eventIndex = smc.events.at(-1)?.index ?? -1;
+        const eventLocalIndex = smc.events.at(-1)?.index ?? -1;
+        const eventIndex = eventLocalIndex >= 0 ? windowStart + eventLocalIndex : -1;
         const signalKey = [
           eventIndex,
           side,
           plannedEntry.toPrecision(12),
           stop.toPrecision(12),
-          waveEndIndex
+          waveGlobalIndex
         ].join("|");
 
         if (seenSignals.has(signalKey)) {
