@@ -147,7 +147,7 @@ async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTi
 }
 function intervalMs(interval:string):number{const units:Record<string,number>={m:60*1000,h:60*60*1000,d:24*60*60*1000};const n=Number(interval.slice(0,-1));return Math.max(60*1000,(Number.isFinite(n)?n:1)*(units[interval.slice(-1)]??60*1000));}
 export default function Home(){
- const [mode,setMode]=useState<Mode>("combined"),[isModePending,startModeTransition]=useTransition(),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m"),[marketType,setMarketType]=useState<MarketKind>("spot");
+ const [mode,setMode]=useState<Mode>("combined"),[isModePending,startModeTransition]=useTransition(),[symbol,setSymbol]=useState("BTCUSDT"),[interval,setInterval]=useState<(typeof intervals)[number]>("15m"),[marketType,setMarketType]=useState<MarketKind>("usdm");
  const [theme,setTheme]=useState<"tradingview"|"cyber">("tradingview");
  const [newsEvents,setNewsEvents]=useState<NewsEvent[]>([]),[newsNow,setNewsNow]=useState(Date.now()),[newsLoading,setNewsLoading]=useState(true),[newsError,setNewsError]=useState(false);
 
