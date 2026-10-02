@@ -93,9 +93,14 @@ function findDeltaDivergence(candles: Candle[], flow: OrderFlowResult, direction
   if (flow.recentBars.length < 12 || candles.length < 12) return false;
   const recentBars = flow.recentBars.slice(-6);
   const priorBars = flow.recentBars.slice(-12, -6);
-  const recentCandles = candles.slice(-6);
-  const priorCandles = candles.slice(-12, -6);
-  if (recentBars.length < 6 || priorBars.length < 6 || recentCandles.length < 6 || priorCandles.length < 6) return false;
+  if (recentBars.length < 6 || priorBars.length < 6) return false;
+  // Divergence is only meaningful when the flow bars refer to the same
+  // candle timestamps as the price series. Positional matching can silently
+  // compare different candles after a feed gap or normalization step.
+  const candleByTime=new Map(candles.map(c=>[c.time,c]));
+  const recentCandles=recentBars.map(b=>candleByTime.get(b.time)).filter((x):x is Candle=>!!x);
+  const priorCandles=priorBars.map(b=>candleByTime.get(b.time)).filter((x):x is Candle=>!!x);
+  if (recentCandles.length < 6 || priorCandles.length < 6) return false;
   const recentDelta = recentBars.reduce((sum, b) => sum + b.deltaRatio, 0) / recentBars.length;
   const priorDelta = priorBars.reduce((sum, b) => sum + b.deltaRatio, 0) / priorBars.length;
   const recentLow = Math.min(...recentCandles.map(c => c.low));
@@ -181,6 +186,9 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
   if (closed.length < 30) return { ...EMPTY, asOf: closed.length - 1 };
 
   const asOf = closed.length - 1;
+  if (smc.asOf !== asOf) {
+    return { ...EMPTY, asOf, reason: "SMC context is out of sync with the reversal candle series" };
+  }
   const last = closed[asOf];
   const lookbackStart = Math.max(0, asOf - 20);
   let best: ReversalEngineResult | null = null;
