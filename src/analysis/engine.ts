@@ -184,8 +184,9 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
      if(m===undefined&&c[j].low<=c[i].open)m=j;
      if(c[j].close<c[i].low){invalid=j;break}
     }
-    // A block that breaks before it is mitigated is no longer a valid active OB.
-    if(m!==undefined||invalid===undefined){
+    // If the block is invalidated before its first mitigation, discard it.
+    // Once mitigated, keep it only as historical/mitigated state.
+    if(invalid===undefined||(m!==undefined&&m<invalid)){
      out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
     }
    }
@@ -197,7 +198,8 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
     for(let j=bearBreak+1;j<=end;j++){
      if(m===undefined&&c[j].high>=c[i].open)m=j;
      if(c[j].close>c[i].high){invalid=j;break}
-    }    if(m!==undefined||invalid===undefined){
+    }    // If the block is invalidated before its first mitigation, discard it.
+    if(invalid===undefined||(m!==undefined&&m<invalid)){
      out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
     }
    }
@@ -295,7 +297,15 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   for(let j=p.index+1;j<=asOf;j++){
    const hit=p.type==="H"?data[j].high>p.price&&data[j].close<p.price:data[j].low<p.price&&data[j].close>p.price;
    if(hit){
-    sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(data,j,atrAt(data,j))>=.7});
+    // A later close through the swept level invalidates the liquidity event.
+    let invalidated=false;
+    for(let k=j+1;k<=asOf;k++){
+     if(p.type==="H"&&data[k].close>p.price){invalidated=true;break}
+     if(p.type==="L"&&data[k].close<p.price){invalidated=true;break}
+    }
+    if(!invalidated){
+     sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(data,j,atrAt(data,j))>=.7});
+    }
     break;
    }
   }
@@ -338,7 +348,11 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   &&latestInternalDirectionalEvent.index-latestDirectionalEvent.index<=12
   &&latestInternalDirectionalEvent.index-sweep.index<=12;
  const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,events,last,a,asOf);
- const zone=selectedZone&&selectedZone.linked&&causalSequence
+ const zoneCausal=!!selectedZone&&!!sweep&&!!latestDirectionalEvent
+  &&selectedZone.origin>=sweep.index
+  &&selectedZone.origin<=latestDirectionalEvent.index
+  &&latestDirectionalEvent.index-selectedZone.origin<=12;
+ const zone=selectedZone&&selectedZone.linked&&causalSequence&&zoneCausal
   ?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
  const direction=zone?rawDirection:null;
  const entry=zone?(zone.low+zone.high)/2:null;
@@ -367,7 +381,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
  if(selectedZone?.kind==="OB")confirmations.push("Qualified unmitigated order block");
  if(selectedZone?.kind==="FVG")confirmations.push("Qualified unfilled fair value gap");
- if(selectedZone?.linked)confirmations.push("Zone linked to latest structure event");
+ if(selectedZone?.linked&&zoneCausal)confirmations.push("Zone linked to current post-sweep structure leg");
  if(direction==="bullish"&&pd==="Discount"||direction==="bearish"&&pd==="Premium")confirmations.push("Premium/discount aligned");
  if(Math.abs(last.close-last.open)>=a*.5)confirmations.push("Displacement");
  const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
@@ -381,7 +395,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap");
  // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
  // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
- const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&internalCausal&&selectedZone?.linked===true;
+ const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&internalCausal&&selectedZone?.linked===true&&zoneCausal;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
