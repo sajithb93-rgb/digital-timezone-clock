@@ -55,7 +55,14 @@ function pivots(c:Candle[],w=3):Pivot[]{
 
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
 export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}
-export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{\n return sweepIndex>=0\n  &&swingBreakIndex>sweepIndex\n  &&swingBreakIndex-sweepIndex<=maxGap\n  &&internalBreakIndex!==null\n  &&internalBreakIndex>=swingBreakIndex\n  &&internalBreakIndex-swingBreakIndex<=maxGap;\n}
+export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{
+ return sweepIndex>=0
+  &&swingBreakIndex>sweepIndex
+  &&swingBreakIndex-sweepIndex<=maxGap
+  &&internalBreakIndex!==null
+  &&internalBreakIndex>=swingBreakIndex
+  &&internalBreakIndex-swingBreakIndex<=maxGap;
+}
 export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
  if(sweepIndex<0||sweepIndex>asOf||sweepIndex>=c.length)return false;
  const sweepCandle=c[sweepIndex];
