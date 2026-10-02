@@ -44,10 +44,17 @@ export function normalizeAggTrade(raw: any): AggTrade | null {
   const quantity = Number(raw?.q);
   const time = Number(raw?.T);
   const rawMaker = raw?.m;
-  const isBuyerMaker = typeof rawMaker === "string"
-    ? rawMaker.toLowerCase() === "true" || rawMaker === "1"
-    : Boolean(rawMaker);
-  if (!Number.isFinite(id) || !Number.isFinite(price) || !Number.isFinite(quantity) || !Number.isFinite(time)) return null;
+  let isBuyerMaker:boolean;
+  if(typeof rawMaker==="boolean") isBuyerMaker=rawMaker;
+  else if(typeof rawMaker==="string"){
+    const normalized=rawMaker.trim().toLowerCase();
+    if(normalized==="true"||normalized==="1")isBuyerMaker=true;
+    else if(normalized==="false"||normalized==="0")isBuyerMaker=false;
+    else return null;
+  }else if(typeof rawMaker==="number"&&(rawMaker===0||rawMaker===1)){
+    isBuyerMaker=rawMaker===1;
+  }else return null;
+  if (!Number.isFinite(id) || !Number.isInteger(id) || !Number.isFinite(price) || !Number.isFinite(quantity) || !Number.isFinite(time) || !Number.isInteger(time)) return null;
   if (price <= 0 || quantity <= 0 || time <= 0) return null;
   return { id, price, quantity, time, isBuyerMaker };
 }
