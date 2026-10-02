@@ -227,6 +227,31 @@ async function main() {
 
   const trades: Trade[] = [];
   const signals: unknown[] = [];
+
+  const settleActiveTrade=(bar:Candle):boolean=>{
+    if(!active)return false;
+    const long=active.side==="LONG";
+    const stopHit=long?bar.low<=active.stop:bar.high>=active.stop;
+    const targetHit=long?bar.high>=active.target:bar.low<=active.target;
+    if(!stopHit&&!targetHit)return false;
+    const rawExit=stopHit?active.stop:active.target;
+    const exit=applySlippage(rawExit,long?"SELL":"BUY");
+    const grossPnl=(exit-active.entry)*active.qty*(long?1:-1);
+    const fees=(active.entry*active.qty+exit*active.qty)*FEE_RATE;
+    const pnl=grossPnl-fees;
+    equity+=pnl;
+    trades.push({
+      ...active,
+      exitTime:bar.time,
+      grossPnl,
+      fees,
+      pnl,
+      r:pnl/Math.max(active.riskAmount,1e-9),
+      reason:stopHit?"STOP (stop-first if ambiguous)":"TARGET"
+    });
+    active=null;
+    return true;
+  };
   const seenSignals = new Set<string>();
   const rejections = {
     staleElliott: 0,
@@ -242,34 +267,7 @@ async function main() {
     const signalCandle = candles[i];
     const next = candles[i + 1];
 
-    if (active) {
-      const bar = signalCandle;
-      const long = active.side === "LONG";
-      const stopHit = long ? bar.low <= active.stop : bar.high >= active.stop;
-      const targetHit = long ? bar.high >= active.target : bar.low <= active.target;
-
-      if (stopHit || targetHit) {
-        const rawExit = stopHit ? active.stop : active.target;
-        const exit = applySlippage(rawExit, long ? "SELL" : "BUY");
-        const grossPnl = (exit - active.entry) * active.qty * (long ? 1 : -1);
-        const fees = (active.entry * active.qty + exit * active.qty) * FEE_RATE;
-        const pnl = grossPnl - fees;
-
-        equity += pnl;
-
-        trades.push({
-          ...active,
-          exitTime: bar.time,
-          grossPnl,
-          fees,
-          pnl,
-          r: pnl / Math.max(active.riskAmount, 1e-9),
-          reason: stopHit ? "STOP (stop-first if ambiguous)" : "TARGET"
-        });
-
-        active = null;
-      }
-    }
+    if (active) settleActiveTrade(signalCandle);
 
     if (!active) {
       const smc = analyzeSMC(window);
@@ -404,6 +402,10 @@ async function main() {
           qty,
           riskAmount
         };
+
+        // Entry occurs at next-candle open, so the remainder of that closed
+        // candle is tradable and must be checked for stop/TP.
+        settleActiveTrade(next);
       }
     }
 
