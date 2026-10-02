@@ -26,6 +26,8 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
   const targetQualityValid=diagnosticPassed("target_quality");
   const recentSweepBuyValid=diagnosticPassed("sweep_recent_buy");
   const recentSweepSellValid=diagnosticPassed("sweep_recent_sell");
+  const sweepIntegrityBuyValid=diagnosticPassed("sweep_integrity_buy");
+  const sweepIntegritySellValid=diagnosticPassed("sweep_integrity_sell");
   const coreDataValid=["closed","history","exact","footprint_history","footprint_coverage","latest_fp"].every(diagnosticPassed);
   const buyChecks = [
     result.pressure === "BUYERS",
@@ -55,9 +57,9 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
   const score = Math.round(Math.max(buyScore, sellScore) / buyChecks.length * 100);
 
   const directionGateValid = direction==="BUY"
-    ? recentSweepBuyValid
+    ? recentSweepBuyValid && sweepIntegrityBuyValid
     : direction==="SELL"
-      ? recentSweepSellValid
+      ? recentSweepSellValid && sweepIntegritySellValid
       : false;
   let state: OrderFlowScanState = "WAIT";
   if (result.direction !== "WAIT" && geometryValid && targetQualityValid && coreDataValid && directionGateValid) state = "CONFIRMED";
