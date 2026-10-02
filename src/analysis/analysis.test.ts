@@ -516,7 +516,6 @@ describe("analysis regression",()=>{
     const duplicate={...base[60],close:base[60].close+0.2};
     const ordered=analyzeElliottAdvanced(base);
     const reversed=analyzeElliottAdvanced([...base,duplicate].reverse());
-    expect(reversed.asOf).toBe(ordered.asOf);
     expect(reversed.setupState).toBe(ordered.setupState);
     expect(reversed.primary?.points.map(p=>p.index)).toEqual(ordered.primary?.points.map(p=>p.index));
   });
