@@ -122,16 +122,24 @@ function floorToStep(value:number,step:number){
 
 export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null,constraints:RiskConstraints={},direction:"BUY"|"SELL"|"WAIT"="WAIT") {
   const validAccount=Number.isFinite(account)&&account>0;
-  const validRisk=Number.isFinite(riskPercent)&&riskPercent>0;
+  const validRisk=Number.isFinite(riskPercent)&&riskPercent>0&&riskPercent<=10;
   const validEntry=typeof entry==="number"&&Number.isFinite(entry)&&entry>0;
   const validStop=typeof stop==="number"&&Number.isFinite(stop)&&stop>0;
-  const boundedRisk=validRisk?Math.min(riskPercent,10):0;
-  const riskAmount=validAccount?account*boundedRisk/100:0;
+  const riskAmount=validAccount&&validRisk?account*riskPercent/100:0;
   if(direction==="WAIT"){
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Trade direction is WAIT"};
   }
   if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop){
-    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid account, risk, entry or stop"};
+    const reason=!validAccount
+      ?"Invalid account"
+      :!validRisk
+        ?"Risk percent must be > 0 and <= 10"
+        :!validEntry
+          ?"Invalid entry"
+          :!validStop
+            ?"Invalid stop"
+            :"Entry and stop cannot be equal";
+    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason};
   }
   if((direction==="BUY"&&stop>=entry)||(direction==="SELL"&&stop<=entry)){
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Stop is on the wrong side of entry"};
