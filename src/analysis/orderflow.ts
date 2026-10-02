@@ -218,7 +218,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   ].map(x=>({side:x.side,score:x.checks.filter(k=>diagnostics.find(d=>d.key===k)?.passed).length,checks:x.checks.length})).sort((a,b)=>b.score-a.score)[0];
   const diagnosticDirection:OrderFlowDirection = maxSide.score>=3 ? maxSide.side : "WAIT";
   const failedChecks=failed(diagnosticDirection);
-  const rejectionReason=failedChecks.length
+  let rejectionReason=failedChecks.length
     ? `${diagnosticDirection==="WAIT"?"No side yet":diagnosticDirection+" candidate"} · blocked by ${failedChecks[0].label.toLowerCase()}${failedChecks.length>1?` + ${failedChecks.length-1} more`:""}`
     : "All required confirmations passed";
 
@@ -234,6 +234,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   }
 
   let entry:number|null=null,stop:number|null=null,targets:number[]=[];
+  let tradeGeometryValid=true;
   if(direction!=="WAIT"){
     entry=closed.at(-1)!.close;
     const buffer=avg(closed.slice(-5).map(c=>barRange(c)))*0.10;
@@ -264,12 +265,29 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
       if(validTargets){
         targets=candidateTargets;
       }else{
-        entry=null;stop=null;targets=[];direction="WAIT";
+        tradeGeometryValid=false;
       }
     }else{
-      entry=null;stop=null;targets=[];direction="WAIT";
+      tradeGeometryValid=false;
+    }
+
+    if(!tradeGeometryValid){
+      entry=null;
+      stop=null;
+      targets=[];
+      direction="WAIT";
+      confirmations.length=0;
+      rejectionReason="Confirmed order-flow candidate · blocked by invalid entry/SL/TP geometry";
     }
   }
+  diagnostics.push({
+    key:"trade_geometry",
+    label:"Entry / SL / TP geometry",
+    passed:tradeGeometryValid,
+    detail:tradeGeometryValid
+      ?"Stop side and target direction are valid"
+      :"Invalid stop side or target direction"
+  });
 
   const signal=direction==="BUY"?"BUY CONFIRMED — CLOSED CANDLE":direction==="SELL"?"SELL CONFIRMED — CLOSED CANDLE":"WAIT — no confirmed closed-candle order-flow setup";
   const lastTotal=Math.max(last.buyVolume+last.sellVolume,1e-12);
