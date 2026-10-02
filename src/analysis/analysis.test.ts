@@ -20,6 +20,14 @@ function candles(count:number, start=100):Candle[]{
 }
 
 describe("analysis regression",()=>{
+  it("validates double zigzag W-X-Y with an explicit countertrend X connector",()=>{
+    const bullish=[100,110,105,115,106,116,111,123];
+    const bearish=[123,113,118,108,117,107,112,100];
+    expect(validateDoubleZigzag(bullish,true).valid).toBe(true);
+    expect(validateDoubleZigzag(bearish,false).valid).toBe(true);
+    expect(validateDoubleZigzag([100,110,105,115,120,126,121,130],true).valid).toBe(false);
+  });
+
   it("uses kline taker-buy volume for flow",()=>{
     const c=[
       {...candles(1)[0],volume:100,takerBuyVolume:80},
