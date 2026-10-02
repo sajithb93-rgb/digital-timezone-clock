@@ -55,6 +55,22 @@ function pivots(c:Candle[],w=3):Pivot[]{
 
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
 export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}
+export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
+ if(sweepIndex<0||sweepIndex>asOf||sweepIndex>=c.length)return false;
+ const sweepCandle=c[sweepIndex];
+ const hit=type==="high"
+  ?sweepCandle.high>level&&sweepCandle.close<level
+  :sweepCandle.low<level&&sweepCandle.close>level;
+ if(!hit)return false;
+ for(let i=sweepIndex+1;i<=Math.min(asOf,c.length-1);i++){
+  if(type==="high"&&c[i].close>level)return false;
+  if(type==="low"&&c[i].close<level)return false;
+ }
+ return true;
+}
+export function isPostSweepZoneCausal(zoneOrigin:number,sweepIndex:number,structureIndex:number,maxGap=12):boolean{
+ return zoneOrigin>=sweepIndex&&zoneOrigin<=structureIndex&&structureIndex-zoneOrigin<=maxGap;
+}
 function range(c:Candle[]){
  const q=c.slice(-60);
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
@@ -297,13 +313,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   for(let j=p.index+1;j<=asOf;j++){
    const hit=p.type==="H"?data[j].high>p.price&&data[j].close<p.price:data[j].low<p.price&&data[j].close>p.price;
    if(hit){
-    // A later close through the swept level invalidates the liquidity event.
-    let invalidated=false;
-    for(let k=j+1;k<=asOf;k++){
-     if(p.type==="H"&&data[k].close>p.price){invalidated=true;break}
-     if(p.type==="L"&&data[k].close<p.price){invalidated=true;break}
-    }
-    if(!invalidated){
+    if(isValidLiquiditySweep(data,j,p.price,p.type==="H"?"high":"low",asOf)){
      sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(data,j,atrAt(data,j))>=.7});
     }
     break;
@@ -349,9 +359,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   &&latestInternalDirectionalEvent.index-sweep.index<=12;
  const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,events,last,a,asOf);
  const zoneCausal=!!selectedZone&&!!sweep&&!!latestDirectionalEvent
-  &&selectedZone.origin>=sweep.index
-  &&selectedZone.origin<=latestDirectionalEvent.index
-  &&latestDirectionalEvent.index-selectedZone.origin<=12;
+  &&isPostSweepZoneCausal(selectedZone.origin,sweep.index,latestDirectionalEvent.index);
  const zone=selectedZone&&selectedZone.linked&&causalSequence&&zoneCausal
   ?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
  const direction=zone?rawDirection:null;
