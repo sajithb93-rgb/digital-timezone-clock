@@ -98,54 +98,78 @@ async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:numb
 async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,intervalMsValue:number,signal?:AbortSignal,targetBars=12):Promise<AggTrade[]>{
  const cfg=marketConfig[marketType];
  const seen=new Set<number>();const out:AggTrade[]=[];
- // /aggTrades returns at most 1000 rows. Page BACKWARD by endTime so dense
- // symbols can reach older candles; stop as soon as enough closed footprint
- // buckets are covered instead of always downloading a fixed 12 pages.
- let cursorEnd=endTime;
+ // Binance returns aggregate trades in ascending order (oldest first). Page
+ // forward instead of moving endTime backward; backward pagination can receive
+ // the oldest 1000 rows in a dense window and then incorrectly skip the newer
+ // rows from that same window.
+ let cursorStart=Math.max(0,startTime);
  let requests=0;
  const maxRequests=12;
+ const maxTrades=12000;
  const currentBucket=Math.floor(endTime/intervalMsValue)*intervalMsValue;
- while(cursorEnd>=startTime&&requests<maxRequests&&out.length<12000){
-  const windowStart=Math.max(startTime,cursorEnd-60*60*1000+1);
-  const q=new URLSearchParams({
+ while(cursorStart<=endTime&&requests<maxRequests&&out.length<maxTrades){
+  const windowEnd=Math.min(endTime,cursorStart+60*60*1000-1);
+  const firstParams=new URLSearchParams({
    symbol:symbol.toUpperCase(),
    limit:"1000",
-   startTime:String(windowStart),
-   endTime:String(cursorEnd)
+   startTime:String(cursorStart),
+   endTime:String(windowEnd)
   });
-  const rows=await binanceFetchJson(cfg.aggRest+"?"+q.toString(),{signal});
+  const firstRows=await binanceFetchJson(cfg.aggRest+"?"+firstParams.toString(),{signal});
   requests+=1;
-  if(!Array.isArray(rows)||!rows.length)break;
-  let earliestTime=cursorEnd;
-  for(const raw of rows){
+  if(!Array.isArray(firstRows)||!firstRows.length)break;
+
+  let lastId:number|null=null;
+  let pageLastTime=cursorStart;
+  for(const raw of firstRows){
    const t=normalizeAggTrade(raw);if(!t)continue;
-   earliestTime=Math.min(earliestTime,t.time);
-   if(t.time>=startTime&&t.time<=endTime&&!seen.has(t.id)){
-    seen.add(t.id);out.push(t);
+   pageLastTime=Math.max(pageLastTime,t.time);
+   lastId=t.id;
+   if(t.time>=startTime&&t.time<=endTime&&!seen.has(t.id)){seen.add(t.id);out.push(t);}
+   if(out.length>=maxTrades)break;
+  }
+
+  // If the response filled its 1000-record page, continue by aggregate-trade
+  // ID so trades sharing the same millisecond are not skipped. Do not combine
+  // fromId with startTime/endTime; Binance documents those as alternate
+  // pagination modes.
+  let pageFull=firstRows.length>=1000;
+  while(pageFull&&lastId!==null&&requests<maxRequests&&out.length<maxTrades){
+   const pageParams=new URLSearchParams({
+    symbol:symbol.toUpperCase(),
+    limit:"1000",
+    fromId:String(lastId+1)
+   });
+   const pageRows=await binanceFetchJson(cfg.aggRest+"?"+pageParams.toString(),{signal});
+   requests+=1;
+   if(!Array.isArray(pageRows)||!pageRows.length)break;
+   pageFull=pageRows.length>=1000;
+   lastId=null;
+   let crossedWindow=false;
+   for(const raw of pageRows){
+    const t=normalizeAggTrade(raw);if(!t)continue;
+    lastId=t.id;
+    pageLastTime=Math.max(pageLastTime,t.time);
+    if(t.time>endTime){crossedWindow=true;break;}
+    if(t.time>=startTime&&!seen.has(t.id)){seen.add(t.id);out.push(t);}
+    if(out.length>=maxTrades)break;
    }
+   if(crossedWindow||out.length>=maxTrades||lastId===null)break;
   }
-  // Count only closed candle buckets. The current/forming bucket can never
-  // satisfy the confirmed-footprint requirement.
-  const coveredClosedBuckets=new Set<number>();
-  for(const t of out){
-   const bucket=Math.floor(t.time/intervalMsValue)*intervalMsValue;
-   if(bucket<currentBucket&&bucket>=startTime)coveredClosedBuckets.add(bucket);
-  }
-  // Seeing one trade in the oldest required bucket is not enough: the bucket
-  // may still be partially paged because /aggTrades caps each response at 1000.
-  // Continue until pagination has crossed below that bucket's start, so the
-  // subsequent volume-coverage gate receives a complete oldest required bar.
-  const oldestCovered=coveredClosedBuckets.size
-    ?Math.min(...coveredClosedBuckets)
-    :null;
-  const targetBucketsComplete=coveredClosedBuckets.size>=targetBars
-    &&oldestCovered!==null
-    &&earliestTime<oldestCovered;
-  if(targetBucketsComplete)break;
-  if(earliestTime>=cursorEnd)break;
-  cursorEnd=earliestTime-1;
+
+  // Once the current bucket has been reached we have all trade pages available
+  // up to the requested endTime (subject to the explicit max request/trade cap).
+  if(pageLastTime>=endTime||cursorStart>windowEnd)break;
+  cursorStart=windowEnd+1;
+  // If the server's first page was sparse, there is no need to reuse its last
+  // timestamp as a cursor; advancing to the next fixed window avoids loops.
  }
- return out.filter(t=>t.time>=startTime&&t.time<=endTime).sort((a,b)=>a.time-b.time||a.id-b.id);
+ // The scanner only consumes closed buckets; the current forming bucket is
+ // intentionally left out of the confirmation dataset.
+ return out.filter(t=>{
+  const bucket=Math.floor(t.time/intervalMsValue)*intervalMsValue;
+  return t.time>=startTime&&t.time<=endTime&&bucket<currentBucket;
+ }).sort((a,b)=>a.time-b.time||a.id-b.id);
 }
 function intervalMs(interval:string):number{const units:Record<string,number>={m:60*1000,h:60*60*1000,d:24*60*60*1000};const n=Number(interval.slice(0,-1));return Math.max(60*1000,(Number.isFinite(n)?n:1)*(units[interval.slice(-1)]??60*1000));}
 export default function Home(){
