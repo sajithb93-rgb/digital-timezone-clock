@@ -118,7 +118,10 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   const validStop=typeof stop==="number"&&Number.isFinite(stop)&&stop>0;
   const boundedRisk=validRisk?Math.min(riskPercent,10):0;
   const riskAmount=validAccount?account*boundedRisk/100:0;
-  if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop||direction==="WAIT"){
+  if(direction==="WAIT"){
+    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Trade direction is WAIT"};
+  }
+  if(!validAccount||!validRisk||!validEntry||!validStop||entry===stop){
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid account, risk, entry or stop"};
   }
   if((direction==="BUY"&&stop>=entry)||(direction==="SELL"&&stop<=entry)){
@@ -180,7 +183,8 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
 
   // Backtests must never inspect an unfinished candle. The analysis window ends
   // before the signal bar, and the signal can only execute on later closed bars.
-  // Backtest input may come from a realtime feed where candles are not guaranteed\n  // to arrive sorted or uniquely. Normalize it before assigning positional indexes;\n  // otherwise an out-of-order candle can become artificial lookahead data.\n  const byTime=new Map<number,Candle>();\n  for(const x of c){\n    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;\n    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;\n    if(x.closed!==false)byTime.set(x.time,x);\n  }\n  const closedCandles=[...byTime.values()].sort((a,b)=>a.time-b.time);
+  // Backtest input may come from a realtime feed where candles are not guaranteed
+  // to arrive sorted or uniquely. Normalize it before assigning positional indexes;\n  // otherwise an out-of-order candle can become artificial lookahead data.\n  const byTime=new Map<number,Candle>();\n  for(const x of c){\n    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;\n    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;\n    if(x.closed!==false)byTime.set(x.time,x);\n  }\n  const closedCandles=[...byTime.values()].sort((a,b)=>a.time-b.time);
   if(closedCandles.length<81){
     return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered,openAtEnd};
   }
