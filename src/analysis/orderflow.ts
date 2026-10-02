@@ -133,12 +133,25 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     .sort((a,b)=>a.candleTime-b.candleTime)
     .slice(-36);
   const footprintByTime=new Map(fpAll.map(f=>[f.candleTime,f]));
-  const expectedFootprintTimes=closed.slice(-12).map(c=>c.time);
+  const expectedClosed=closed.slice(-12);
+  const expectedFootprintTimes=expectedClosed.map(c=>c.time);
   const fpRecent=expectedFootprintTimes
     .map(time=>footprintByTime.get(time))
     .filter((f): f is FootprintSnapshot => !!f);
   const latestFootprint=footprintByTime.get(last.time) ?? null;
-  const useFootprint=expectedFootprintTimes.length===12 && fpRecent.length===12;
+  // A time-confirmed footprint is not sufficient if its aggTrade payload is
+  // materially incomplete. Compare each footprint bar with Binance kline
+  // volume before allowing footprint data to confirm a setup.
+  const coverageByTime=new Map(expectedClosed.map(c=>[
+    c.time,
+    Math.min(1,
+      (((footprintByTime.get(c.time)?.buyVolume??0)+(footprintByTime.get(c.time)?.sellVolume??0))/Math.max(c.volume,1e-12))
+    )
+  ]));
+  const footprintCoverage=expectedClosed.length===12
+    ?Math.min(...expectedClosed.map(c=>coverageByTime.get(c.time)??0))
+    :0;
+  const useFootprint=expectedFootprintTimes.length===12 && fpRecent.length===12 && footprintCoverage>=0.95;
   const buyVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.buyVolume,0):candleBuyVolume;
   const sellVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.sellVolume,0):candleSellVolume;
   const total=Math.max(buyVolume+sellVolume,1e-12);
@@ -178,7 +191,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"closed",label:"Closed candle",passed:true,detail:"Latest analysis candle is closed"},
     {key:"history",label:"12+ closed candles",passed:sufficientHistory,detail:`${closed.length}/12 closed candles`},
     {key:"exact",label:"Real Binance taker/footprint flow",passed:confirmedFlowData,detail:useFootprint?"Confirmed Binance footprint window available":allExact?"Exact kline taker-buy volume available":"One or more candles use estimated volume"},
-    {key:"footprint_history",label:"12 confirmed footprint bars",passed:useFootprint,detail:`${fpRecent.length}/12 confirmed footprint bars`},
+    {key:"footprint_history",label:"12 confirmed footprint bars",passed:expectedFootprintTimes.length===12&&fpRecent.length===12,detail:`${fpRecent.length}/12 confirmed footprint bars`},
+    {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:footprintCoverage>=0.95,detail:`Minimum per-bar coverage ${(footprintCoverage*100).toFixed(1)}%`},
     {key:"latest_fp",label:"Latest closed footprint",passed:!!latestFootprint,detail:latestFootprint?"Latest candle has a confirmed footprint":"Latest closed candle has no confirmed footprint snapshot"},
     {key:"sweep_buy",label:"Sell-side liquidity sweep",passed:!!sweepLow,detail:sweepLow?`Sweep at index ${sweepLow.index} · ${sweepLow.sweepPrice??"—"}`:"No low sweep in recent window"},
     {key:"abs_buy",label:"Buyer absorption after sweep",passed:longContext,detail:buyerAbsorption?`Latest buyer absorption at index ${buyerAbsorption.index}`:"No buyer absorption after a low sweep"},
@@ -194,9 +208,9 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"structure_sell",label:"Bearish structure break",passed:last.microStructure==="BEARISH",detail:last.microStructure},
   ];
   const failed = (directionHint:OrderFlowDirection)=>diagnostics.filter(d=>{
-    if(directionHint==="BUY") return ["closed","history","exact","footprint_history","latest_fp","sweep_buy","abs_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
-    if(directionHint==="SELL") return ["closed","history","exact","footprint_history","latest_fp","sweep_sell","abs_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
-    return ["closed","history","exact","footprint_history","latest_fp"].includes(d.key);
+    if(directionHint==="BUY") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_buy","abs_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
+    if(directionHint==="SELL") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_sell","abs_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
+    return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp"].includes(d.key);
   }).filter(d=>!d.passed);
   const maxSide = [
     {side:"BUY" as const,checks:["sweep_buy","abs_buy","pressure_buy","delta_buy","imb_buy","structure_buy"]},
