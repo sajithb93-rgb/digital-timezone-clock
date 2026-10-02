@@ -195,8 +195,8 @@ describe("analysis regression",()=>{
   });
 
   it("requires real contraction or expansion for a triangle candidate",()=>{
-    expect(validateTriangle([100,90,96,92,94],true).contracting).toBe(true);
-    expect(validateTriangle([100,90,105,80,110],true).expanding).toBe(true);
+    expect(validateTriangle([100,110,104,108,106],true).contracting).toBe(true);
+    expect(validateTriangle([100,110,95,125,80],true).expanding).toBe(true);
   });
 
   it("never promotes the fallback monotonic candle series to an Elliott count",()=>{
