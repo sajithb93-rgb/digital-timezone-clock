@@ -48,24 +48,28 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
   const closed=[...byTime.values()].sort((a,b)=>a.time-b.time);
   if(!closed.length)return{buyVolume:0,sellVolume:0,delta:0,deltaRatio:0,cumulativeDelta:0,volumeRatio:0,pressure:"BALANCED"};
   let buy=0,sell=0,cum=0;
+  const recent=closed.slice(-20);
+  const recentTimes=new Set(recent.map(x=>x.time));
   for(const x of closed){
     // Binance klines expose taker-buy base-asset volume. When present, use it
     // directly and derive taker-sell volume as total volume minus taker buys.
+    let b:number,s:number;
     if(Number.isFinite(x.takerBuyVolume)&&x.takerBuyVolume!>=0&&x.takerBuyVolume!<=x.volume){
-      const b=x.takerBuyVolume!;
-      const s=x.volume-b;
-      buy+=b;sell+=s;cum+=b-s;
-      continue;
+      b=x.takerBuyVolume!;
+      s=x.volume-b;
+    }else{
+      // Fallback for Candle inputs that do not include exchange taker-buy data.
+      const range=Math.max(x.high-x.low,1e-12);
+      const bodyBias=Math.max(-1,Math.min(1,(x.close-x.open)/range));
+      const buyShare=.5+bodyBias*.25;
+      b=x.volume*buyShare;s=x.volume-b;
     }
-    // Fallback for Candle inputs that do not include exchange taker-buy data.
-    const range=Math.max(x.high-x.low,1e-12);
-    const bodyBias=Math.max(-1,Math.min(1,(x.close-x.open)/range));
-    const buyShare=.5+bodyBias*.25;
-    const b=x.volume*buyShare,s=x.volume-b;
-    buy+=b;sell+=s;cum+=b-s;
+    cum+=b-s;
+    // "Window delta" and pressure describe the latest 20 closed candles;
+    // cumulativeDelta intentionally retains the full normalized history.
+    if(recentTimes.has(x.time)){buy+=b;sell+=s;}
   }
-  const last=closed.at(-1)!;
-  const recent=closed.slice(-20);
+  const last=recent.at(-1)!;
   const base=recent.slice(0,-1).reduce((s,x)=>s+x.volume,0)/Math.max(1,recent.length-1);
   const delta=buy-sell, total=buy+sell;
   const ratio=delta/Math.max(total,1e-12);
