@@ -495,9 +495,10 @@ export default function Home(){
     book.load(trades);
     pendingRevision+=1;
     setFootprintVersion(v=>v+1);
-    setFootprintVersion(v=>v+1);
    }catch{
-    if(!stop)setFootprintConnected(false);
+    // History backfill failure is distinct from the live aggTrade socket state.
+    // Do not mark the socket offline here; only the WebSocket open/error/close
+    // handlers own the live connectivity flag.
    }finally{
     historyLoading=false;
     if(!stop){setFootprintHistoryReady(true);setFootprintVersion(v=>v+1);}
