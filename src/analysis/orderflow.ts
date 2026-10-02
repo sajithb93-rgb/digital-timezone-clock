@@ -46,6 +46,19 @@ function sweepRemainsValid(candles:Candle[],sweep:OrderFlowBar|undefined,lastInd
   return true;
 }
 function avg(v:number[]){return v.length?v.reduce((a,b)=>a+b,0)/v.length:0}
+function isUsableFootprint(f:FootprintSnapshot):boolean{
+  if(!f.confirmed||!Number.isFinite(f.candleTime))return false;
+  const numeric=[f.buyVolume,f.sellVolume,f.delta,f.deltaRatio,f.stackedBuyImbalances,f.stackedSellImbalances,
+    f.maxBuyImbalanceRatio,f.maxSellImbalanceRatio,f.maxPositiveDelta,f.maxNegativeDelta,f.absorptionStrength];
+  if(numeric.some(x=>!Number.isFinite(x)))return false;
+  if(f.buyVolume<0||f.sellVolume<0||f.stackedBuyImbalances<0||f.stackedSellImbalances<0
+    ||f.maxBuyImbalanceRatio<0||f.maxSellImbalanceRatio<0||f.absorptionStrength<0||f.absorptionStrength>100)return false;
+  const total=f.buyVolume+f.sellVolume;
+  if(total<=0)return false;
+  if(Math.abs(f.delta-(f.buyVolume-f.sellVolume))>Math.max(1e-9,total*1e-6))return false;
+  if(f.deltaRatio< -1.000001||f.deltaRatio>1.000001)return false;
+  return true;
+}
 
 function buildOrderFlowTargets(direction:"BUY"|"SELL",entry:number,risk:number,candles:Candle[]){
   if(!Number.isFinite(entry)||!Number.isFinite(risk)||risk<=0)return {targets:[] as number[],structuralTargetCount:0};
@@ -205,7 +218,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const candleDelta=candleBuyVolume-candleSellVolume;
 
   const fpAll=footprints
-    .filter(f=>f.confirmed && Number.isFinite(f.candleTime))
+    .filter(isUsableFootprint)
     .sort((a,b)=>a.candleTime-b.candleTime)
     .slice(-36);
   const footprintByTime=new Map<number,FootprintSnapshot>();
