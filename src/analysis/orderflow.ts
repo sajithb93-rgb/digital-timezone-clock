@@ -56,9 +56,13 @@ function buildOrderFlowTargets(direction:"BUY"|"SELL",entry:number,risk:number,c
     if(direction==="BUY" && p.high>=window[i-1].high && p.high>=window[i+1].high && p.high>entry)structuralLevels.push(p.high);
     if(direction==="SELL" && p.low<=window[i-1].low && p.low<=window[i+1].low && p.low<entry)structuralLevels.push(p.low);
   }
+  const current=candles.at(-1);
+  if(!current)return {targets:[] as number[],structuralTargetCount:0};
+  const futureSide=(p:number)=>
+    direction==="BUY" ? p>current.high : p<current.low;
   const valid=(p:number)=>{
     const rr=Math.abs(p-entry)/risk;
-    return Number.isFinite(p)&&rr>=minRR&&rr<=maxRR;
+    return Number.isFinite(p)&&rr>=minRR&&rr<=maxRR&&futureSide(p);
   };
   const minSpacing=Math.max(risk*0.25,1e-12);
   const out:number[]=[];
