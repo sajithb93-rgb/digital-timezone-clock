@@ -314,12 +314,21 @@ export default function Home(){
 
   const mergeCandles=(incoming:Candle[],existing:Candle[]=[],preferIncoming=false)=>{
    const byTime=new Map<number,Candle>();
-   if(preferIncoming){
-    for(const c of existing)byTime.set(c.time,c);
-    for(const c of incoming)byTime.set(c.time,c);
-   }else{
-    for(const c of incoming)byTime.set(c.time,c);
-    for(const c of existing)byTime.set(c.time,c);
+   for(const c of existing)byTime.set(c.time,c);
+   for(const next of incoming){
+    const prev=byTime.get(next.time);
+    if(!prev){byTime.set(next.time,next);continue;}
+    const prevClosed=prev.closed!==false;
+    const nextClosed=next.closed!==false;
+    // A closed candle always supersedes an open snapshot at the same time.
+    if(nextClosed!==prevClosed){
+      if(nextClosed)byTime.set(next.time,next);
+      continue;
+    }
+    // When both snapshots are still forming, prefer the live WebSocket update
+    // over a REST resync, because the REST response may have been sampled
+    // before the latest tick arrived.
+    if(preferIncoming||prevClosed)byTime.set(next.time,next);
    }
    return [...byTime.values()].sort((a,b)=>a.time-b.time).slice(-350);
   };
