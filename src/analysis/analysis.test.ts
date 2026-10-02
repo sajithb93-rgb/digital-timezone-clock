@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
+import { normalizeCandleSeries } from "./candles";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
@@ -336,6 +337,8 @@ describe("analysis regression",()=>{
       {time:33,open:100,high:105,low:100.2,close:104,volume:100,closed:true}
     ];
     const future={time:33,open:101,high:102,low:99,close:100,volume:100,closed:true};
+    const normalizedWindow=normalizeCandleSeries([...candles(30),...base]);
+    expect(normalizedWindow.map(x=>x.time)).toEqual([...Array.from({length:30},(_,i)=>i),31,32,33]);
     const earlier=analyzeSMC([...candles(30),...base]);
     const later=analyzeSMC([...candles(30),...base,future]);
     expect(earlier.asOf).toBe(33);
