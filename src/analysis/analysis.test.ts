@@ -54,7 +54,7 @@ describe("analysis regression",()=>{
   });
 
   it("floors quantity from the exchange minQty step origin",()=>{
-    const r=riskPlan(1000,1,100,99.2,{minQty:0.15,maxQty:10,stepSize:0.1,minNotional:0},"BUY");
+    const r=riskPlan(120,1,100,99,{minQty:0.15,maxQty:10,stepSize:0.1,minNotional:0},"BUY");
     expect(r.valid).toBe(true);
     expect(r.positionSize).toBe(1.15);
   });
