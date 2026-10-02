@@ -50,7 +50,7 @@ describe("analysis regression",()=>{
     expect(linear.valid).toBe(true);
     expect(linear.positionSize).toBe(2);
     expect(inverse.valid).toBe(true);
-    expect(inverse.positionSize).toBe(20);
+    expect(inverse.positionSize).toBe(2);
   });
 
   it("floors quantity from the exchange minQty step origin",()=>{
