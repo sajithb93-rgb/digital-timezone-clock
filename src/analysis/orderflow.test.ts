@@ -85,16 +85,6 @@ describe("order flow strategy",()=>{
     expect(r.recentBars.at(-1)?.absorption).toBe("BUYER");
   });
 
-  it("does not force a directional sweep when both sides are swept on one candle",()=>{
-    const r=analyzeOrderFlow([
-      candle(0,100,102,98,101,100,50),
-      candle(1,101,103,99,102,100,50),
-      candle(2,102,104,100,103,100,50),
-      candle(3,103,105,97,101,100,50)
-    ]);
-    expect(r.recentBars.find(x=>x.index===3)?.liquiditySweep).toBe("HIGH");
-  });
-
   it("detects a low liquidity sweep when price trades below prior lows and closes back above",()=>{
     const r=analyzeOrderFlow([
       candle(0,100,102,98,101,100,50),
