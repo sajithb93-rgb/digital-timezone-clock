@@ -438,7 +438,14 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
   const flat=best.flat;
   const prices=q.map(p=>p.price);
 
-  const [,a,b,cPoint]=prices;
+  const [x,a,b,cPoint]=prices;
+  // The completed ABC correction must not break the parent impulse origin.
+  // Once C crosses that boundary, the parent 1–5 count is no longer a valid
+  // continuation context even if price later reclaims the level.
+  const parentOrigin=primary.points[0].price;
+  const nonInvalidatingC=bull?cPoint>parentOrigin:cPoint<parentOrigin;
+  if(!nonInvalidatingC)return null;
+
   // Entry is the B trigger after C completes; C is the invalidation point.
   const entry=b;
   const invalidation=cPoint;
@@ -449,6 +456,11 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
   const extension=Math.max(abs(b-a),risk)*1.618;
   const target=entry+dir*extension;
   const lastClose=c.at(-1)?.close??entry;
+  // A live continuation is only actionable while price is still on the
+  // non-invalidated side of C. Reclaims after invalidation do not revive the
+  // old count.
+  const liveNotInvalidated=bull?lastClose>invalidation:lastClose<invalidation;
+  if(!liveNotInvalidated)return null;
   const triggered=bull?lastClose>=entry:lastClose<=entry;
   const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0)+(flat.valid?0:2));
 
@@ -481,33 +493,36 @@ function buildFib(prices:number[],bull:boolean){
 }
 
 export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
-  if(c.length<30)return EMPTY("Insufficient closed-candle history");
-  const ps=alternatePivots(swingPivots(c,2));
-  const corrections=correctionCandidates(c);
+  let closedEnd=c.length-1;
+  while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+  if(closedEnd<29)return EMPTY("Insufficient closed-candle history");
+  const data=c.slice(0,closedEnd+1);
+  const ps=alternatePivots(swingPivots(data,2));
+  const corrections=correctionCandidates(data);
   const action:WaveCount[]=[
     ...[true,false].flatMap(bull=>{
       const out:WaveCount[]=[];
       for(let i=0;i<=ps.length-6;i++){
         const q=ps.slice(i,i+6),types=bull?["L","H","L","H","L","H"]:["H","L","H","L","H","L"];
         if(q.some((p,j)=>p.type!==types[j]))continue;
-        const candidate=impulseCandidate(c,q,bull);
+        const candidate=impulseCandidate(data,q,bull);
         if(candidate)out.push(candidate);
       }
       return out;
     }),
-    ...diagonalCandidates(c,true),...diagonalCandidates(c,false)
+    ...diagonalCandidates(data,true),...diagonalCandidates(data,false)
   ];
   const ranked=action
     .sort((a,b)=>{
-      const ageA=(c.length-1)-(a.points.at(-1)?.index??-1);
-      const ageB=(c.length-1)-(b.points.at(-1)?.index??-1);
+      const ageA=(data.length-1)-(a.points.at(-1)?.index??-1);
+      const ageB=(data.length-1)-(b.points.at(-1)?.index??-1);
       const recentA=ageA<=MAX_PRIMARY_AGE_BARS?8*(1-ageA/MAX_PRIMARY_AGE_BARS):0;
       const recentB=ageB<=MAX_PRIMARY_AGE_BARS?8*(1-ageB/MAX_PRIMARY_AGE_BARS):0;
       return (b.quality+recentB)-(a.quality+recentA)
         ||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1));
     })
     .filter((x,i,a)=>i===a.findIndex(y=>y.points.map(p=>p.index).join(",")===x.points.map(p=>p.index).join(",")));
-  const recentRanked=ranked.filter(x=>((c.length-1)-(x.points.at(-1)?.index??-1))<=MAX_PRIMARY_AGE_BARS);
+  const recentRanked=ranked.filter(x=>((data.length-1)-(x.points.at(-1)?.index??-1))<=MAX_PRIMARY_AGE_BARS);
   const primary=recentRanked.find(x=>x.quality>=60)??null;
   const alternative=ranked.find(x=>x!==primary&&x.quality>=55)??null;
   const correction=corrections[0]??null;
@@ -528,12 +543,12 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   const prices=primary.points.map(p=>p.price);
   const w1=abs(prices[1]-prices[0]),w2=abs(prices[2]-prices[1]),w3=abs(prices[3]-prices[2]),w4=abs(prices[4]-prices[3]),w5=abs(prices[5]-prices[4]);
   const fibLevels=buildFib(prices,primary.direction==="bullish");
-  const nested3=internalEvidence(c,primary.points[2].index,primary.points[3].index,primary.direction==="bullish");
-  const nested5=internalEvidence(c,primary.points[4].index,primary.points[5].index,primary.direction==="bullish");
+  const nested3=internalEvidence(data,primary.points[2].index,primary.points[3].index,primary.direction==="bullish");
+  const nested5=internalEvidence(data,primary.points[4].index,primary.points[5].index,primary.direction==="bullish");
   nested3.wave="3"; nested5.wave="5";
   const nested=[nested3,nested5];
-  const degree=inferDegree((primary.points.at(-1)?.index??0)-(primary.points[0]?.index??0),c.length);
-  const lastClose=c.at(-1)?.close??prices[5];
+  const degree=inferDegree((primary.points.at(-1)?.index??0)-(primary.points[0]?.index??0),data.length);
+  const lastClose=data.at(-1)?.close??prices[5];
   const invalidated=primary.direction==="bullish"?lastClose<=prices[0]:lastClose>=prices[0];
   const setupState:ElliottCountState=invalidated?"INVALIDATED":"HISTORICAL";
   const pattern:AdvancedElliottResult["pattern"]=primary.kind==="Impulse" ? "Impulse" : "Diagonal";
@@ -546,7 +561,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   const setupReason=invalidated
     ? "Closed price crossed the Wave 1 origin; the completed count is invalidated in hindsight"
     : "Completed count is historical; live entry requires a confirmed ABC correction and Wave B trigger";
-  const liveSetup=invalidated?null:buildLiveContinuationSetup(c,primary);
+  const liveSetup=invalidated?null:buildLiveContinuationSetup(data,primary);
   const liveActiveWave=liveSetup
     ? ((liveSetup.points.at(-1)?.label==="A"?"A":liveSetup.points.at(-1)?.label==="B"?"B":"C") as AdvancedElliottResult["activeWave"])
     : "Wave 5";
