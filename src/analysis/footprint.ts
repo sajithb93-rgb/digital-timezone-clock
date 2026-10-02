@@ -1,4 +1,5 @@
 import type { Candle } from "./engine";
+import { normalizeCandleSeries } from "./candles";
 
 export type AggTrade = {
   id: number;
@@ -299,9 +300,7 @@ export class FootprintBook {
   }
 
   snapshots(candles: Candle[], now = Date.now()): FootprintSnapshot[] {
-    const ordered=[...candles].sort((a,b)=>a.time-b.time);
-    const firstUnclosed=ordered.findIndex(c=>c.closed===false);
-    const closed=firstUnclosed>=0?ordered.slice(0,firstUnclosed):ordered;
+    const closed=normalizeCandleSeries(candles,true);
     return closed
       .slice(-this.maxBars)
       .map(c => this.snapshot(c.time, c, now))
