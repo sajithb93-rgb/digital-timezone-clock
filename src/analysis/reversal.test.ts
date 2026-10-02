@@ -54,6 +54,23 @@ describe("reversal engine",()=>{
     expect(r.structureIndex).toBe(33);
   });
 
+  it("requires the liquidity sweep itself to be confirmed",()=>{
+    const candles=Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[31]=candle(31,100,101,95,99);
+    candles[33]=candle(33,98,106,97,105);
+    const r=analyzeReversal(candles,smc({
+      sweeps:[{index:31,price:95,type:"low",confirmed:false,displacement:true}],
+      events:[
+        {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},
+        {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}
+      ],
+      fvgs:[{from:32,to:33,low:103,high:105,type:"bullish",filled:false,size:1}],
+      orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}]
+    }),flow(),{requireOrderFlow:false});
+    expect(r.sweepIndex).toBeNull();
+    expect(r.state).not.toBe("CONFIRMED");
+  });
+
   it("rejects a stale sweep-to-CHOCH gap beyond the causal window",()=>{
     const candles=Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
     candles[33]=candle(33,98,106,97,105);
