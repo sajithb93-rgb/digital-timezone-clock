@@ -299,23 +299,31 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
   // must never print BOS/CHOCH or mutate protected structure state.
   if(c[i].closed===false)continue;
   const disp=displacementAt(c,i)>=.7;
-  const brokeBull=!!activeH&&c[i].close>activeH.price;
-  const brokeBear=!!activeL&&c[i].close<activeL.price;
+  // Continuation BOS uses the latest active pivot; counter-trend CHOCH must
+  // use the protected pivot. A newer unprotected pivot must not hide the
+  // protected level that actually defines the trend change.
+  const brokeBull=structure==="bearish"
+    ?!!protectedHigh&&c[i].close>protectedHigh.price
+    :!!activeH&&c[i].close>activeH.price;
+  const brokeBear=structure==="bullish"
+    ?!!protectedLow&&c[i].close<protectedLow.price
+    :!!activeL&&c[i].close<activeL.price;
   if(brokeBull&&brokeBear){
    // A malformed/ambiguous candle cannot establish two opposing structure
    // events at once; wait for the next closed candle.
    continue;
   }
   if(brokeBull){
+   const brokenPivot=structure==="bearish"?protectedHigh:activeH;
    const type=classifyProtectedStructureBreak(
      structure,
      "high",
      protectedHigh?"high":protectedLow?"low":null,
      protectedHigh?.index??protectedLow?.index,
-     activeH?.index
+     brokenPivot?.index
     );
-   if(type){
-    events.push({index:i,price:activeH!.price,type,direction:"bullish",strength:disp?"displacement":"normal"});
+   if(type&&brokenPivot){
+    events.push({index:i,price:brokenPivot.price,type,direction:"bullish",strength:disp?"displacement":"normal"});
     structure="bullish";
     activeH=null;
     if(type==="BOS"){
@@ -329,15 +337,16 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
     protectedHigh=null;
    }
   }else if(brokeBear){
+   const brokenPivot=structure==="bullish"?protectedLow:activeL;
    const type=classifyProtectedStructureBreak(
      structure,
      "low",
      protectedHigh?"high":protectedLow?"low":null,
      protectedHigh?.index??protectedLow?.index,
-     activeL?.index
+     brokenPivot?.index
     );
-   if(type){
-    events.push({index:i,price:activeL!.price,type,direction:"bearish",strength:disp?"displacement":"normal"});
+   if(type&&brokenPivot){
+    events.push({index:i,price:brokenPivot.price,type,direction:"bearish",strength:disp?"displacement":"normal"});
     structure="bearish";
     activeL=null;
     if(type==="BOS"){
