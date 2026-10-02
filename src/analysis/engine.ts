@@ -26,7 +26,7 @@ export function isValidTradeGeometry(direction:"BUY"|"SELL",entry:number,stop:nu
 }
 const MIN_SETUP_RR=1.5;
 export type SMCResult={
- trend:"Bullish"|"Bearish"|"Neutral"; asOf:number; pivots:Pivot[]; internalPivots:Pivot[]; events:StructureEvent[];
+ trend:"Bullish"|"Bearish"|"Neutral"; asOf:number; asOfTime?:number; pivots:Pivot[]; internalPivots:Pivot[]; events:StructureEvent[];
  fvgs:FVG[]; orderBlocks:OB[]; breakers:Breaker[]; liquidityHighs:Pivot[]; liquidityLows:Pivot[]; equalHighs:Pivot[]; equalLows:Pivot[];
  sweeps:Sweep[]; premiumDiscount:"Premium"|"Discount"|"Equilibrium"; premiumDiscountRange:{high:number;low:number;mid:number};
  vwap:number; volumeRatio:number; displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
@@ -581,7 +581,7 @@ function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:C
 
 
 export function analyzeSMC(c:Candle[]):SMCResult{
- const empty:SMCResult={trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",status:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
+ const empty:SMCResult={trend:"Neutral",asOf:-1,asOfTime:0,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",status:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
  // Core SMC indices are causal positions, so normalize the exchange feed before
  // any pivot/event calculation. Keep only valid OHLC candles, dedupe timestamps,
  // sort chronologically, and stop at the first open candle.
@@ -720,7 +720,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
- return{trend,asOf,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(data,asOf),entryZone:zone,stop,targets,score,setup};
+ return{trend,asOf,asOfTime:data[asOf]?.time??0,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(data,asOf),entryZone:zone,stop,targets,score,setup};
 }
 
 export type ImpulseMetrics={w1:number;w2:number;w3:number;w4:number;w5:number;r2:number;r3:number;r4:number;r5:number};
