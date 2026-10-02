@@ -115,3 +115,12 @@ describe("advanced flow/regime input normalization",()=>{
     expect(detectRegime([...bars].reverse())).toEqual(detectRegime([...bars,duplicate]));
   });
 });
+
+
+describe("advanced history guards",()=>{
+  it("does not manufacture a volume ratio from an undersized history",()=>{
+    const candles=Array.from({length:3},(_,i)=>({time:i,open:100,high:101,low:99,close:100+i,volume:100,takerBuyVolume:50,closed:true}));
+    expect(flowSnapshot(candles).volumeRatio).toBe(0);
+  });
+
+});
