@@ -199,6 +199,11 @@ function isFavorableTarget(side: "LONG" | "SHORT", entry: number, target: number
   return side === "LONG" ? target > entry : target < entry;
 }
 
+export function globalIndexFromWindow(windowStart:number,localIndex:number):number{
+  if(!Number.isInteger(windowStart)||windowStart<0||!Number.isInteger(localIndex)||localIndex<0)return -1;
+  return windowStart+localIndex;
+}
+
 async function main() {
   if (
     !(Number.isFinite(DAYS) && Number.isInteger(DAYS) && DAYS > 0) ||
@@ -276,7 +281,7 @@ async function main() {
       const setup = smc.setup;
       const wave = elliott.primary;
       const waveEndIndex = wave?.points.at(-1)?.index ?? -Infinity;
-      const waveGlobalIndex = Number.isFinite(waveEndIndex) ? windowStart + waveEndIndex : -Infinity;
+      const waveGlobalIndex = Number.isFinite(waveEndIndex) ? globalIndexFromWindow(windowStart,waveEndIndex) : -Infinity;
       const waveAge = Number.isFinite(waveGlobalIndex) ? i - waveGlobalIndex : Infinity;
       const waveFresh = !!wave && waveAge >= 0 && waveAge <= ELLIOTT_MAX_AGE_BARS;
       const waveValid = !!wave && elliott.setupState !== "INVALIDATED";
@@ -368,7 +373,7 @@ async function main() {
         }
 
         const eventLocalIndex = smc.events.at(-1)?.index ?? -1;
-        const eventIndex = eventLocalIndex >= 0 ? windowStart + eventLocalIndex : -1;
+        const eventIndex = eventLocalIndex >= 0 ? globalIndexFromWindow(windowStart,eventLocalIndex) : -1;
         const signalKey = [
           eventIndex,
           side,
