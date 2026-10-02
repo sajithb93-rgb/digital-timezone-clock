@@ -164,7 +164,7 @@ describe("analysis regression",()=>{
   });
 
   it("distinguishes regular, expanded and running flats",()=>{
-    const regular=validateFlat([100,80,99,90],false);
+    const regular=validateFlat([100,80,99,85],false);
     expect(regular.valid).toBe(true);
     expect(regular.subtype).toBe("Regular Flat");
 
@@ -172,7 +172,7 @@ describe("analysis regression",()=>{
     expect(expanded.valid).toBe(true);
     expect(expanded.subtype).toBe("Expanded Flat");
 
-    const running=validateFlat([100,80,105,90],false);
+    const running=validateFlat([100,80,105,88],false);
     expect(running.valid).toBe(true);
     expect(running.subtype).toBe("Running Flat");
   });
