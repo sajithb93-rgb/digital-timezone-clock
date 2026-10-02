@@ -67,8 +67,8 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
   let state: OrderFlowScanState = "WAIT";
   if (resultDirectionAligned && geometryValid && targetQualityValid && coreDataValid && directionGateValid) state = "CONFIRMED";
   else if (!geometryValid || !targetQualityValid || !coreDataValid || !directionGateValid || !resultDirectionAligned) state = "WAIT";
-  else if (direction !== "NONE" && score >= 75) state = "SETUP";
-  else if (direction !== "NONE" && score >= 50) state = "WATCH";
+  else if (score >= 75) state = "SETUP";
+  else if (score >= 50) state = "WATCH";
   
   const missing = direction === "BUY"
     ? ["buyers pressure", "positive delta", "low sweep", "buyer absorption", "footprint delta", "3x buy imbalance", "2 stacked buys", "bullish break"].filter((_, i) => !buyChecks[i])
