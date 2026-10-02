@@ -196,7 +196,9 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const orderFlowPoints = requireOrderFlow && orderflowConfirmed ? 15 : 0;
     const rawScore = 15 + (choch ? 25 : 0) + (displacementOk ? 15 : 0) + (fvg ? 10 : 0) + (orderBlock ? 10 : 0) + orderFlowPoints + (deltaDivergence ? 5 : 0) + (opposingStructure ? 5 : 0);
     const score = clamp(rawScore);
-    const state: ReversalState = score >= 75 && !!choch && opposingStructure && displacementOk && orderFlowGate ? "CONFIRMED" : score >= 45 ? "SETUP" : "WATCH";
+    const structuralGate = !!choch && opposingStructure && displacementOk;
+    const confirmedThreshold = requireOrderFlow ? 75 : 70;
+    const state: ReversalState = score >= confirmedThreshold && structuralGate && orderFlowGate ? "CONFIRMED" : score >= 45 ? "SETUP" : "WATCH";
 
     const evidence: ReversalEvidence[] = [
       { name: "Liquidity sweep", active: true, points: 15, detail: direction === "BUY" ? "Sell-side liquidity swept and reclaimed" : "Buy-side liquidity swept and reclaimed" },
