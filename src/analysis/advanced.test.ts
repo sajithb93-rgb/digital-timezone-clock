@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flowSnapshot, detectRegime, riskPlan, runSMCBacktest } from "./advanced";
+import { backtestCostR, flowSnapshot, detectRegime, riskPlan, runSMCBacktest } from "./advanced";
 import type { Candle } from "./engine";
 
 function candle(i:number):Candle {
@@ -12,6 +12,18 @@ describe("risk sizing precision",()=>{
     expect(r.valid).toBe(false);
     expect(r.positionSize).toBe(0);
     expect(r.reason).toContain("<= 10");
+  });
+
+  it("scales backtest transaction costs with Risk R",()=>{
+    const oneR=backtestCostR(100,110,5,10,1);
+    const twoR=backtestCostR(100,110,5,10,2);
+    expect(twoR).toBeCloseTo(oneR*2,12);
+  });
+
+  it("ignores invalid exchange constraint values instead of producing NaN sizing",()=>{
+    const r=riskPlan(1000,1,100,98,{minQty:Number.NaN,stepSize:0.1},"BUY");
+    expect(r.valid).toBe(true);
+    expect(Number.isFinite(r.positionSize)).toBe(true);
   });
 
   it("returns exchange-step quantities without floating-point residue",()=>{
