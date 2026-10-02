@@ -555,6 +555,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   &&!!sweep
   &&latestDirectionalEvent.direction===rawDirection
   &&sweep.index<latestDirectionalEvent.index
+  &&latestDirectionalEvent.index<=asOf
   &&latestDirectionalEvent.index-sweep.index<=12;
  const latestInternalDirectionalEvent=rawDirection
   ?internalEvents.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
@@ -605,7 +606,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  if(selectedZone?.kind==="FVG")confirmations.push("Qualified unfilled fair value gap");
  if(selectedZone?.kind==="BREAKER")confirmations.push("Qualified active breaker");
  if(selectedZone?.linked&&zoneCausal)confirmations.push("Zone linked to current post-sweep structure leg");
- if(direction==="bullish"&&pd==="Discount"||direction==="bearish"&&pd==="Premium")confirmations.push("Premium/discount aligned");
+ if((direction==="bullish"&&pd==="Discount")||(direction==="bearish"&&pd==="Premium"))confirmations.push("Premium/discount aligned");
  if(Math.abs(last.close-last.open)>=a*.5)confirmations.push("Displacement");
  const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
  const score=zone&&direction?clamp(rawScore):0;
@@ -619,7 +620,18 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const hasPD=confirmations.includes("Premium/discount aligned");
  const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap")||confirmations.includes("Qualified active breaker"); // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
  // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
- const confirmedGate=hasSwing&&hasConfirmedBOS&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&internalCausal&&selectedZone?.linked===true&&zoneCausal;
+ const confirmedGate=last.closed!==false
+  &&rawDirection!==null
+  &&hasSwing
+  &&hasConfirmedBOS
+  &&hasInternal
+  &&hasSweep
+  &&hasPD
+  &&hasQualifiedZone
+  &&causalSequence
+  &&internalCausal
+  &&selectedZone?.linked===true
+  &&zoneCausal;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
