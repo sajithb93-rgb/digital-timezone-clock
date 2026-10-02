@@ -54,7 +54,7 @@ function pivots(c:Candle[],w=3):Pivot[]{
 }
 
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
-export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.high>=zone.low&&last.low<=zone.high}
+export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}
 function range(c:Candle[]){
  const q=c.slice(-60);
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
@@ -278,12 +278,15 @@ function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:C
 
 export function analyzeSMC(c:Candle[]):SMCResult{
  const empty:SMCResult={trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",status:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
- if(c.length<25)return empty;
- const a=atr(c),ps=labelPivots(pivots(c,3)),internal=labelPivots(pivots(c,1));
- const events=detectStructureEvents(c,ps);
- const internalEvents=detectStructureEvents(c,internal);
- const asOf=c.length-1;
- const fvgs=findFvgs(c,a,asOf),obs=findOrderBlocks(c,a,asOf,events),breakers=makeBreakers(obs,c,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.18,.0000001);
+ let closedEnd=c.length-1;
+ while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ if(closedEnd<24)return empty;
+ const data=c.slice(0,closedEnd+1);
+ const a=atr(data),ps=labelPivots(pivots(data,3)),internal=labelPivots(pivots(data,1));
+ const events=detectStructureEvents(data,ps);
+ const internalEvents=detectStructureEvents(data,internal);
+ const asOf=data.length-1;
+ const fvgs=findFvgs(data,a,asOf),obs=findOrderBlocks(data,a,asOf,events),breakers=makeBreakers(obs,data,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.18,.0000001);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
  const liquidityHighs=uniquePivots([...equalHighs,...highs.slice(-6)],tol).slice(-8);
  const liquidityLows=uniquePivots([...equalLows,...lows.slice(-6)],tol).slice(-8);
@@ -298,13 +301,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
    }
   }
  }
- const r=dealingRange(ps,c,asOf);
+ const r=dealingRange(ps,data,asOf);
  const mid=(r.hi+r.lo)/2;
- const last=c[c.length-1];
- const recentVolumes=c.slice(-21,-1);
+ const last=data[asOf];
+ const recentVolumes=data.slice(-21,-1);
  const volBase=recentVolumes.reduce((s,x)=>s+x.volume,0)/Math.max(1,recentVolumes.length);
  const volumeRatio=last.volume/Math.max(volBase,.0000001);
- const recentCandles=c.slice(Math.min(r.anchorIndex,asOf),asOf+1);
+ const recentCandles=data.slice(Math.min(r.anchorIndex,asOf),asOf+1);
  const totalVolume=recentCandles.reduce((sum,x)=>sum+x.volume,0);
  const vwap=recentCandles.reduce((sum,x)=>sum+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
  const structureDirection=events.at(-1)?.direction??null;
@@ -316,8 +319,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   :rawDirection==="bearish"
    ?sweeps.slice().reverse().find(x=>x.type==="high"&&asOf-x.index<=20)
    :undefined;
+ const latestDirectionalEvent=rawDirection
+  ?events.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
+  :undefined;
+ const causalSequence=!!rawDirection&&!!latestDirectionalEvent&&!!sweep&&latestDirectionalEvent.direction===rawDirection&&sweep.index<latestDirectionalEvent.index;
  const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,events,last,a,asOf);
- const zone=selectedZone?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
+ const zone=selectedZone&&selectedZone.linked&&causalSequence
+  ?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
  const direction=zone?rawDirection:null;
  const entry=zone?(zone.low+zone.high)/2:null;
  const zoneOrigin=selectedZone?.origin??asOf;
@@ -339,7 +347,8 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   ?uniqueTargets.filter(p=>Math.abs(p-entry)/risk>=MIN_SETUP_RR).slice(0,4)
   :[];
  const confirmations:string[]=[];
- if(direction&&events.at(-1)?.direction===direction)confirmations.push("Swing structure aligned");
+ if(direction&&latestDirectionalEvent?.direction===direction)confirmations.push("Swing structure aligned");
+ if(direction&&causalSequence)confirmations.push("Liquidity sweep → structure break sequence aligned");
  if(direction&&internalEvents.at(-1)?.direction===direction)confirmations.push("Internal structure aligned");
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
  if(selectedZone?.kind==="OB")confirmations.push("Qualified unmitigated order block");
@@ -358,11 +367,11 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap");
  // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
  // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
- const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone;
+ const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&selectedZone?.linked===true;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
- return{trend,asOf:c.length-1,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
+ return{trend,asOf,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(data,asOf,a),entryZone:zone,stop,targets,score,setup};
 }
 
 export type ImpulseMetrics={w1:number;w2:number;w3:number;w4:number;w5:number;r2:number;r3:number;r4:number;r5:number};
