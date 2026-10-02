@@ -284,6 +284,7 @@ export default function Home(){
  },[symbol,marketType]);
 
  useEffect(()=>{
+  const controller=new AbortController();
   let ws:WebSocket|undefined;
   let stop=false;
   let retryTimer:ReturnType<typeof setTimeout>|undefined;
@@ -345,7 +346,7 @@ export default function Home(){
    if(stop||restSyncInFlight)return;
    restSyncInFlight=true;
    try{
-    const data=await fetchKlines(symbol,interval,350,marketType);
+    const data=await fetchKlines(symbol,interval,350,marketType,controller.signal);
     if(stop)return;
     setRestConnected(true);
     setError("");
@@ -421,7 +422,7 @@ export default function Home(){
    };
   };
 
-  fetchKlines(symbol,interval,350,marketType).then(data=>{
+  fetchKlines(symbol,interval,350,marketType,controller.signal).then(data=>{
    if(stop)return;
    setRestConnected(true);
    setCandles(data);
@@ -439,6 +440,7 @@ export default function Home(){
 
   return()=>{
    stop=true;
+   controller.abort();
    clearTimers();
    const oldSocket=ws;
    ws=undefined;
