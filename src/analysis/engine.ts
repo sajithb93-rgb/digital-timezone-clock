@@ -351,9 +351,17 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const score=zone&&direction?clamp(rawScore):0;
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
  const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0&&rr!==null&&rr>=MIN_SETUP_RR;
+ const hasSwing=confirmations.includes("Swing structure aligned");
+ const hasInternal=confirmations.includes("Internal structure aligned");
+ const hasSweep=confirmations.includes("Liquidity sweep + displacement");
+ const hasPD=confirmations.includes("Premium/discount aligned");
+ const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap");
+ // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
+ // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
+ const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
- const status:Setup["status"]=usable&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
- const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable?score:0,confirmations:usable?confirmations:[]};
+ const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
+ const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
  return{trend,asOf:c.length-1,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(c,c.length-1,a),entryZone:zone,stop,targets,score,setup};
 }
 
