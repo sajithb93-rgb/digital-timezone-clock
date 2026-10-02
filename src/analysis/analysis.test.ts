@@ -21,11 +21,11 @@ function candles(count:number, start=100):Candle[]{
 }
 
 describe("analysis regression",()=>{
-  it("allows Wave 3 to tie Wave 1 when Wave 5 is longer",()=>{
+  it("rejects an impulse when Wave 3 ties Wave 1 as the shortest",()=>{
     const prices=[100,110,105,115,112,120];
     const v=validateImpulseWave(prices,true);
-    expect(v.w3NotShortest).toBe(true);
-    expect(v.valid).toBe(true);
+    expect(v.w3NotShortest).toBe(false);
+    expect(v.valid).toBe(false);
   });
 
   it("validates double zigzag W-X-Y with an explicit countertrend X connector",()=>{
