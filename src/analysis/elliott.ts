@@ -497,8 +497,16 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const endIndex=xPoint?.index??-1;
   if(!xPoint||endIndex<0)return null;
   const bull=primary.direction==="bullish";
-  const closedCandleEnd=c.reduce((lastIndex,candle,index)=>candle.closed===false?lastIndex:index,-1);
-  const data=c.slice(0,closedCandleEnd+1);
+  const byTime=new Map<number,Candle>();
+  for(const x of c){
+    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
+    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+    byTime.set(x.time,x);
+  }
+  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
+  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
+  const closedCandleEnd=firstUnclosed>=0?firstUnclosed-1:normalized.length-1;
+  const data=normalized.slice(0,closedCandleEnd+1);
   const ps=alternatePivots(swingPivots(data,2)).filter(p=>p.index>endIndex);
   // Wave 5 end is the X anchor. The correction must then be the next
   // three confirmed pivots A-B-C; never substitute a later pivot for X.
