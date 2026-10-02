@@ -222,10 +222,13 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
  return events;
 }
 
-function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
+export function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  const out:FVG[]=[];
- const end=Math.min(asOf,c.length-1);
+ let closedEnd=Math.min(asOf,c.length-1);
+ while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ const end=closedEnd;
  for(let i=1;i<end;i++){
+
   const left=c[i-1],right=c[i+1];
   const bull=left.high<right.low;
   const bear=left.low>right.high;
