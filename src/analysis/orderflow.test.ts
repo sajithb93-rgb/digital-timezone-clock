@@ -219,8 +219,8 @@ describe("order flow strategy",()=>{
 
   it("invalidates a SELL when price later closes above the swept level",()=>{
     const candles=fullShortCandles().map((c,i)=>{
-      if(i===10)return {...c,high:101,close:101.5,takerBuyVolume:35};
-      if(i===11)return {...c,open:101.5,high:101.8,low:94,close:95,takerBuyVolume:30};
+      if(i===10)return {...c,high:103,close:102.5,takerBuyVolume:35};
+      if(i===11)return {...c,open:102.5,high:102.8,low:94,close:95,takerBuyVolume:30};
       return c;
     });
     const r=analyzeOrderFlow(candles,confirmedFootprints("SELL"));
