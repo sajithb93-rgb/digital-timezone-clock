@@ -212,6 +212,11 @@ export class FootprintBook {
   }
 
   add(trade: AggTrade): boolean {
+    // Keep the class safe even when a caller bypasses normalizeAggTrade at
+    // runtime. A typed AggTrade is not a runtime guarantee.
+    if(!Number.isInteger(trade.id)||trade.id<=0||!Number.isFinite(trade.price)||trade.price<=0
+      ||!Number.isFinite(trade.quantity)||trade.quantity<=0||!Number.isInteger(trade.time)||trade.time<=0
+      ||typeof trade.isBuyerMaker!=="boolean")return false;
     if (this.seen.has(trade.id)) return false;
     this.seen.add(trade.id);
     const time = bucketStart(trade.time, this.intervalMs);
