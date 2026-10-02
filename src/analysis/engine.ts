@@ -52,17 +52,24 @@ export function mtfFrameWeight(interval:string):number{
 function trueRange(c:Candle[],i:number){if(i===0)return c[i].high-c[i].low;return Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close))}
 function atr(c:Candle[],n=14){return atrAt(c,c.length-1,n)}
 function atrAt(c:Candle[],end:number,n=14){if(!c.length||end<0)return 0;const e=Math.min(end,c.length-1),start=Math.max(0,e-n+1);return c.slice(start,e+1).reduce((v,_,i)=>v+trueRange(c,start+i),0)/Math.max(1,e-start+1)}
-function pivots(c:Candle[],w=3):Pivot[]{
+export function pivots(c:Candle[],w=3):Pivot[]{
  const out:Pivot[]=[];
  for(let i=w;i<c.length-w;i++){
-  let hi=true,lo=true,highScore=0,lowScore=0;
+  let hi=true,lo=true,strictHigh=false,strictLow=false,highScore=0,lowScore=0;
   for(let j=i-w;j<=i+w;j++){
    if(j===i)continue;
-   if(c[j].high>=c[i].high)hi=false;
-   if(c[j].low<=c[i].low)lo=false;
+   if(c[j].high>c[i].high)hi=false;
+   if(c[j].low<c[i].low)lo=false;
+   if(c[j].high<c[i].high)strictHigh=true;
+   if(c[j].low>c[i].low)strictLow=true;
    highScore+=Math.max(0,c[i].high-c[j].high);
    lowScore+=Math.max(0,c[j].low-c[i].low);
   }
+  // Equal-touch plateaus remain eligible when at least one neighboring bar is
+  // strictly lower/higher. This preserves liquidity pivots for EQH/EQL while
+  // still rejecting a completely flat window as a swing.
+  hi=hi&&strictHigh;
+  lo=lo&&strictLow;
   if(hi&&lo){
    if(highScore>=lowScore)lo=false;
    else hi=false;
