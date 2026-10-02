@@ -414,7 +414,7 @@ describe("order flow strategy",()=>{
       candle(8,97,98,96,97,100,70),
       candle(9,97,97,96.5,96.8,100,60),
       candle(10,96.8,97,96.2,96.7,100,60),
-      candle(11,96.7,96.5,94.8,95.8,100,65)
+      candle(11,96.7,96.9,94.8,95.8,100,65)
     ];
     const r=analyzeOrderFlow(candles,confirmedFootprints("SELL"));
     expect(r.direction).toBe("WAIT");
