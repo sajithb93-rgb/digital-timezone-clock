@@ -43,6 +43,13 @@ describe("analysis regression",()=>{
     expect(isSetupActive(zone,{time:2,open:106,high:107,low:103,close:104,volume:100,closed:true})).toBe(true);
   });
 
+  it("ignores an unfinished tail candle for SMC signal state",()=>{
+    const c=[...candles(40),{...candles(1)[0],time:40,closed:false}];
+    const m=analyzeSMC(c);
+    expect(m.asOf).toBe(39);
+    expect(isSetupActive({low:99,high:101,type:"entry"},c.at(-1))).toBe(false);
+  });
+
   it("never emits two opposing structure events on the same candle",()=>{
     const c=candles(120);
     const m=analyzeSMC(c);
