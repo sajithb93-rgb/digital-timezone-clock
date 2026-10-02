@@ -238,6 +238,36 @@ describe("order flow strategy",()=>{
     expect(r.rejectionReason).toContain("3-bar buyer flow alignment");
   });
 
+  it("confirms a normal BUY entry without chase extension",()=>{
+    const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
+    expect(r.direction).toBe("BUY");
+    expect(r.entry).toBe(105);
+    expect(r.diagnostics.find(d=>d.key==="entry_chase_buy")?.passed).toBe(true);
+  });
+
+  it("rejects an overextended BUY entry after the structure break",()=>{
+    const candles=fullLongCandles().map((c,i)=>i===11?{...c,high:116,close:115}:c);
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.entry).toBeNull();
+    expect(r.diagnostics.find(d=>d.key==="entry_chase_buy")?.passed).toBe(false);
+  });
+
+  it("confirms a normal SELL entry without chase extension",()=>{
+    const r=analyzeOrderFlow(fullShortCandles(),confirmedFootprints("SELL"));
+    expect(r.direction).toBe("SELL");
+    expect(r.entry).toBe(95);
+    expect(r.diagnostics.find(d=>d.key==="entry_chase_sell")?.passed).toBe(true);
+  });
+
+  it("rejects an overextended SELL entry after the structure break",()=>{
+    const candles=fullShortCandles().map((c,i)=>i===11?{...c,low:84,close:85}:c);
+    const r=analyzeOrderFlow(candles,confirmedFootprints("SELL"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.entry).toBeNull();
+    expect(r.diagnostics.find(d=>d.key==="entry_chase_sell")?.passed).toBe(false);
+  });
+
   it("rejects a BUY when the computed stop is not below entry",()=>{
     const candles=[
       ...Array.from({length:7},(_,i)=>candle(i,108,110,105,109,100,50)),
