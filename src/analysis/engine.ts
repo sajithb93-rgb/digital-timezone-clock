@@ -530,8 +530,8 @@ function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:C
  for(const o of obs){
   if(o.type!==opposite||o.mitigated||asOf-o.index>50)continue;
   const mid=(o.low+o.high)/2;
-  if(direction==="bullish"&&mid>Math.max(entry,last.close)&&mid<=last.close+atrValue*8)levels.push(mid);
-  if(direction==="bearish"&&mid<Math.min(entry,last.close)&&mid>=last.close-atrValue*8)levels.push(mid);
+  if(direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8)levels.push(mid);
+  if(direction==="bearish"&&mid<Math.min(entry,last.low)&&mid>=last.low-atrValue*8)levels.push(mid);
  }
  for(const f of fvgs){
   if(f.type!==opposite||f.filled||asOf-f.to>40)continue;
