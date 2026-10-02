@@ -7,7 +7,7 @@ const make=(symbol:string,timeframe:string,state:EntryScanState,direction:"BUY"|
 
 export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):EntryScanRow{
  const s=r.setup;
- const direction=s.direction==="WAIT"?(r.trend==="Bullish"?"BUY":r.trend==="Bearish"?"SELL":"NONE"):s.direction;
+ const direction=s.direction==="WAIT"?"NONE":s.direction;
  const latestEvent=r.events.slice().reverse().find(e=>e.direction===(direction==="BUY"?"bullish":direction==="SELL"?"bearish":"none"));
  const latestSweep=r.sweeps.slice().reverse().find(sw=>sw.type===(direction==="BUY"?"low":direction==="SELL"?"high":"none"));
  const asOf=r.asOf??0;
