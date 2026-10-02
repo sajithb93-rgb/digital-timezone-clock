@@ -368,6 +368,14 @@ describe("order flow strategy",()=>{
     expect(r.diagnostics.find(d=>d.key==="target_quality")?.passed).toBe(true);
   });
 
+  it("rejects duplicate footprint snapshots for the same candle time",()=>{
+    const footprint=confirmedFootprints("BUY");
+    footprint.push({...footprint[0],candleTime:11});
+    const r=analyzeOrderFlow(fullLongCandles(),footprint);
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="footprint_unique")?.passed).toBe(false);
+  });
+
   it("requires near-complete coverage on the latest confirmation footprint",()=>{
     const footprint=confirmedFootprints("BUY");
     footprint[11]={...footprint[11],buyVolume:58,sellVolume:40,delta:18,deltaRatio:18/98};
