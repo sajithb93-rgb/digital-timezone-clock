@@ -343,6 +343,7 @@ export default function Home(){
   let establishedOnce=false;
   let hasInitialData=false;
   let restSyncInFlight=false;
+  if(!symbol){setLoading(false);setError("");return()=>{stop=true;controller.abort()}}
   const MAX_RECONNECT_DELAY=30000;
   const STALE_AFTER_MS=45000;
 
