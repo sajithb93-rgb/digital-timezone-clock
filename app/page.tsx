@@ -495,7 +495,7 @@ export default function Home(){
     book.load(trades);
     pendingRevision+=1;
     setFootprintVersion(v=>v+1);
-    setFootprintConnected(true);
+    setFootprintVersion(v=>v+1);
    }catch{
     if(!stop)setFootprintConnected(false);
    }finally{
