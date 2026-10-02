@@ -254,8 +254,9 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const structureLow=structureWindow.length>=2?Math.min(...structureWindow.map(c=>c.low)):null;
   const structureRange=avg(structureWindow.map(c=>barRange(c)));
   const maxEntryChase=Math.max(structureRange,1e-12);
-  const entryChaseBuy=structureHigh!=null?(last.close-structureHigh)/maxEntryChase:null;
-  const entryChaseSell=structureLow!=null?(structureLow-last.close)/maxEntryChase:null;
+  const latestClose=closed.at(-1)!.close;
+  const entryChaseBuy=structureHigh!=null?(latestClose-structureHigh)/maxEntryChase:null;
+  const entryChaseSell=structureLow!=null?(structureLow-latestClose)/maxEntryChase:null;
   const entryChaseBuyValid=entryChaseBuy==null||entryChaseBuy<=1;
   const entryChaseSellValid=entryChaseSell==null||entryChaseSell<=1;
 
