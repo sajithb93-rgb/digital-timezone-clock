@@ -223,7 +223,7 @@ export default function Home(){
        if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
        const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType,controller.signal)).filter(x=>x.closed!==false);
        const lookback=Math.max(tfMs*14,60*60*1000);
-       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,controller.signal,12);
+       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
        const book=new FootprintBook(tfMs,c.pair.tickSize,36);
        book.load(trades);
        const fps=book.snapshots(candles,Date.now());
@@ -482,7 +482,7 @@ export default function Home(){
    if(!symbol||!selectedPair?.tickSize){historyLoading=false;return}
    try{
     const lookback=Math.max(tfMs*14,60*60*1000);
-    const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,controller.signal,12);
+    const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
     if(stop)return;
     book.load(trades);
     pendingRevision+=1;
