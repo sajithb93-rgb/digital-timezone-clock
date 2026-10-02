@@ -143,6 +143,16 @@ describe("order flow strategy",()=>{
     expect(r.absorption).toBe("BUYER");
   });
 
+  it("blocks confirmation when one footprint bar is only partly covered",()=>{
+    const candles=Array.from({length:12},(_,i)=>candle(i,100,101,99,100.2,100,60));
+    const footprint=confirmedFootprints("BUY");
+    footprint[5]={...footprint[5],buyVolume:20,sellVolume:10,delta:10,deltaRatio:1/3};
+    const result=analyzeOrderFlow(candles,footprint);
+    expect(result.direction).toBe("WAIT");
+    expect(result.footprintHistoryCount).toBe(12);
+    expect(result.diagnostics.find(d=>d.key==="footprint_coverage")?.passed).toBe(false);
+  });
+
   it("requires 12 closed candles before a 12-bar pressure setup can confirm",()=>{
     const rows=Array.from({length:11},(_,i)=>candle(i,100+i,102+i,99+i,101+i,100,70));
     const r=analyzeOrderFlow(rows);
