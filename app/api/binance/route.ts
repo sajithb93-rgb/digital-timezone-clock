@@ -51,8 +51,12 @@ export async function GET(request: NextRequest) {
     }
   }
   const symbol = query.get("symbol");
-  if (symbol !== null && !/^[A-Za-z0-9._-]{1,40}$/.test(symbol)) {
-    return NextResponse.json({ error: "Invalid Binance symbol" }, { status: 400 });
+  if (symbol !== null) {
+    const normalizedSymbol = symbol.trim().toUpperCase();
+    if (!normalizedSymbol || !/^[A-Z0-9._-]{1,40}$/.test(normalizedSymbol)) {
+      return NextResponse.json({ error: "Invalid Binance symbol" }, { status: 400 });
+    }
+    query.set("symbol", normalizedSymbol);
   }
   const interval = query.get("interval");
   if (interval !== null && !/^([1-9]\d*)(s|m|h|d|w|M)$/.test(interval)) {
