@@ -491,6 +491,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
  if(selectedZone?.kind==="OB")confirmations.push("Qualified unmitigated order block");
  if(selectedZone?.kind==="FVG")confirmations.push("Qualified unfilled fair value gap");
+ if(selectedZone?.kind==="BREAKER")confirmations.push("Qualified active breaker");
  if(selectedZone?.linked&&zoneCausal)confirmations.push("Zone linked to current post-sweep structure leg");
  if(direction==="bullish"&&pd==="Discount"||direction==="bearish"&&pd==="Premium")confirmations.push("Premium/discount aligned");
  if(Math.abs(last.close-last.open)>=a*.5)confirmations.push("Displacement");
@@ -501,7 +502,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const hasSwing=confirmations.includes("Swing structure aligned");
  const hasInternal=confirmations.includes("Internal structure aligned"); const hasSweep=confirmations.includes("Liquidity sweep + displacement");
  const hasPD=confirmations.includes("Premium/discount aligned");
- const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap"); // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
+ const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap")||confirmations.includes("Qualified active breaker"); // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
  // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
  const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&internalCausal&&selectedZone?.linked===true&&zoneCausal;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
