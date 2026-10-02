@@ -378,20 +378,34 @@ export function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
  let endIndex=Math.min(asOf,c.length-1);
  while(endIndex>=0&&c[endIndex].closed===false)endIndex--;
  for(const o of obs){
-  if(!o.mitigated||o.mitigationIndex===undefined||o.mitigationIndex>endIndex)continue;
+  const mitigation=o.mitigationIndex;
+  // A breaker can only form after a confirmed, closed-candle mitigation.
+  if(!o.mitigated||mitigation===undefined||mitigation<=o.index||mitigation>endIndex)continue;
   let breakIndex:number|undefined;
-  for(let j=o.mitigationIndex+1;j<=endIndex;j++){
+  for(let j=mitigation+1;j<=endIndex;j++){
+   if(c[j].closed===false)continue;
+   // The original OB must be broken by a closed candle through its far
+   // boundary; a wick alone is not enough to create a breaker.
    const broken=o.type==="bullish" ? c[j].close<o.low : c[j].close>o.high;
    if(broken){breakIndex=j;break}
   }
   if(breakIndex===undefined)continue;
   let invalidAfterBreak=false;
   for(let j=breakIndex+1;j<=endIndex;j++){
+   if(c[j].closed===false)continue;
+   // Once converted, a close back through the opposite OB boundary
+   // invalidates the breaker. Keep the zone active until that happens.
    const invalid=o.type==="bullish" ? c[j].close>o.high : c[j].close<o.low;
    if(invalid){invalidAfterBreak=true;break}
   }
   if(!invalidAfterBreak){
-   out.push({index:breakIndex,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true});
+   out.push({
+    index:breakIndex,
+    low:o.low,
+    high:o.high,
+    type:o.type==="bullish"?"bearish":"bullish",
+    active:true
+   });
   }
  }
  return out;
