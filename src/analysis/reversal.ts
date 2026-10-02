@@ -209,10 +209,10 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
   if (closed.length < 30) return { ...EMPTY, asOf: closed.length - 1 };
 
   const asOf = closed.length - 1;
-  if (smc.asOf !== asOf) {
+  const last = closed[asOf];
+  if (smc.asOf !== asOf || !last || !Number.isFinite(smc.asOfTime) || smc.asOfTime !== last.time) {
     return { ...EMPTY, asOf, reason: "SMC context is out of sync with the reversal candle series" };
   }
-  const last = closed[asOf];
   const lookbackStart = Math.max(0, asOf - 20);
   let best: ReversalEngineResult | null = null;
 
@@ -245,6 +245,12 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     let bestDisplacementIndex = anchor;
     const displacementStart = choch ? choch.index + 1 : anchor;
     for (let i = Math.max(0, displacementStart); i <= asOf && i - anchor <= 12; i += 1) {
+      const candidate = closed[i];
+      if (!candidate) continue;
+      const directionAligned = direction === "BUY"
+        ? candidate.close > candidate.open
+        : candidate.close < candidate.open;
+      if (!directionAligned) continue;
       const ratio = displacementRatio(closed, i);
       if (ratio > bestDisplacement) {
         bestDisplacement = ratio;
