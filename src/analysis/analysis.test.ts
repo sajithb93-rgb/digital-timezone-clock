@@ -206,8 +206,8 @@ describe("analysis regression",()=>{
     expect(e.engine).toBe("ADVANCED_ELLIOTT_V2");
   });
 
-  it("rejects an ordinary flat whose B wave is outside XA",()=>{
-    expect(validateFlat([100,80,101,85],false).valid).toBe(false);
+  it("rejects a malformed flat whose C wave fails to reverse B",()=>{
+    expect(validateFlat([100,80,101,102],false).valid).toBe(false);
   });
 
 });
