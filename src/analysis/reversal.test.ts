@@ -35,6 +35,8 @@ function flow(overrides: Partial<OrderFlowResult> = {}): OrderFlowResult {
 describe("reversal engine",()=>{
   it("confirms a bullish reversal after sweep, opposite structure, CHOCH, displacement and order flow",()=>{
     const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[20]=candle(20,100,160,99,100);
+    candles[20]=candle(20,100,160,99,100);
     candles[31]=candle(31,100,101,95,99);
     candles[32]=candle(32,99,100,96,98);
     candles[33]=candle(33,98,106,97,105);
@@ -151,6 +153,25 @@ describe("reversal engine",()=>{
     expect(r.state).toBe("CONFIRMED");
     expect(r.orderflowConfirmed).toBe(false);
     expect(r.reason).toContain("structural MTF mode");
+  });
+
+  it("does not confirm a reversal when targets are only mathematical R multiples",()=>{
+    const candles=Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[31]=candle(31,100,101,95,99);
+    candles[32]=candle(32,99,100,96,98);
+    candles[33]=candle(33,98,106,97,105);
+    candles[34]=candle(34,105,118,103,116);
+    const r=analyzeReversal(candles,smc({
+      sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],
+      events:[
+        {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},
+        {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}
+      ],
+      fvgs:[{from:32,to:33,low:103,high:105,type:"bullish",filled:false,size:1}],
+      orderBlocks:[{index:30,low:96,high:99,type:"bullish",mitigated:false,strength:1}],
+    }),flow(),{requireOrderFlow:false});
+    expect(r.state).not.toBe("CONFIRMED");
+    expect(r.targets).toHaveLength(3);
   });
 
   it("does not confirm without a causal entry zone and three future targets",()=>{
