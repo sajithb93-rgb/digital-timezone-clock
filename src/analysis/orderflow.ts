@@ -190,7 +190,11 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const footprintCoverage=expectedClosed.length===12
     ?Math.min(...expectedClosed.map(c=>coverageByTime.get(c.time)??0))
     :0;
-  const useFootprint=expectedFootprintTimes.length===12 && fpRecent.length===12 && footprintCoverage>=0.95;
+  const latestFootprintCoverage=coverageByTime.get(last.time)??0;
+  const useFootprint=expectedFootprintTimes.length===12
+    && fpRecent.length===12
+    && footprintCoverage>=0.95
+    && latestFootprintCoverage>=0.99;
   const buyVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.buyVolume,0):candleBuyVolume;
   const sellVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.sellVolume,0):candleSellVolume;
   const total=Math.max(buyVolume+sellVolume,1e-12);
@@ -252,6 +256,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"exact",label:"Real Binance taker/footprint flow",passed:confirmedFlowData,detail:useFootprint?"Confirmed Binance footprint window available":allExact?"Exact kline taker-buy volume available":"One or more candles use estimated volume"},
     {key:"footprint_history",label:"12 confirmed footprint bars",passed:expectedFootprintTimes.length===12&&fpRecent.length===12,detail:`${fpRecent.length}/12 confirmed footprint bars`},
     {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:footprintCoverage>=0.95,detail:`Minimum per-bar coverage ${(footprintCoverage*100).toFixed(1)}%`},
+    {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:latestFootprintCoverage>=0.99,detail:`Latest candle coverage ${(latestFootprintCoverage*100).toFixed(1)}%`},
     {key:"latest_fp",label:"Latest closed footprint",passed:!!latestFootprint,detail:latestFootprint?"Latest candle has a confirmed footprint":"Latest closed candle has no confirmed footprint snapshot"},
     {key:"sweep_buy",label:"Sell-side liquidity sweep",passed:!!sweepLow,detail:sweepLow?`Sweep at index ${sweepLow.index} · ${sweepLow.sweepPrice??"—"}`:"No low sweep in recent window"},
     {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:sweepRecentBuyValid,detail:sweepLow?`${last.index-sweepLow.index} bars ago`:"No low sweep"},
@@ -275,8 +280,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"structure_sell",label:"Bearish structure break",passed:last.microStructure==="BEARISH",detail:last.microStructure},
   ];
   const failed = (directionHint:OrderFlowDirection)=>diagnostics.filter(d=>{
-    if(directionHint==="BUY") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_buy","sweep_recent_buy","sweep_integrity_buy","abs_buy","recent_flow_buy","entry_chase_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
-    if(directionHint==="SELL") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_sell","sweep_recent_sell","sweep_integrity_sell","abs_sell","recent_flow_sell","entry_chase_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
+    if(directionHint==="BUY") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp","sweep_buy","sweep_recent_buy","sweep_integrity_buy","abs_buy","recent_flow_buy","entry_chase_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
+    if(directionHint==="SELL") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp","sweep_sell","sweep_recent_sell","sweep_integrity_sell","abs_sell","recent_flow_sell","entry_chase_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
     return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp"].includes(d.key);
   }).filter(d=>!d.passed);
   const maxSide = [
