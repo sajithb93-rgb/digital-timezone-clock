@@ -550,8 +550,9 @@ function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:C
  for(const f of fvgs){
   if(f.type!==opposite||f.filled||asOf-f.to>40)continue;
   const mid=(f.low+f.high)/2;
-  if(direction==="bullish"&&mid>Math.max(entry,last.close)&&mid<=last.close+atrValue*8)levels.push(mid);
-  if(direction==="bearish"&&mid<Math.min(entry,last.close)&&mid>=last.close-atrValue*8)levels.push(mid);
+  // A target already touched by the latest signal candle is not a future objective.
+  if(direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8)levels.push(mid);
+  if(direction==="bearish"&&mid<Math.min(entry,last.low)&&mid>=last.low-atrValue*8)levels.push(mid);
  }
  return levels;
 }
@@ -649,9 +650,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   :null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
  const structuralTargets=direction==="bullish"
-  ?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>Math.max(entry,last.close)).sort((a,b)=>a-b)
+  ?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>Math.max(entry,last.high)).sort((a,b)=>a-b)
   :direction==="bearish"
-   ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<Math.min(entry,last.close)).sort((a,b)=>b-a)
+   ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<Math.min(entry,last.low)).sort((a,b)=>b-a)
    :[];
  const opposingTargets=direction&&entry!==null?recentOpposingTargets(direction,entry,last,obs,fvgs,asOf,a):[];
  const uniqueTargets=[...structuralTargets,...opposingTargets].sort((x,y)=>direction==="bullish"?x-y:y-x)
