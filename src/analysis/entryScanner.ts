@@ -33,8 +33,8 @@ export function classifyElliottEntry(symbol:string,timeframe:string,r:ElliottRes
  const risk=Math.abs(live.entry-live.invalidation);
  const rr=target!=null&&risk>0?Math.abs(target-live.entry)/risk:null;
  const trigger=live.direction==="bullish"
-   ? (currentPrice!=null&&currentPrice>=live.entry)
-   : (currentPrice!=null&&currentPrice<=live.entry);
+   ? (currentPrice!=null&&target!=null&&currentPrice>=live.entry&&currentPrice>live.invalidation&&currentPrice<target)
+   : (currentPrice!=null&&target!=null&&currentPrice<=live.entry&&currentPrice<live.invalidation&&currentPrice>target);
  const score=Math.min(100,Math.round((r.confidence||live.quality||0)+(live.strict?5:0)));
  const confirmed=live.strict!==false&&trigger&&target!=null&&rr!=null&&rr>=1.5;
 
