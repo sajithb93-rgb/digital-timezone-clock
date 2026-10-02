@@ -23,12 +23,19 @@ export function normalizeCandleSeries<T extends CandleLike>(candles:T[],stopAtOp
    if(nextClosed)byTime.set(x.time,x);
    continue;
   }
-  const sameCore=prev.open===x.open&&prev.high===x.high&&prev.low===x.low&&prev.close===x.close&&prev.volume===x.volume
-    &&(prev.takerBuyVolume??null)===(x.takerBuyVolume??null);
-  if(!sameCore){
-   byTime.delete(x.time);
-   ambiguous.add(x.time);
+  const samePriceVolume=prev.open===x.open&&prev.high===x.high&&prev.low===x.low&&prev.close===x.close&&prev.volume===x.volume;
+  if(samePriceVolume){
+   // REST and WebSocket snapshots may differ only because one source omitted
+   // the optional taker-buy field. Preserve the richer snapshot instead of
+   // discarding an otherwise identical candle as ambiguous.
+   const prevTaker=prev.takerBuyVolume;
+   const nextTaker=x.takerBuyVolume;
+   if(prevTaker===undefined&&nextTaker!==undefined){byTime.set(x.time,x);continue;}
+   if(prevTaker!==undefined&&nextTaker===undefined)continue;
+   if(prevTaker===nextTaker)continue;
   }
+  byTime.delete(x.time);
+  ambiguous.add(x.time);
  }
  const ordered=[...byTime.values()].sort((a,b)=>a.time-b.time);
  if(!stopAtOpen)return ordered;
