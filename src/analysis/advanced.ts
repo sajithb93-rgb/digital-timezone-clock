@@ -300,7 +300,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     // entry candle itself also manufacture a TP win/SL loss; manage the
     // position only from the next closed candle.
     const manageStart=entryBar+1;
-    const tradeEnd=Math.min(closedCandles.length,manageStart+maxBars-1);
+    const tradeEnd=Math.min(closedCandles.length,manageStart+maxBars);
     for(let j=manageStart;j<tradeEnd;j++){
       const x=closedCandles[j];
       const stopHit=isBuy?x.low<=stop:x.high>=stop;
