@@ -459,7 +459,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   const sweepType=p.type==="H"?"high":"low";
   const latest=findLatestValidLiquiditySweep(data,p.price,sweepType,p.index+1,asOf);
   if(latest){
-   latest.displacement=displacementAt(data,latest.index,atrAt(data,latest.index))>=.7;
+   latest.displacement=displacementAt(data,latest.index)>=.7;
    sweeps.push(latest);
   }
  }
@@ -557,7 +557,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
- return{trend,asOf,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(data,asOf,a),entryZone:zone,stop,targets,score,setup};
+ return{trend,asOf,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(data,asOf),entryZone:zone,stop,targets,score,setup};
 }
 
 export type ImpulseMetrics={w1:number;w2:number;w3:number;w4:number;w5:number;r2:number;r3:number;r4:number;r5:number};
