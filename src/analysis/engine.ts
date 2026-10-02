@@ -760,7 +760,7 @@ export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValid
  const positiveLengths=w1>0&&w2>0&&w3>0&&w4>0&&w5>0;
  const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
  const w3BeyondW1=bull?p3>p1:p3<p1;
- const w3NotShortest=w3>Math.min(w1,w5);
+ const w3NotShortest=w3>=Math.min(w1,w5);
  const w4OverlapsW1=bull?p4<=p1&&p4>p0:p4>=p1&&p4<p0;
  // Retain this as diagnostic information, but do not use it as a hard
  // validity gate. Valid diagonals can have deeper Wave-4 retracements.
