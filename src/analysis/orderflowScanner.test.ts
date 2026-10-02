@@ -21,7 +21,7 @@ const base: OrderFlowResult = {
     {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
     {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
     {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
-    {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:true,detail:"100%"},
+    {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:true,detail:"100%"},
     {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:true,detail:"100%"},
     {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"},
     {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:true,detail:"1 bar ago"},
@@ -37,6 +37,11 @@ describe("Order Flow pair scanner", () => {
     expect(row.state).toBe("CONFIRMED");
     expect(row.direction).toBe("BUY");
   });
+  it("does not confirm when classifier direction disagrees with engine direction",()=>{
+    const row = classifyOrderFlowSetup("BTCUSDT","5m",{...base,direction:"SELL",signal:"SELL CONFIRMED — CLOSED CANDLE"});
+    expect(row.state).toBe("WAIT");
+  });
+
   it("detects a forming setup without calling it confirmed", () => {
     const row = classifyOrderFlowSetup("ETHUSDT", "5m", base);
     expect(row.state).toBe("SETUP");
@@ -65,7 +70,7 @@ describe("Order Flow pair scanner", () => {
           {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
           {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
           {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
-          {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:true,detail:"98%"} ,
+          {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:true,detail:"98%"} ,
           {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"}
         ]
       }
@@ -95,7 +100,7 @@ describe("Order Flow pair scanner", () => {
           {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
           {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
           {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
-          {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:true,detail:"100%"},
+          {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:true,detail:"100%"},
           {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:true,detail:"100%"},
           {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"},
           {key:"target_quality",label:"Target quality / spacing",passed:true,detail:"3 valid targets"},
@@ -122,7 +127,7 @@ describe("Order Flow pair scanner", () => {
           {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
           {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
           {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
-          {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:true,detail:"100%"},
+          {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:true,detail:"100%"},
           {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"}
         ]
       }
