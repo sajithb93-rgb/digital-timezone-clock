@@ -109,10 +109,17 @@ export type NestedImpulseValidation={
 
 export function validateNestedImpulse(prices:number[],bullish:boolean):NestedImpulseValidation{
   if(prices.length<6)return{alternating:false,structural:false,valid:false};
-  // Nested validation receives prices only, so alternation is checked from
-  // the expected five-wave directional geometry rather than inferred later.
+  // Prices alone do not carry pivot types, so explicitly verify the expected
+  // high/low alternation from the five-wave directional sequence. Structural
+  // validity by itself must not be treated as proof of alternation.
+  const dir=bullish?1:-1;
+  const alternating=prices.slice(1).every((p,i)=>{
+    const prev=prices[i];
+    const expectedMove=(i%2===0)?dir:-dir;
+    const delta=p-prev;
+    return expectedMove>0?delta>0:delta<0;
+  });
   const structural=validateStandardImpulse(prices,bullish).valid;
-  const alternating=structural;
   return{alternating,structural,valid:alternating&&structural};
 }
 
