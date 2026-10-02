@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -66,6 +66,30 @@ describe("analysis regression",()=>{
     ];
     expect(isValidLiquiditySweep(lowSweep,1,96,"low",2)).toBe(false);
     expect(isValidLiquiditySweep(lowSweep,1,96,"low",1)).toBe(true);
+  });
+
+  it("selects the newest currently valid liquidity sweep at one level",()=>{
+    const data=[
+      {...candles(1)[0],time:0,open:100,high:101,low:99,close:100,closed:true},
+      {...candles(1)[0],time:1,open:100,high:105,low:99,close:103,closed:true},
+      {...candles(1)[0],time:2,open:103,high:104,low:101,close:106,closed:true},
+      {...candles(1)[0],time:3,open:106,high:107,low:102,close:106.5,closed:true},
+      {...candles(1)[0],time:4,open:106.5,high:105.5,low:102,close:104,closed:true},
+      {...candles(1)[0],time:5,open:104,high:106,low:102.5,close:104.5,closed:true}
+    ];
+    const latest=findLatestValidLiquiditySweep(data,105,"high",1,5);
+    expect(latest?.index).toBe(4);
+    expect(latest?.type).toBe("high");
+  });
+
+  it("does not let an unfinished candle invalidate a liquidity sweep",()=>{
+    const data=[
+      {...candles(1)[0],time:0,open:100,high:101,low:99,close:100,closed:true},
+      {...candles(1)[0],time:1,open:100,high:105,low:99,close:104,closed:true},
+      {...candles(1)[0],time:2,open:104,high:106,low:103,close:104.5,closed:false}
+    ];
+    expect(isValidLiquiditySweep(data,1,104.5,"high",2)).toBe(true);
+    expect(findLatestValidLiquiditySweep(data,104.5,"high",1,2)?.index).toBe(1);
   });
 
   it("requires an entry zone to belong to the same post-sweep structure leg",()=>{
