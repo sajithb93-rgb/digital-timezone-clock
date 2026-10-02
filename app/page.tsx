@@ -76,26 +76,6 @@ async function fetchKlines(symbol:string,interval:string,limit=300,marketType:Ma
  return parsed;
 }
 
-async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,signal?:AbortSignal,maxTrades=3000):Promise<AggTrade[]>{
- const cfg=marketConfig[marketType];const out:AggTrade[]=[];const seen=new Set<number>();let cursor=startTime;let requestCount=0;
- while(cursor<=endTime&&out.length<maxTrades&&requestCount<8){
-  const windowEnd=Math.min(endTime,cursor+60*60*1000-1);
-  const q=new URLSearchParams({symbol:symbol.toUpperCase(),limit:"1000",startTime:String(cursor),endTime:String(windowEnd)});
-  const rows=await binanceFetchJson(cfg.aggRest+"?"+q.toString(),{signal});requestCount+=1;
-  if(!Array.isArray(rows)||rows.length===0)break;
-  let lastTime=cursor;
-  for(const raw of rows){
-   const t=normalizeAggTrade(raw);if(!t)continue;
-   lastTime=Math.max(lastTime,t.time);
-   if(t.time<startTime||t.time>endTime||seen.has(t.id))continue;
-   seen.add(t.id);out.push(t);if(out.length>=maxTrades)break;
-  }
-  if(lastTime<=cursor)break;
-  cursor=lastTime+1;
- }
- return out.sort((a,b)=>a.time-b.time||a.id-b.id);
-}
-
 async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,intervalMsValue:number,signal?:AbortSignal,targetBars=12):Promise<AggTrade[]>{
  const cfg=marketConfig[marketType];
  const seen=new Set<number>();const out:AggTrade[]=[];
