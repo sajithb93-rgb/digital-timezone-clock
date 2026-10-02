@@ -65,9 +65,26 @@ function isUsableFootprint(f:FootprintSnapshot):boolean{
     ||f.maxBuyImbalanceRatio<0||f.maxSellImbalanceRatio<0||f.absorptionStrength<0||f.absorptionStrength>100)return false;
   const total=f.buyVolume+f.sellVolume;
   if(total<=0)return false;
-  if(Math.abs(f.delta-(f.buyVolume-f.sellVolume))>Math.max(1e-9,total*1e-6))return false;
+  const levelBuy=f.levels.reduce((sum,level)=>sum+level.buyVolume,0);
+  const levelSell=f.levels.reduce((sum,level)=>sum+level.sellVolume,0);
+  const levelDelta=levelBuy-levelSell;
+  const levelTotal=levelBuy+levelSell;
+  const aggregateTolerance=Math.max(1e-9,total*1e-6);
+  // The summary volumes must reconcile with the price-level ledger. Otherwise
+  // a corrupted summary can pass the candle-coverage gate while its actual
+  // footprint levels describe a different market flow.
+  if(Math.abs(levelBuy-f.buyVolume)>aggregateTolerance
+    ||Math.abs(levelSell-f.sellVolume)>aggregateTolerance
+    ||Math.abs(levelTotal-total)>aggregateTolerance)return false;
+  if(Math.abs(f.delta-(f.buyVolume-f.sellVolume))>aggregateTolerance
+    ||Math.abs(levelDelta-f.delta)>aggregateTolerance
+    ||Math.abs(f.deltaRatio-f.delta/total)>1e-6)return false;
+  const derivedMaxPositive=f.levels.reduce((m,x)=>Math.max(m,x.delta),0);
+  const derivedMaxNegative=f.levels.reduce((m,x)=>Math.min(m,x.delta),0);
+  if(Math.abs(derivedMaxPositive-f.maxPositiveDelta)>Math.max(1e-9,total*1e-6)
+    ||Math.abs(derivedMaxNegative-f.maxNegativeDelta)>Math.max(1e-9,total*1e-6))return false;
   if(f.deltaRatio< -1.000001||f.deltaRatio>1.000001)return false;
-  if(f.poc!==null&&(!Number.isFinite(f.poc)||f.poc<=0))return false;
+  if(f.poc!==null&&(!Number.isFinite(f.poc)||f.poc<=0||!f.levels.some(level=>Math.abs(level.price-f.poc)<=1e-12)))return false;
   return true;
 }
 
