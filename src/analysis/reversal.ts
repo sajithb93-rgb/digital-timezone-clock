@@ -257,7 +257,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const sweepCandle = closed[sweep.index];
     const sweepExtreme = sweepCandle ? (direction === "BUY" ? sweepCandle.low : sweepCandle.high) : sweep.price;
     const invalidation = direction === "BUY" ? sweepExtreme - buffer : sweepExtreme + buffer;
-    const targets = calculateTargets(closed, entry, invalidation, direction);
+    const targets = zone ? calculateTargets(closed, entry, invalidation, direction) : [];
     const risk=Math.abs(entry-invalidation);
     const validEntryGeometry=!!zone&&Number.isFinite(invalidation)&&invalidation>0&&risk>0&&(
       direction==="BUY"?invalidation<entry:invalidation>entry
