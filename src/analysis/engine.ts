@@ -232,39 +232,60 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
   const disp=displacementAt(c,i)>=.7;
   const brokeBull=!!activeH&&c[i].close>activeH.price;
   const brokeBear=!!activeL&&c[i].close<activeL.price;
-  if(brokeBull&&brokeBear){
-   // A malformed/ambiguous candle cannot establish two opposing structure
-   // events at once; wait for the next closed candle.
-   continue;
-  }
+  if(brokeBull&&brokeBear)continue;
+
   if(brokeBull){
-   const type=classifyProtectedStructureBreak(structure,"high",protectedHigh?"high":protectedLow?"low":null);
-   if(type){
-    events.push({index:i,price:activeH!.price,type,direction:"bullish",strength:disp?"displacement":"normal"});
-    structure="bullish";
-    activeH=null;
-    if(type==="BOS"){
-     // Only a continuation BOS promotes the swing that produced the break
-     // into protected structure. A CHoCH is a warning, not a confirmed new
-     // trend, so it must not manufacture a protected swing prematurely.
-     protectedLow=latestBefore(confirmedLows,i);
-    }else{
-     protectedLow=null;
-    }
-    protectedHigh=null;
+   const broken=activeH!;
+   const continuation=structure==="bullish";
+   const counter=structure==="bearish";
+   // A counter-trend break is CHoCH only when the actual protected high
+   // is broken. Breaking a newer/unprotected high is not a trend reversal.
+   const breaksProtected=!!protectedHigh&&broken.index===protectedHigh.index;
+   const type=structure===null
+    ?"BOS"
+    :continuation
+     ?"BOS"
+     :counter&&breaksProtected
+      ?"CHOCH"
+      :null;
+   activeH=null;
+   if(!type)continue;
+   events.push({index:i,price:broken.price,type,direction:"bullish",strength:disp?"displacement":"normal"});
+   structure="bullish";
+   protectedHigh=null;
+   if(type==="BOS"){
+    // The last confirmed low before the break is the candidate protected
+    // low for the next bearish CHoCH.
+    protectedLow=latestBefore(confirmedLows,i);
+   }else{
+    // CHoCH changes the working direction, but does not itself confirm a
+    // new protected low. The next bullish BOS will establish it.
+    protectedLow=null;
    }
   }else if(brokeBear){
-   const type=classifyProtectedStructureBreak(structure,"low",protectedHigh?"high":protectedLow?"low":null);
-   if(type){
-    events.push({index:i,price:activeL!.price,type,direction:"bearish",strength:disp?"displacement":"normal"});
-    structure="bearish";
-    activeL=null;
-    if(type==="BOS"){
-     protectedHigh=latestBefore(confirmedHighs,i);
-    }else{
-     protectedHigh=null;
-    }
-    protectedLow=null;
+   const broken=activeL!;
+   const continuation=structure==="bearish";
+   const counter=structure==="bullish";
+   // Symmetric rule for bearish CHoCH: only the protected low can trigger it.
+   const breaksProtected=!!protectedLow&&broken.index===protectedLow.index;
+   const type=structure===null
+    ?"BOS"
+    :continuation
+     ?"BOS"
+     :counter&&breaksProtected
+      ?"CHOCH"
+      :null;
+   activeL=null;
+   if(!type)continue;
+   events.push({index:i,price:broken.price,type,direction:"bearish",strength:disp?"displacement":"normal"});
+   structure="bearish";
+   protectedLow=null;
+   if(type==="BOS"){
+    // The last confirmed high before the break becomes the candidate
+    // protected high for the next bullish CHoCH.
+    protectedHigh=latestBefore(confirmedHighs,i);
+   }else{
+    protectedHigh=null;
    }
   }
  }
