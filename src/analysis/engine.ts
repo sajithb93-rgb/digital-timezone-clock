@@ -197,8 +197,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
     for(let j=bearBreak+1;j<=end;j++){
      if(m===undefined&&c[j].high>=c[i].open)m=j;
      if(c[j].close>c[i].high){invalid=j;break}
-    }
-    if(m!==undefined||invalid===undefined){
+    }    if(m!==undefined||invalid===undefined){
      out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
     }
    }
@@ -331,7 +330,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const latestInternalDirectionalEvent=rawDirection
   ?internalEvents.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
   :undefined;
- const internalCausal=!!latestInternalDirectionalEvent&&!!sweep&&latestInternalDirectionalEvent.index>=sweep.index;
+ const internalCausal=!!latestInternalDirectionalEvent
+  &&!!sweep
+  &&!!latestDirectionalEvent
+  &&latestInternalDirectionalEvent.direction===rawDirection
+  &&latestInternalDirectionalEvent.index>=latestDirectionalEvent.index
+  &&latestInternalDirectionalEvent.index-latestDirectionalEvent.index<=12
+  &&latestInternalDirectionalEvent.index-sweep.index<=12;
  const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,events,last,a,asOf);
  const zone=selectedZone&&selectedZone.linked&&causalSequence
   ?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
@@ -397,8 +402,7 @@ export function buildImpulseFibLevels(prices:number[],bull:boolean):{label:strin
  const [p0,,,,,p5]=prices,dir=bull?1:-1,range=Math.abs(p5-p0);
  return[
   ["0%",p5],["23.6%",p5+(p0-p5)*.236],["38.2%",p5+(p0-p5)*.382],["50%",p5+(p0-p5)*.5],
-  ["61.8%",p5+(p0-p5)*.618],["78.6%",p5+(p0-p5)*.786],["100%",p0],
-  ["127.2%",p5+dir*range*.272],["161.8%",p5+dir*range*.618],["261.8%",p5+dir*range*1.618]
+  ["61.8%",p5+(p0-p5)*.618],["78.6%",p5+(p0-p5)*.786],["100%",p0],  ["127.2%",p5+dir*range*.272],["161.8%",p5+dir*range*.618],["261.8%",p5+dir*range*1.618]
  ].map(([label,price])=>({label:String(label),price:Number(price)}));
 }
 
@@ -468,4 +472,3 @@ export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResul
   frames:rows
  };
 }
-
