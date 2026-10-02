@@ -163,7 +163,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
 
   // Backtests must never inspect an unfinished candle. The analysis window ends
   // before the signal bar, and the signal can only execute on later closed bars.
-  const closedCandles=c.filter(x=>x.closed!==false);
+  // Backtest input may come from a realtime feed where candles are not guaranteed\n  // to arrive sorted or uniquely. Normalize it before assigning positional indexes;\n  // otherwise an out-of-order candle can become artificial lookahead data.\n  const byTime=new Map<number,Candle>();\n  for(const x of c){\n    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;\n    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;\n    if(x.closed!==false)byTime.set(x.time,x);\n  }\n  const closedCandles=[...byTime.values()].sort((a,b)=>a.time-b.time);
   if(closedCandles.length<81){
     return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered,openAtEnd};
   }
