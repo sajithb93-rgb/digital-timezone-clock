@@ -14,7 +14,7 @@ function confirmedFootprints(direction:"BUY"|"SELL", latestOverrides:Partial<Foo
     const buy=direction==="BUY"?60:40;
     const sell=direction==="BUY"?40:60;
     return {
-      candleTime:i,intervalMs:60000,confirmed:true,levels:[],
+      candleTime:i,intervalMs:60000,confirmed:true,levels:[{price:100,buyVolume:buy,sellVolume:sell,delta:buy-sell,totalVolume:buy+sell,buyTrades:1,sellTrades:1}],
       buyVolume:buy,sellVolume:sell,delta:buy-sell,deltaRatio:(buy-sell)/(buy+sell),poc:100,
       stackedBuyImbalances:direction==="BUY"?2:0,stackedSellImbalances:direction==="SELL"?2:0,
       maxBuyImbalanceRatio:direction==="BUY"?4:0,maxSellImbalanceRatio:direction==="SELL"?4:0,
@@ -169,13 +169,7 @@ describe("order flow strategy",()=>{
   });
   it("uses footprint delta and stacked imbalance for confirmed-flow confirmation data",()=>{
     const candles=Array.from({length:12},(_,i)=>candle(i,100,101,99,100.2,100,60));
-    const footprint:FootprintSnapshot[]=[];
-    for(let i=0;i<12;i++) footprint.push({
-      candleTime:i,intervalMs:60000,confirmed:true,levels:[],
-      buyVolume:60,sellVolume:40,delta:20,deltaRatio:0.2,poc:100,
-      stackedBuyImbalances:2,stackedSellImbalances:0,maxBuyImbalanceRatio:4,maxSellImbalanceRatio:0,
-      maxPositiveDelta:20,maxNegativeDelta:0,absorption:"BUYER",absorptionStrength:80
-    });
+    const footprint:FootprintSnapshot[]=confirmedFootprints("BUY");
     const r=analyzeOrderFlow(candles,footprint);
     expect(r.source).toBe("BINANCE_FOOTPRINT");
     expect(r.delta).toBe(240);
