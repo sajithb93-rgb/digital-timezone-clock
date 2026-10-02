@@ -88,9 +88,11 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
 }
 
 async function fetchKlines(symbol:string,interval:string,limit=300,marketType:MarketKind="spot",signal?:AbortSignal):Promise<Candle[]>{
+ const normalizedSymbol=symbol.trim().toUpperCase();
+ if(!normalizedSymbol||!/^[A-Z0-9._-]{1,40}$/.test(normalizedSymbol))throw new Error("Invalid Binance symbol");
  const cfg=marketConfig[marketType];
  const init=signal?{signal}:undefined;
- const rows=await binanceFetchJson(cfg.rest+"/klines?symbol="+encodeURIComponent(symbol)+"&interval="+interval+"&limit="+limit,init);
+ const rows=await binanceFetchJson(cfg.rest+"/klines?symbol="+encodeURIComponent(normalizedSymbol)+"&interval="+interval+"&limit="+limit,init);
  if(!Array.isArray(rows))throw new Error("Binance kline response is invalid");
  const parsed:Candle[]=[];
  for(const x of rows){
