@@ -300,7 +300,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:sweepRecentBuyValid,detail:sweepLow?`${last.index-sweepLow.index} bars ago`:"No low sweep"},
     {key:"sweep_integrity_buy",label:"Sell-side sweep still valid",passed:sweepIntegrityBuyValid,detail:sweepIntegrityBuyValid?"No later close invalidated the sweep level":"A later closed candle closed below the sweep level"},
     {key:"abs_buy",label:"Buyer absorption after sweep",passed:longContext,detail:buyerAbsorption?`Latest buyer absorption at index ${buyerAbsorption.index}`:"No buyer absorption after a low sweep"},
-    {key:"recent_flow_buy",label:"3-bar buyer flow alignment",passed:recentFlowAlignedBuy,detail:`3-bar average delta ratio ${(recent3FlowAverage*100).toFixed(2)}% · latest ${((recent3.at(-1)??0)*100).toFixed(2)}%`},
+    {key:"recent_flow_buy",label:"3-bar buyer flow alignment",passed:recentFlowAlignedBuy,detail:`3-bar average delta ratio ${(recent3FlowAverage*100).toFixed(2)}% · latest ${((recent3Flow.at(-1)??0)*100).toFixed(2)}%`},
     {key:"entry_chase_buy",label:"BUY entry not overextended",passed:entryChaseBuyValid,detail:entryChaseBuy==null?"Not enough structure bars":`Break extension ${entryChaseBuy.toFixed(2)}× avg range`},
     {key:"pressure_buy",label:"12-bar buyer pressure",passed:pressure==="BUYERS",detail:`${buyerPressure.toFixed(1)}% buyers · delta ratio ${(deltaRatio*100).toFixed(2)}%`},
     {key:"delta_buy",label:"Positive delta ≥ 0.08",passed:deltaRatio>=0.08,detail:`Current window delta ratio ${deltaRatio.toFixed(3)}`},
