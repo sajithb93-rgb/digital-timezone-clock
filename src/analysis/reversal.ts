@@ -137,7 +137,10 @@ function findRelevantOb(smc: SMCResult, direction: ReversalDirection, sweepIndex
 function calculateTargets(candles: Candle[], entry: number, invalidation: number, direction: ReversalDirection): number[] {
   const risk = Math.abs(entry - invalidation);
   if (!risk || !Number.isFinite(risk) || direction === "NONE") return [];
-  // Targets must be derived from structure that existed before the signal candle.\n  // Including the current candle can select a level that price has already\n  // touched before the reversal entry is considered active.\n  const recent = candles.slice(0, -1).slice(-60);
+  // Targets must be derived from structure that existed before the signal candle.
+  // Including the current candle can select a level that price has already
+  // touched before the reversal entry is considered active.
+  const recent = candles.slice(0, -1).slice(-60);
   const minRR = 1.5;
   const levels = direction === "BUY"
     ? recent.map(c => c.high).filter(p => p > entry + risk * minRR).sort((a, b) => a - b)
