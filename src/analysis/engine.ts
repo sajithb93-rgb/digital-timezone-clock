@@ -82,6 +82,13 @@ export function isPostSweepZoneCausal(zoneOrigin:number,sweepIndex:number,struct
 export function isOrderBlockCausal(zoneOrigin:number,displacementIndex:number,structureIndex:number,maxGap=12):boolean{
  return zoneOrigin<displacementIndex&&structureIndex>=displacementIndex&&structureIndex-zoneOrigin<=maxGap;
 }
+export function isEntryZoneCausal(zoneOrigin:number,sweepIndex:number,structureIndex:number,kind:"OB"|"FVG"|"BREAKER",maxGap=12):boolean{
+ if(kind==="BREAKER"){
+  return sweepIndex>=0&&structureIndex>sweepIndex&&structureIndex-sweepIndex<=maxGap
+   &&zoneOrigin>=structureIndex&&zoneOrigin-structureIndex<=maxGap;
+ }
+ return isPostSweepZoneCausal(zoneOrigin,sweepIndex,structureIndex,maxGap);
+}
 function range(c:Candle[]){
  const q=c.slice(-60);
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
@@ -454,7 +461,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
 ) && !!latestInternalDirectionalEvent && latestInternalDirectionalEvent.direction===rawDirection;
  const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,breakers,events,last,a,asOf);
  const zoneCausal=!!selectedZone&&!!sweep&&!!latestDirectionalEvent
-  &&isPostSweepZoneCausal(selectedZone.origin,sweep.index,latestDirectionalEvent.index);
+  &&isEntryZoneCausal(selectedZone.origin,sweep.index,latestDirectionalEvent.index,selectedZone.kind,12);
  const zone=selectedZone&&selectedZone.linked&&causalSequence&&zoneCausal
   ?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
  const direction=zone?rawDirection:null;
