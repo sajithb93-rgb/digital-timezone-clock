@@ -350,16 +350,36 @@ export function validateTriangle(prices:number[],bullish:boolean):TriangleValida
 
 export function validateDoubleZigzag(prices:number[],bullishCorrection:boolean){
   if(prices.length<8)return{valid:false,firstValid:false,secondValid:false,connectorValid:false};
+  // W-X-Y is two separate zigzags joined at X:
+  // W = p0..p3, X = p3..p4, Y = p4..p7.
+  // Validate the component zigzags first, then validate the connector
+  // independently so a large but still legitimate X is not rejected by an
+  // arbitrary 61.8% cutoff.
   const first=prices.slice(0,4);
   const connector=prices.slice(3,5);
   const second=prices.slice(4,8);
-  const a=validateZigzag(first,bullishCorrection);
-  const b=validateZigzag(second,bullishCorrection);
-  const connectorSize=Math.abs(connector[1]-connector[0]);
-  const firstSize=Math.abs(first[3]-first[0]);
-  const secondSize=Math.abs(second[3]-second[0]);
-  const connectorValid=connectorSize>0&&connectorSize<Math.max(firstSize,secondSize)*.618;
-  return{valid:a.valid&&b.valid&&connectorValid,firstValid:a.valid,secondValid:b.valid,connectorValid};
+  const w=validateZigzag(first,bullishCorrection);
+  const y=validateZigzag(second,bullishCorrection);
+
+  const [p0,p3,p4]=connector;
+  const wSize=Math.abs(p3-p0);
+  const xSize=Math.abs(p4-p3);
+  const ySize=Math.abs(second[3]-second[0]);
+  const dir=bullishCorrection?1:-1;
+
+  // X must move counter to the correction, remain inside W's price span,
+  // and be non-zero. A 100% retracement would erase W, so it is invalid.
+  const xCounterTrend=(p4-p3)*dir<0;
+  const xInsideW=bullishCorrection?p4>p0&&p4<p3:p4<p0&&p4>p3;
+  const xRetracement=wSize>0?xSize/wSize:Infinity;
+  const connectorValid=xSize>0&&wSize>0&&ySize>0&&xCounterTrend&&xInsideW&&xRetracement<1;
+
+  return{
+    valid:w.valid&&y.valid&&connectorValid,
+    firstValid:w.valid,
+    secondValid:y.valid,
+    connectorValid
+  };
 }
 
 function correctionCandidates(c:Candle[]){
@@ -398,7 +418,7 @@ function correctionCandidates(c:Candle[]){
     const p=q.map(x=>x.price),bullishCorrection=upward,dz=validateDoubleZigzag(p,bullishCorrection);
     if(!dz.valid)continue;
     out.push({
-      points:sequencePoints(q).map((x,j)=>({...x,label:["W","A","B","C","X","A","B","C"][j]})),
+      points:sequencePoints(q).map((x,j)=>({...x,label:["W-A","W-B","W-C","W-C/X","X","Y-A","Y-B","Y-C"][j]})),
       kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[7].price],
       quality:86,rules:["W-X-Y double zigzag geometry","Both component zigzags validated","Connector is smaller than the main correction legs"],
       strict:false,pattern:"Double Zigzag"
