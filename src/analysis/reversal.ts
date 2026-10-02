@@ -162,6 +162,10 @@ function calculateTargets(candles: Candle[], entry: number, invalidation: number
     : [entry - risk * 1.5, entry - risk * 2, entry - risk * 3];
   for (const level of fallback) {
     if (unique.length >= 3) break;
+    if(signalCandle){
+      const futureSide=direction==="BUY"?level>signalCandle.high:level<signalCandle.low;
+      if(!futureSide)continue;
+    }
     if (!unique.some(x => Math.abs(x - level) <= spacing)) unique.push(level);
   }
   unique.sort((a, b) => direction === "BUY" ? a - b : b - a);
