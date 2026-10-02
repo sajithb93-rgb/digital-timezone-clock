@@ -206,6 +206,38 @@ describe("order flow strategy",()=>{
     expect(r.confirmations).toContain("2+ stacked sell imbalances");
   });
 
+  it("blocks a BUY when the liquidity sweep is stale",()=>{
+    const candles=[
+      candle(0,100,102,99,101,100,50),
+      candle(1,101,103,99,102,100,50),
+      candle(2,102,104,99,103,100,50),
+      candle(3,103,104,99,103.5,100,50),
+      candle(4,103.5,104,99,103.2,100,50),
+      candle(5,103.2,104,95,100.5,100,50),
+      candle(6,100.5,101.5,99.5,100.8,100,50),
+      candle(7,100.8,101.5,99.5,100.6,100,50),
+      candle(8,100.6,101.5,99.5,100.7,100,50),
+      candle(9,100.7,101.2,99.5,100.8,100,30),
+      candle(10,100.8,103,99.5,102,100,60),
+      candle(11,102,106,101,105,100,70)
+    ];
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.entry).toBeNull();
+    expect(r.diagnostics.find(d=>d.key==="sweep_recent_buy")?.passed).toBe(false);
+  });
+
+  it("blocks a BUY when the latest three footprint bars lose directional flow",()=>{
+    const candles=fullLongCandles();
+    const footprint=confirmedFootprints("BUY");
+    footprint[9]={...footprint[9],deltaRatio:-0.2,delta:-20,buyVolume:40,sellVolume:60};
+    footprint[10]={...footprint[10],deltaRatio:-0.2,delta:-20,buyVolume:40,sellVolume:60};
+    const r=analyzeOrderFlow(candles,footprint);
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="recent_flow_buy")?.passed).toBe(false);
+    expect(r.rejectionReason).toContain("3-bar buyer flow alignment");
+  });
+
   it("rejects a BUY when the computed stop is not below entry",()=>{
     const candles=[
       ...Array.from({length:7},(_,i)=>candle(i,108,110,105,109,100,50)),
