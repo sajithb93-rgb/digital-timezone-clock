@@ -73,7 +73,12 @@ export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes
   return { level: "LOW", blocked: false, message: "No high-impact USD news in the configured window" };
 }
 export async function fetchNewsEvents(signal?: AbortSignal): Promise<NewsEvent[]> {
-  const url = process.env.NEXT_PUBLIC_NEWS_CALENDAR_URL || DEFAULT_CALENDAR_URL;
+  // Browser callers use the same-origin Next.js proxy to avoid CORS failures
+  // from the external calendar provider. Server/test callers can still fetch
+  // the provider directly.
+  const url = typeof window === "undefined"
+    ? (process.env.NEWS_CALENDAR_URL || DEFAULT_CALENDAR_URL)
+    : "/api/news";
   const response = await fetch(url, { signal, cache: "no-store" });
   if (!response.ok) throw new Error("News calendar returned " + response.status);
   return normalizeNews(await response.json());
