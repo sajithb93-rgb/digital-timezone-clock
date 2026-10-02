@@ -295,20 +295,34 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
  }
  return out;
 }
-function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
- return obs
-  .filter(o=>o.mitigated&&o.mitigationIndex!==undefined&&o.mitigationIndex!<=asOf)
-  .map((o):Breaker=>({index:o.mitigationIndex!,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true}))
-  .filter(b=>{
-   const k=c.slice(b.index+1,Math.min(asOf+1,c.length));
-   return k.length>0&&(b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high));
-  });
+export function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
+ const out:Breaker[]=[];
+ const endIndex=Math.min(asOf,c.length-1);
+ for(const o of obs){
+  if(!o.mitigated||o.mitigationIndex===undefined||o.mitigationIndex>endIndex)continue;
+  let breakIndex:number|undefined;
+  for(let j=o.mitigationIndex+1;j<=endIndex;j++){
+   const broken=o.type==="bullish" ? c[j].close<o.low : c[j].close>o.high;
+   if(broken){breakIndex=j;break}
+  }
+  if(breakIndex===undefined)continue;
+  let invalidAfterBreak=false;
+  for(let j=breakIndex+1;j<=endIndex;j++){
+   const invalid=o.type==="bullish" ? c[j].close>o.high : c[j].close<o.low;
+   if(invalid){invalidAfterBreak=true;break}
+  }
+  if(!invalidAfterBreak){
+   out.push({index:breakIndex,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true});
+  }
+ }
+ return out;
 }
-type ZoneCandidate={low:number;high:number;origin:number;kind:"OB"|"FVG";strength:number;linked:boolean;distance:number};
+type ZoneCandidate={low:number;high:number;origin:number;kind:"OB"|"FVG"|"BREAKER";strength:number;linked:boolean;distance:number};
 function chooseEntryZone(
  direction:"bullish"|"bearish"|null,
  obs:OB[],
  fvgs:FVG[],
+ breakers:Breaker[],
  events:StructureEvent[],
  last:Candle,
  atrValue:number,
@@ -335,11 +349,20 @@ function chooseEntryZone(
   const linked=!!latestEvent&&origin<=latestEvent.index&&latestEvent.index-origin<=12;
   candidates.push({low:f.low,high:f.high,origin,kind:"FVG",strength:f.size??0,linked,distance});
  }
+ for(const b of breakers){
+  if(!b.active||b.type!==direction)continue;
+  const age=asOf-b.index;
+  if(age<0||age>40)continue;
+  const distance=last.close<b.low?b.low-last.close:last.close>b.high?last.close-b.high:0;
+  if(distance>atrValue*3.5)continue;
+  const linked=!!latestEvent&&b.index<=latestEvent.index+12&&b.index>=latestEvent.index;
+  candidates.push({low:b.low,high:b.high,origin:b.index,kind:"BREAKER",strength:0.8,linked,distance});
+ }
  if(!candidates.length)return null;
  candidates.sort((x,y)=>{
   const score=(z:ZoneCandidate)=>
    (z.linked?100000:0)
-   +(z.kind==="OB"?20000:10000)
+   +(z.kind==="OB"?20000:z.kind==="BREAKER"?18000:10000)
    +Math.max(0,5000-(asOf-z.origin)*100)
    +Math.min(2000,z.strength*250)
    -Math.min(5000,z.distance/Math.max(atrValue,.0000001)*1000);
@@ -429,7 +452,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   latestInternalDirectionalEvent?.index??null,
   12
 ) && !!latestInternalDirectionalEvent && latestInternalDirectionalEvent.direction===rawDirection;
- const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,events,last,a,asOf);
+ const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,breakers,events,last,a,asOf);
  const zoneCausal=!!selectedZone&&!!sweep&&!!latestDirectionalEvent
   &&isPostSweepZoneCausal(selectedZone.origin,sweep.index,latestDirectionalEvent.index);
  const zone=selectedZone&&selectedZone.linked&&causalSequence&&zoneCausal
