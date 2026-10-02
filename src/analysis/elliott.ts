@@ -295,9 +295,13 @@ export function validateFlat(prices:number[],bullishCorrection:boolean):FlatVali
   const cFailsA=aUp?c<a:c>a;
   if(direction!==(bullishCorrection?"bullish":"bearish")||!cReversesA)return{valid:false,subtype:"None",bRetracement,cProjection};
 
-  const regular=bInXA&&bRetracement>=.90&&bRetracement<=1.10&&cProjection>=.618&&cProjection<=1.618;
+  const regular=bInXA&&bRetracement>=.90&&bRetracement<=1.00&&cProjection>=.618&&cProjection<=1.618;
   const expanded=bExceedsX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cBeyondA;
-  const running=bExceedsX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cFailsA;
+  // A running flat has a deep B wave (typically at least 90% of A) that can
+  // exceed X, while C fails to travel beyond A. Requiring B to exceed X is
+  // important; requiring B to exceed 100% is not—the distinction is C's
+  // failure to fully retrace A.
+  const running=bExceedsX&&bRetracement>=.90&&bRetracement<=1.618&&cProjection>=.618&&cFailsA;
 
   const subtype=expanded?"Expanded Flat":running?"Running Flat":regular?"Regular Flat":"None";
   return{valid:subtype!=="None",subtype,bRetracement,cProjection};
@@ -312,24 +316,34 @@ export type TriangleValidation={
 };
 
 export function validateTriangle(prices:number[],bullish:boolean):TriangleValidation{
-  if(prices.length<5)return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
-  const [x,a,b,c,d]=prices;
-  const swings=[Math.abs(a-x),Math.abs(b-a),Math.abs(c-b),Math.abs(d-c)];
+  // A triangle is A-B-C-D-E: five alternating subwaves after the
+  // correction's X anchor. The old implementation stopped at D and then
+  // mislabeled D as E, allowing incomplete triangles to qualify.
+  if(prices.length<6)return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+  const [x,a,b,c,d,e]=prices;
+  const swings=[Math.abs(a-x),Math.abs(b-a),Math.abs(c-b),Math.abs(d-c),Math.abs(e-d)];
   if(swings.some(v=>v<=0))return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+
   const alternating=bullish
-    ? a>x&&b<a&&c>b&&d<c
-    : a<x&&b>a&&c<b&&d>c;
+    ? a>x&&b<a&&c>b&&d<c&&e>d
+    : a<x&&b>a&&c<b&&d>c&&e<d;
   if(!alternating)return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
 
-  const highs=[a,c], lows=[x,b,d];
-  const highSlope=highs[1]-highs[0];
-  const lowSlope=lows[2]-lows[0];
-  const contracting=Math.abs(swings[1])<swings[0]&&Math.abs(swings[2])<swings[1]&&Math.abs(swings[3])<swings[2] &&
-    highSlope<=0 && lowSlope>=0;
-  const expanding=Math.abs(swings[1])>swings[0]&&Math.abs(swings[2])>swings[1]&&Math.abs(swings[3])>swings[2] &&
-    highSlope>=0 && lowSlope<=0;
+  // Upper boundary uses A/C/E; lower boundary uses X/B/D.
+  // Contracting requires both boundaries to move inward. Expanding is the
+  // inverse. Monotonic swing shrink/expansion is intentionally not required
+  // because Elliott triangles are defined by boundary geometry, not equal leg
+  // lengths.
+  const highA=a,highC=c,highE=e;
+  const lowX=x,lowB=b,lowD=d;
+  const upperContracting=highC<=highA&&highE<=highC;
+  const lowerContracting=lowB>=lowX&&lowD>=lowB;
+  const upperExpanding=highC>=highA&&highE>=highC;
+  const lowerExpanding=lowB<=lowX&&lowD<=lowB;
+  const contracting=upperContracting&&lowerContracting;
+  const expanding=upperExpanding&&lowerExpanding;
   const initialRange=Math.abs(a-x);
-  const finalRange=Math.abs(c-b);
+  const finalRange=Math.abs(e-d);
   const converging=initialRange>0&&finalRange<initialRange;
   return{valid:contracting||expanding,contracting,expanding,converging,alternating};
 }
@@ -391,19 +405,20 @@ function correctionCandidates(c:Candle[]){
     });
   }
 
-  // Triangle A-B-C-D-E. The validator enforces alternation and boundary geometry.
-  for(let i=0;i<=ps.length-5;i++){
-    const q=ps.slice(i,i+5);
+  // Triangle: X-A-B-C-D-E. X is the correction anchor; A-E are the five
+  // alternating triangle waves.
+  for(let i=0;i<=ps.length-6;i++){
+    const q=ps.slice(i,i+6);
     const upward=q[0].type==="L"&&q[1].type==="H";
     const downward=q[0].type==="H"&&q[1].type==="L";
     if(!upward&&!downward)continue;
     const tri=validateTriangle(q.map(x=>x.price),upward);
     if(!tri.valid)continue;
     out.push({
-      points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C","D","E"][j]})),
-      kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[4].price],
+      points:sequencePoints(q).map((x,j)=>({...x,label:["X","A","B","C","D","E"][j]})),
+      kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[5].price],
       quality:tri.contracting?82:68,
-      rules:["A-B-C-D-E triangle geometry",tri.contracting?"Contracting triangle proportions detected":"Expanding triangle proportions detected"],
+      rules:["X-A-B-C-D-E triangle geometry",tri.contracting?"Contracting triangle boundary detected":"Expanding triangle boundary detected"],
       strict:false,pattern:"Triangle"
     });
   }
