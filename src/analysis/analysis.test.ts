@@ -385,6 +385,22 @@ describe("analysis regression",()=>{
     expect(e.primary?.strict).toBe(true);
   });
 
+  it("does not let closed candles after an unclosed gap leak into Elliott counts",()=>{
+    const base=[
+      100,102,90,96,100,120,112,110,130,150,140,135,155,165,160,158,
+      161,162,163,164,165,166,167,168,169,170,171,172,173,174,175
+    ].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    const prefix=analyzeElliottAdvanced(base.slice(0,30));
+    const gap=[
+      ...base.slice(0,30),
+      {...base[30],closed:false},
+      {...base[30],time:31,closed:true}
+    ];
+    const withGap=analyzeElliottAdvanced(gap);
+    expect(withGap.candidateCount).toBe(prefix.candidateCount);
+    expect(withGap.primary?.points.map(p=>p.index)).toEqual(prefix.primary?.points.map(p=>p.index));
+  });
+
   it("requires a real five-wave nested impulse instead of a raw pivot count",()=>{
     expect(validateNestedImpulse([100,120,110,150,135,165],true).valid).toBe(true);
     expect(validateNestedImpulse([100,120,110,125,115,150],true).valid).toBe(false);
