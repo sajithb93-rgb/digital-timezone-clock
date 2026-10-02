@@ -206,7 +206,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const rawScore = 15 + (choch ? 25 : 0) + (displacementOk ? 15 : 0) + (fvg ? 10 : 0) + (orderBlock ? 10 : 0) + orderFlowPoints + (deltaDivergence ? 5 : 0) + (opposingStructure ? 5 : 0);
     const score = clamp(rawScore);
     const structuralGate = !!choch && opposingStructure && displacementOk;
-    const confirmedThreshold = requireOrderFlow ? 75 : 70;
+    const confirmedThreshold = requireOrderFlow ? 75 : 60;
     const state: ReversalState = score >= confirmedThreshold && structuralGate && orderFlowGate ? "CONFIRMED" : score >= 45 ? "SETUP" : "WATCH";
 
     const evidence: ReversalEvidence[] = [
