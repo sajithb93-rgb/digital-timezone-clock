@@ -98,17 +98,34 @@ function sequencePoints(q:Pivot[]):WavePoint[]{
 }
 
 function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean):NestedWaveEvidence{
-  const ps=alternatePivots(swingPivots(c,1).filter(p=>p.index>start&&p.index<end));
-  let alternating=true;
-  for(let i=1;i<ps.length;i++)if(ps[i].type===ps[i-1].type)alternating=false;
-  const directionAligned=ps.length>0
-    ? (bullish ? ps.filter(p=>p.type==="H").length : ps.filter(p=>p.type==="L").length) >= Math.ceil(ps.length/2)
-    : false;
-  const subwaves=ps.length;
-  const score=clamp((Math.min(subwaves,5)/5)*70+(alternating?15:0)+(directionAligned?15:0));
+  // A genuine nested 5-wave subdivision needs the two parent boundaries
+  // plus four internal turning points. A raw pivot count is not enough.
+  const internal=alternatePivots(
+    swingPivots(c,1).filter(p=>p.index>start&&p.index<end)
+  );
+  const startType=bullish?"L":"H";
+  const endType=bullish?"H":"L";
+  const boundaryStart:Pivot={index:start,price:c[start]?.close??0,type:startType,strength:0,confirmedAt:start};
+  const boundaryEnd:Pivot={index:end,price:c[end]?.close??0,type:endType,strength:0,confirmedAt:end};
+
+  let best:Pivot[]|null=null;
+  for(let i=0;i<=internal.length-4;i++){
+    const candidate=[boundaryStart,...internal.slice(i,i+4),boundaryEnd];
+    const prices=candidate.map(p=>p.price);
+    if(validateStandardImpulse(prices,bullish).valid){
+      best=candidate;
+      break;
+    }
+  }
+
+  const alternating=internal.every((p,i)=>i===0||p.type!==internal[i-1].type);
+  const directionAligned=best!==null;
+  const subwaves=best?5:Math.min(internal.length+1,5);
+  const score=best
+    ? 100
+    : clamp((Math.min(internal.length,4)/4)*55+(alternating?15:0)+(directionAligned?30:0));
   return{wave:"3",subwaves,alternating,directionAligned,score};
 }
-
 function inferDegree(spanBars:number,totalBars:number):ElliottDegree{
   const r=spanBars/Math.max(totalBars,1);
   if(r<=.18)return "Micro";
@@ -310,7 +327,7 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
   const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0)+(flat.valid?0:2));
 
   return{
-    points:sequencePoints(q).map((x,i)=>({...x,label:["A","B","C"][i]})),
+    points:sequencePoints(q).map((x,i)=>({...x,label:["X","A","B","C"][i]})),
     kind:"Correction",
     direction:bull?"bullish":"bearish",
     invalidation,
