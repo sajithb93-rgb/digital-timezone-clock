@@ -223,20 +223,27 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   // A time-confirmed footprint is not sufficient if its aggTrade payload is
   // materially incomplete. Compare each footprint bar with Binance kline
   // volume before allowing footprint data to confirm a setup.
-  const coverageByTime=new Map(expectedClosed.map(c=>[
-    c.time,
-    Math.min(1,
-      (((footprintByTime.get(c.time)?.buyVolume??0)+(footprintByTime.get(c.time)?.sellVolume??0))/Math.max(c.volume,1e-12))
-    )
-  ]));
+  // Coverage must be both sufficiently complete and physically consistent.
+  // Clamping ratios above 100% would hide duplicate/over-counted agg-trade data
+  // and could incorrectly promote a corrupted footprint to confirmation.
+  const coverageByTime=new Map(expectedClosed.map(c=>{
+    const footprintVolume=(footprintByTime.get(c.time)?.buyVolume??0)+(footprintByTime.get(c.time)?.sellVolume??0);
+    return [c.time, footprintVolume/Math.max(c.volume,1e-12)] as const;
+  }));
   const footprintCoverage=expectedClosed.length===12
     ?Math.min(...expectedClosed.map(c=>coverageByTime.get(c.time)??0))
     :0;
   const latestFootprintCoverage=coverageByTime.get(last.time)??0;
+  const footprintCoverageValid=expectedClosed.length===12
+    &&expectedClosed.every(c=>{
+      const coverage=coverageByTime.get(c.time)??0;
+      return coverage>=0.95&&coverage<=1.05;
+    });
   const useFootprint=expectedFootprintTimes.length===12
     && fpRecent.length===12
-    && footprintCoverage>=0.95
-    && latestFootprintCoverage>=0.99;
+    && footprintCoverageValid
+    && latestFootprintCoverage>=0.99
+    && latestFootprintCoverage<=1.05;
   const buyVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.buyVolume,0):candleBuyVolume;
   const sellVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.sellVolume,0):candleSellVolume;
   const total=Math.max(buyVolume+sellVolume,1e-12);
@@ -299,7 +306,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"history",label:"12+ closed candles",passed:sufficientHistory,detail:`${closed.length}/12 closed candles`},
     {key:"exact",label:"Real Binance taker/footprint flow",passed:confirmedFlowData,detail:useFootprint?"Confirmed Binance footprint window available":allExact?"Exact kline taker-buy volume available":"One or more candles use estimated volume"},
     {key:"footprint_history",label:"12 confirmed footprint bars",passed:expectedFootprintTimes.length===12&&fpRecent.length===12,detail:`${fpRecent.length}/12 confirmed footprint bars`},
-    {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:footprintCoverage>=0.95,detail:`Minimum per-bar coverage ${(footprintCoverage*100).toFixed(1)}%`},
+    {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:footprintCoverageValid,detail:`Minimum per-bar coverage ${(footprintCoverage*100).toFixed(1)}% · bars above 105% are rejected`},
     {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:latestFootprintCoverage>=0.99,detail:`Latest candle coverage ${(latestFootprintCoverage*100).toFixed(1)}%`},
     {key:"latest_fp",label:"Latest closed footprint",passed:!!latestFootprint,detail:latestFootprint?"Latest candle has a confirmed footprint":"Latest closed candle has no confirmed footprint snapshot"},
     {key:"sweep_buy",label:"Sell-side liquidity sweep",passed:!!sweepLow,detail:sweepLow?`Sweep at index ${sweepLow.index} · ${sweepLow.sweepPrice??"—"}`:"No low sweep in recent window"},
