@@ -12,12 +12,14 @@ export function isValidTradeGeometry(direction:"BUY"|"SELL",entry:number,stop:nu
  if(!Number.isFinite(entry)||!Number.isFinite(stop)||entry<=0||stop<=0||entry===stop)return false;
  const risk=Math.abs(entry-stop);
  if(risk<=0)return false;
+ if(direction!=="BUY"&&direction!=="SELL")return false;
  if(direction==="BUY"&&stop>=entry)return false;
  if(direction==="SELL"&&stop<=entry)return false;
  if(!Array.isArray(targets)||targets.length===0)return false;
  if(!targets.every(t=>Number.isFinite(t)))return false;
  if(!targets.every(t=>direction==="BUY"?t>entry:t<entry))return false;
- return targets.every(t=>Math.abs(t-entry)/risk>=minRR);
+ const requiredRR=Number.isFinite(minRR)&&minRR>0?minRR:MIN_SETUP_RR;
+ return targets.every(t=>Math.abs(t-entry)/risk>=requiredRR);
 }
 const MIN_SETUP_RR=1.5;
 export type SMCResult={
@@ -88,7 +90,8 @@ export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,int
   &&internalBreakIndex-swingBreakIndex<=maxGap;
 }
 export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
- let closedEnd=Math.min(asOf,c.length-1);
+ if(!Number.isFinite(level)||!Number.isFinite(asOf)||asOf<0)return false;
+ let closedEnd=Math.min(Math.floor(asOf),c.length-1);
  const firstUnclosed=c.slice(0,closedEnd+1).findIndex(x=>x.closed===false);
  if(firstUnclosed>=0)closedEnd=firstUnclosed-1;
  if(sweepIndex<0||sweepIndex>closedEnd||sweepIndex>=c.length)return false;
@@ -131,7 +134,11 @@ export function isEntryZoneCausal(zoneOrigin:number,sweepIndex:number,structureI
  return isPostSweepZoneCausal(zoneOrigin,sweepIndex,structureIndex,maxGap);
 }
 function range(c:Candle[],asOf=c.length-1){
- const q=c.slice(0,Math.min(asOf+1,c.length)).filter(x=>x.closed!==false).slice(-60);
+ const end=Math.min(asOf,c.length-1);
+ if(end<0)return{hi:0,lo:0};
+ const firstUnclosed=c.slice(0,end+1).findIndex(x=>x.closed===false);
+ const causalEnd=firstUnclosed>=0?firstUnclosed-1:end;
+ const q=c.slice(0,causalEnd+1).filter(x=>Number.isFinite(x.high)&&Number.isFinite(x.low)).slice(-60);
  if(!q.length)return{hi:0,lo:0};
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
 }
