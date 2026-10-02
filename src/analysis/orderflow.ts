@@ -1,7 +1,6 @@
 import { isValidTradeGeometry, type Candle } from "./engine";
 import { normalizeCandleSeries } from "./candles";
 import type { FootprintSnapshot } from "./footprint";
-import { normalizeCandleSeries } from "./candles";
 
 export type OrderFlowPressure = "BUYERS" | "SELLERS" | "BALANCED";
 export type OrderFlowDirection = "BUY" | "SELL" | "WAIT";
