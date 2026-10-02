@@ -17,8 +17,12 @@ function toImpact(value: unknown, title: string): NewsImpact {
 }
 function parseDate(value: unknown): number | null {
   if (typeof value === "number") return value > 1e12 ? value : value * 1000;
-  if (!value) return null;
-  const t = Date.parse(String(value));
+  if (value === null || value === undefined || value === "") return null;
+  const textValue=String(value).trim();
+  if (!textValue) return null;
+  const numeric=Number(textValue);
+  if (Number.isFinite(numeric) && numeric>0) return numeric>1e12 ? numeric : numeric*1000;
+  const t = Date.parse(textValue);
   return Number.isFinite(t) ? t : null;
 }
 export function normalizeNews(raw: any): NewsEvent[] {
