@@ -212,6 +212,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const entryChaseSellValid=entryChaseSell==null||entryChaseSell<=1;
 
   const recentBars=bars.slice(-12);
+  const maxSweepAge=5;
   // Use the latest qualifying event, not the oldest one in the lookback window.
   const sweepLow=recentBars.filter(b=>b.liquiditySweep==="LOW").at(-1);
   const sweepHigh=recentBars.filter(b=>b.liquiditySweep==="HIGH").at(-1);
@@ -232,8 +233,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const confirmedFlowData=useFootprint||allExact;
   const sweepRecentBuyValid=!!sweepLow&&last.index-sweepLow.index<=maxSweepAge;
   const sweepRecentSellValid=!!sweepHigh&&last.index-sweepHigh.index<=maxSweepAge;
-  const longConfirmed=sufficientHistory&&useFootprint&&longContext&&pressure==="BUYERS"&&recentFlowAlignedBuy&&latestBuyFootprint&&last.microStructure==="BULLISH"&&entryChaseBuyValid;
-  const shortConfirmed=sufficientHistory&&useFootprint&&shortContext&&pressure==="SELLERS"&&recentFlowAlignedSell&&latestSellFootprint&&last.microStructure==="BEARISH"&&entryChaseSellValid;
+  const longConfirmed=sufficientHistory&&useFootprint&&longContext&&sweepRecentBuyValid&&pressure==="BUYERS"&&recentFlowAlignedBuy&&latestBuyFootprint&&last.microStructure==="BULLISH"&&entryChaseBuyValid;
+  const shortConfirmed=sufficientHistory&&useFootprint&&shortContext&&sweepRecentSellValid&&pressure==="SELLERS"&&recentFlowAlignedSell&&latestSellFootprint&&last.microStructure==="BEARISH"&&entryChaseSellValid;
 
   const diagnostics:OrderFlowDiagnostic[]=[
     {key:"closed",label:"Closed candle",passed:true,detail:"Latest analysis candle is closed"},
