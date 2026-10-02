@@ -86,19 +86,37 @@ export function analyzeFootprintSnapshot(
   let stackedSellImbalances = 0;
   let maxBuyImbalanceRatio = 0;
   let maxSellImbalanceRatio = 0;
+  let buyRun = 0;
+  let sellRun = 0;
   for (let i = 0; i < levels.length; i += 1) {
     const cur = levels[i];
     const below = levels[i - 1];
     const above = levels[i + 1];
+
     if (below) {
       const r = ratio(cur.buyVolume, below.sellVolume);
       maxBuyImbalanceRatio = Math.max(maxBuyImbalanceRatio, r);
-      if (r >= 3) stackedBuyImbalances += 1;
+      if (r >= 3) {
+        buyRun += 1;
+        stackedBuyImbalances = Math.max(stackedBuyImbalances, buyRun);
+      } else {
+        buyRun = 0;
+      }
+    } else {
+      buyRun = 0;
     }
+
     if (above) {
       const r = ratio(cur.sellVolume, above.buyVolume);
       maxSellImbalanceRatio = Math.max(maxSellImbalanceRatio, r);
-      if (r >= 3) stackedSellImbalances += 1;
+      if (r >= 3) {
+        sellRun += 1;
+        stackedSellImbalances = Math.max(stackedSellImbalances, sellRun);
+      } else {
+        sellRun = 0;
+      }
+    } else {
+      sellRun = 0;
     }
   }
 
