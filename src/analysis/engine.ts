@@ -214,7 +214,7 @@ function uniquePivots(ps:Pivot[],tol:number){
  }
  return out.sort((a,b)=>a.index-b.index);
 }
-function equalLevels(ps:Pivot[],tol:number){
+export function equalLevels(ps:Pivot[],tol:number){
  // Cluster by price using a running band rather than a single seed. This
  // avoids missing transitive equal levels (A≈B, B≈C, but A slightly > C)
  // while still requiring each liquidity test to be separated in time.
