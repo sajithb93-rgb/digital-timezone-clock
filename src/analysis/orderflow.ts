@@ -84,7 +84,8 @@ function isUsableFootprint(f:FootprintSnapshot):boolean{
   if(Math.abs(derivedMaxPositive-f.maxPositiveDelta)>Math.max(1e-9,total*1e-6)
     ||Math.abs(derivedMaxNegative-f.maxNegativeDelta)>Math.max(1e-9,total*1e-6))return false;
   if(f.deltaRatio< -1.000001||f.deltaRatio>1.000001)return false;
-  if(f.poc!==null&&(!Number.isFinite(f.poc)||f.poc<=0||!f.levels.some(level=>Math.abs(level.price-f.poc)<=1e-12)))return false;
+  const poc=f.poc;
+  if(poc!==null&&(!Number.isFinite(poc)||poc<=0||!f.levels.some(level=>Math.abs(level.price-poc)<=1e-12)))return false;
   return true;
 }
 
