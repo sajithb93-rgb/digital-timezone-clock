@@ -238,9 +238,12 @@ function equalLevels(ps:Pivot[],tol:number){
  };
  for(const p of ordered){
   if(!cluster.length){cluster=[p];continue;}
-  const bandLow=Math.min(...cluster.map(x=>x.price));
-  const bandHigh=Math.max(...cluster.map(x=>x.price));
-  if(p.price-bandLow<=tol&&p.price-bandHigh<=tol){
+  // Price-sorted adjacent pivots form a transitive band: A can join B and
+  // B can join C even when A and C are slightly farther apart than tol.
+  // Comparing to the immediately preceding price preserves that chaining
+  // without merging genuinely separated liquidity pools.
+  const previous=cluster[cluster.length-1];
+  if(p.price-previous.price<=tol){
    cluster.push(p);
   }else{
    flush();
