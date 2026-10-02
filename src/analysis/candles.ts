@@ -11,23 +11,30 @@ export type CandleLike={
 
 export function normalizeCandleSeries<T extends CandleLike>(candles:T[],stopAtOpen=true):T[]{
  const byTime=new Map<number,T>();
- const ambiguous=new Set<number>();
+ // Conflicting open snapshots may be superseded by a later closed snapshot.
+ // Conflicting closed snapshots remain ambiguous because OHLC alone cannot
+ // determine which closed value is newer.
+ const ambiguousClosed=new Set<number>();
+ const ambiguousOpen=new Set<number>();
  for(const x of candles){
   if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
   if(x.time<0||x.open<=0||x.high<=0||x.low<=0||x.close<=0||x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-  if(ambiguous.has(x.time))continue;
   const prev=byTime.get(x.time);
-  if(!prev){byTime.set(x.time,x);continue;}
+  if(!prev){
+   if(ambiguousClosed.has(x.time))continue;
+   if(x.closed===false&&ambiguousOpen.has(x.time))continue;
+   byTime.set(x.time,x);continue;
+  }
   const prevClosed=prev.closed!==false,nextClosed=x.closed!==false;
   if(prevClosed!==nextClosed){
-   if(nextClosed)byTime.set(x.time,x);
+   if(nextClosed){
+    byTime.set(x.time,x);
+    ambiguousOpen.delete(x.time);
+   }
    continue;
   }
   const samePriceVolume=prev.open===x.open&&prev.high===x.high&&prev.low===x.low&&prev.close===x.close&&prev.volume===x.volume;
   if(samePriceVolume){
-   // REST and WebSocket snapshots may differ only because one source omitted
-   // the optional taker-buy field. Preserve the richer snapshot instead of
-   // discarding an otherwise identical candle as ambiguous.
    const prevTaker=prev.takerBuyVolume;
    const nextTaker=x.takerBuyVolume;
    if(prevTaker===undefined&&nextTaker!==undefined){byTime.set(x.time,x);continue;}
@@ -35,7 +42,8 @@ export function normalizeCandleSeries<T extends CandleLike>(candles:T[],stopAtOp
    if(prevTaker===nextTaker)continue;
   }
   byTime.delete(x.time);
-  ambiguous.add(x.time);
+  if(prevClosed)ambiguousClosed.add(x.time);
+  else ambiguousOpen.add(x.time);
  }
  const ordered=[...byTime.values()].sort((a,b)=>a.time-b.time);
  if(!stopAtOpen)return ordered;
