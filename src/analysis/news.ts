@@ -34,7 +34,10 @@ export function normalizeNews(raw: any): NewsEvent[] {
     return { title, country, impact: toImpact(x.impact ?? x.importance ?? x.volatility, title), date: date ?? 0 };
   }).filter((x: NewsEvent) => x.title && x.date > 0 && x.country === "USD");
 }
-export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes = 30): NewsRisk {
+export function getNewsRisk(events: NewsEvent[], effectiveNow = Date.effectiveNow(), bufferMinutes = 30): NewsRisk {
+  // Invalid clock input must never silently turn an active news window into
+  // LOW risk. Fall back to the real current clock value.
+  const effectiveNow=Number.isFinite(effectiveNow)?effectiveNow:Date.effectiveNow();
   // Treat invalid/negative windows as the safe default instead of allowing a
   // caller to accidentally disable the news block through NaN/negative input.
   const safeBufferMinutes=Number.isFinite(bufferMinutes)?Math.max(0,bufferMinutes):30;
@@ -43,9 +46,9 @@ export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes
   // If an upcoming high-impact event and a recently completed one are both
   // inside the window, the upcoming event must take precedence. Otherwise an
   // older event can incorrectly mask the next release.
-  const upcomingHigh = relevant.find(e => e.date >= now && e.date - now <= buffer);
+  const upcomingHigh = relevant.find(e => e.date >= effectiveNow && e.date - effectiveNow <= buffer);
   if (upcomingHigh) {
-    const minutesToEvent = Math.ceil((upcomingHigh.date - now) / 60_000);
+    const minutesToEvent = Math.ceil((upcomingHigh.date - effectiveNow) / 60_000);
     return {
       level: "HIGH", blocked: true,
       message: upcomingHigh.title + " in " + minutesToEvent + "m — high-impact news window",
@@ -53,10 +56,10 @@ export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes
     };
   }
   const recentHigh = relevant
-    .filter(e => e.date < now && now - e.date <= buffer)
+    .filter(e => e.date < effectiveNow && effectiveNow - e.date <= buffer)
     .sort((a,b) => b.date - a.date)[0];
   if (recentHigh) {
-    const minutesSinceEvent = Math.ceil((now - recentHigh.date) / 60_000);
+    const minutesSinceEvent = Math.ceil((effectiveNow - recentHigh.date) / 60_000);
     return {
       level: "HIGH", blocked: true,
       message: recentHigh.title + " was " + minutesSinceEvent + "m ago — post-news volatility window",
@@ -68,14 +71,14 @@ export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes
   // Prefer an upcoming medium-impact release when several events share the
   // caution window; otherwise fall back to the most recent completed release.
   const upcomingMedium = mediumEvents
-    .filter(e => e.date >= now && e.date - now <= buffer)
+    .filter(e => e.date >= effectiveNow && e.date - effectiveNow <= buffer)
     .sort((a,b) => a.date-b.date)[0];
   const recentMedium = mediumEvents
-    .filter(e => e.date < now && now-e.date <= buffer)
+    .filter(e => e.date < effectiveNow && effectiveNow-e.date <= buffer)
     .sort((a,b) => b.date-a.date)[0];
   const medium = upcomingMedium ?? recentMedium;
-  if (medium && Math.abs(medium.date-now) <= buffer) {
-    const delta=medium.date-now;
+  if (medium && Math.abs(medium.date-effectiveNow) <= buffer) {
+    const delta=medium.date-effectiveNow;
     return {
       level: "MEDIUM", blocked: false,
       message: delta>=0 ? medium.title + " in " + Math.ceil(delta/60_000) + "m — use caution" : medium.title + " was " + Math.ceil(Math.abs(delta)/60_000) + "m ago — use caution",
