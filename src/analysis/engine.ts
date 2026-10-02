@@ -304,7 +304,8 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
 }
 export function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
  const out:Breaker[]=[];
- const endIndex=Math.min(asOf,c.length-1);
+ let endIndex=Math.min(asOf,c.length-1);
+ while(endIndex>=0&&c[endIndex].closed===false)endIndex--;
  for(const o of obs){
   if(!o.mitigated||o.mitigationIndex===undefined||o.mitigationIndex>endIndex)continue;
   let breakIndex:number|undefined;
