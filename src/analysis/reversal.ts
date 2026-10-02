@@ -360,7 +360,7 @@ export function analyzeReversalMTF(mtfFrames: { interval: string; candles: Candl
     primary.score * 0.55 +
     trigger.score * 0.30 +
     (aligned ? 10 : 0) +
-    (opposedToContext ? 5 : neutralContext ? 2 : 0)
+    (neutralContext ? 2 : 0)
   )));
   const confirmed = aligned && primary.state === "CONFIRMED" && trigger.state !== "WATCH";
   const state: ReversalState = confirmed ? "CONFIRMED" : score >= 65 && aligned ? "SETUP" : score >= 40 ? "WATCH" : "NONE";
