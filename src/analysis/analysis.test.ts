@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -73,6 +73,61 @@ describe("analysis regression",()=>{
     expect(isPostSweepZoneCausal(26,25,30)).toBe(true);
     expect(isPostSweepZoneCausal(20,19,30)).toBe(true);
     expect(isPostSweepZoneCausal(10,1,30,12)).toBe(false);
+  });
+
+  it("tracks bullish FVG lifecycle from creation through full fill",()=>{
+    const base=[
+      {time:0,open:99,high:100,low:98,close:99.5,volume:100,closed:true},
+      {time:1,open:100.2,high:102,low:100.1,close:101.5,volume:100,closed:true},
+      {time:2,open:101.6,high:103,low:101,close:102.5,volume:100,closed:true}
+    ];
+    const partial=findFvgs([...base,{time:3,open:102,high:103,low:100.5,close:101,volume:100,closed:true}],1,3);
+    const partialGap=partial.find(x=>x.from===0&&x.to===2&&x.type==="bullish");
+    expect(partialGap?.low).toBe(100);
+    expect(partialGap?.high).toBe(101);
+    expect(partialGap?.filled).toBe(false);
+
+    const full=findFvgs([...base,
+      {time:3,open:102,high:103,low:100.5,close:101,volume:100,closed:true},
+      {time:4,open:101,high:102,low:99.9,close:100,volume:100,closed:true}
+    ],1,4);
+    const fullGap=full.find(x=>x.from===0&&x.to===2&&x.type==="bullish");
+    expect(fullGap?.filled).toBe(true);
+    expect(fullGap?.fillIndex).toBe(4);
+  });
+
+  it("tracks bearish FVG lifecycle symmetrically",()=>{
+    const base=[
+      {time:0,open:101,high:102,low:100,close:101.5,volume:100,closed:true},
+      {time:1,open:100.8,high:101,low:98,close:99,volume:100,closed:true},
+      {time:2,open:98.5,high:99,low:97,close:97.5,volume:100,closed:true}
+    ];
+    const partial=findFvgs([...base,{time:3,open:98,high:99.5,low:97,close:99,volume:100,closed:true}],1,3);
+    const partialGap=partial.find(x=>x.from===0&&x.to===2&&x.type==="bearish");
+    expect(partialGap?.low).toBe(99);
+    expect(partialGap?.high).toBe(100);
+    expect(partialGap?.filled).toBe(false);
+
+    const full=findFvgs([...base,
+      {time:3,open:98,high:99.5,low:97,close:99,volume:100,closed:true},
+      {time:4,open:99,high:100.1,low:98,close:100,volume:100,closed:true}
+    ],1,4);
+    const fullGap=full.find(x=>x.from===0&&x.to===2&&x.type==="bearish");
+    expect(fullGap?.filled).toBe(true);
+    expect(fullGap?.fillIndex).toBe(4);
+  });
+
+  it("never lets an unfinished candle create or fill an FVG",()=>{
+    const c=[
+      {time:0,open:99,high:100,low:98,close:99.5,volume:100,closed:true},
+      {time:1,open:100.2,high:102,low:100.1,close:101.5,volume:100,closed:true},
+      {time:2,open:101.6,high:103,low:101,close:102.5,volume:100,closed:true},
+      {time:3,open:102,high:103,low:99.9,close:100,volume:100,closed:false}
+    ];
+    const gaps=findFvgs(c,1,3);
+    const gap=gaps.find(x=>x.from===0&&x.to===2&&x.type==="bullish");
+    expect(gap?.filled).toBe(false);
+    expect(gap?.fillIndex).toBeUndefined();
   });
 
   it("requires an order block to link to a structure break at or after displacement",()=>{
