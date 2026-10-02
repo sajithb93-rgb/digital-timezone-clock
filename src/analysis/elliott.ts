@@ -183,7 +183,10 @@ export function isCompletedWaveCountInvalidated(c:Candle[],primary:WaveCount):bo
   for(let i=endIndex+1;i<c.length;i++){
     const bar=c[i];
     if(bar.closed===false)break;
-    if(primary.direction==="bullish" ? bar.close<=origin : bar.close>=origin)return true;
+    // Elliott's wave-2 origin is a hard price invalidation level: a wick
+    // through it invalidates the count; waiting for a close can keep an
+    // already-invalidated count alive.
+    if(primary.direction==="bullish" ? bar.low<=origin : bar.high>=origin)return true;
   }
   return false;
 }
@@ -487,7 +490,11 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   // A live continuation is only actionable while price is still inside the
   // correction-invalidated-to-target window. Reclaims after invalidation, or
   // moves that already reached/passed the target, do not revive the old setup.
-  const liveNotInvalidated=bull?lastClose>invalidation:lastClose<invalidation;
+  // The live continuation remains invalid only while the latest closed
+  // candle has not crossed the C invalidation level. Use the candle extreme
+  // rather than close so a wick breach cannot revive an invalid count.
+  const lastCandle=c.at(-1);
+  const liveNotInvalidated=!!lastCandle&&(bull?lastCandle.low>invalidation:lastCandle.high<invalidation);
   const liveBeforeTarget=bull?lastClose<target:lastClose>target;
   if(!liveNotInvalidated||!liveBeforeTarget)return null;
   const triggered=bull?lastClose>=entry:lastClose<=entry;
