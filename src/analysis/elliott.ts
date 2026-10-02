@@ -257,11 +257,11 @@ export function validateFlat(prices:number[],bullishCorrection:boolean):FlatVali
   const bInXA=aUp?b<x&&b>a:b>x&&b<a;
   const cReversesA=aUp?c>b:c<b;
   const bExceedsX=aUp?b<=x:b>=x;
-  const cBeyondA=aUp?c<a:c>a;
-  const cFailsA=aUp?c>a:c<a;
+  const cBeyondA=aUp?c>a:c<a;
+  const cFailsA=aUp?c<a:c>a;
   if(direction!==(bullishCorrection?"bullish":"bearish")||!cReversesA)return{valid:false,subtype:"None",bRetracement,cProjection};
 
-  const regular=bRetracement>=.90&&bRetracement<=1.10&&cProjection>=.618&&cProjection<=1.618;
+  const regular=bInXA&&bRetracement>=.90&&bRetracement<=1.10&&cProjection>=.618&&cProjection<=1.618;
   const expanded=bExceedsX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cBeyondA;
   const running=bExceedsX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cFailsA;
 
@@ -412,22 +412,31 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
   const bull=primary.direction==="bullish";
   const ps=alternatePivots(swingPivots(c,2)).filter(p=>p.index>endIndex);
   // A live continuation correction must be represented as X-A-B-C.
-  // The previous implementation passed only A-B-C (3 points) to validators
-  // that explicitly require 4 points, making every live correction invalid.
+  // Scan every recent 4-pivot window instead of only the final four pivots;
+  // an extra minor swing must not hide an otherwise valid correction.
   if(ps.length<4)return null;
 
-  const q=ps.slice(-4);
+  let best:{q:Pivot[];correction:ReturnType<typeof validateZigzag>;flat:ReturnType<typeof validateFlat>}|null=null;
   const expected=bull?["H","L","H","L"]:["L","H","L","H"];
-  if(q.some((p,i)=>p.type!==expected[i]))return null;
+  for(let i=0;i<=ps.length-4;i++){
+    const q=ps.slice(i,i+4);
+    if(q.some((p,j)=>p.type!==expected[j]))continue;
+    const prices=q.map(p=>p.price);
+    const correction=bull
+      ? validateZigzag(prices,false)
+      : validateZigzag(prices,true);
+    const flat=bull
+      ? validateFlat(prices,false)
+      : validateFlat(prices,true);
+    if(!correction.valid&&!flat.valid)continue;
+    if(!best || q[3].index>best.q[3].index) best={q,correction,flat};
+  }
+  if(!best)return null;
 
+  const q=best.q;
+  const correction=best.correction;
+  const flat=best.flat;
   const prices=q.map(p=>p.price);
-  const correction=bull
-    ? validateZigzag(prices,false)
-    : validateZigzag(prices,true);
-  const flat=bull
-    ? validateFlat(prices,false)
-    : validateFlat(prices,true);
-  if(!correction.valid&&!flat.valid)return null;
 
   const [,a,b,cPoint]=prices;
   // Entry is the B trigger after C completes; C is the invalidation point.
