@@ -346,8 +346,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   }
 
   let entry:number|null=null,stop:number|null=null,targets:number[]=[];
-  let tradeGeometryValid=true;
-  let targetQualityValid=true;
+  let tradeGeometryValid=false;
+  let targetQualityValid=false;
   if(direction!=="WAIT"){
     entry=closed.at(-1)!.close;
     const buffer=avg(closed.slice(-5).map(c=>barRange(c)))*0.10;
