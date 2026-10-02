@@ -311,23 +311,24 @@ export type TriangleValidation={
   valid:boolean;
   contracting:boolean;
   expanding:boolean;
+  barrier:boolean;
   converging:boolean;
   alternating:boolean;
 };
 
 export function validateTriangle(prices:number[],bullish:boolean):TriangleValidation{
-  // A triangle is A-B-C-D-E: five alternating subwaves after the
+  // A triangle is X-A-B-C-D-E: five alternating subwaves after the
   // correction's X anchor. The old implementation stopped at D and then
   // mislabeled D as E, allowing incomplete triangles to qualify.
-  if(prices.length<6)return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+  if(prices.length<6)return{valid:false,contracting:false,expanding:false,barrier:false,converging:false,alternating:false};
   const [x,a,b,c,d,e]=prices;
   const swings=[Math.abs(a-x),Math.abs(b-a),Math.abs(c-b),Math.abs(d-c),Math.abs(e-d)];
-  if(swings.some(v=>v<=0))return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+  if(swings.some(v=>v<=0))return{valid:false,contracting:false,expanding:false,barrier:false,converging:false,alternating:false};
 
   const alternating=bullish
     ? a>x&&b<a&&c>b&&d<c&&e>d
     : a<x&&b>a&&c<b&&d>c&&e<d;
-  if(!alternating)return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+  if(!alternating)return{valid:false,contracting:false,expanding:false,barrier:false,converging:false,alternating:false};
 
   // Upper boundary uses A/C/E; lower boundary uses X/B/D.
   // Contracting requires both boundaries to move inward. Expanding is the
@@ -342,10 +343,17 @@ export function validateTriangle(prices:number[],bullish:boolean):TriangleValida
   const lowerExpanding=lowB<=lowX&&lowD<=lowB;
   const contracting=upperContracting&&lowerContracting;
   const expanding=upperExpanding&&lowerExpanding;
+  // Barrier triangles have one approximately horizontal boundary while the
+  // opposite boundary contracts. Use a tolerance derived from the smallest
+  // observed subwave so this remains scale-aware without requiring ATR.
+  const horizontalTol=Math.max(Math.min(...swings)*0.15,1e-12);
+  const upperBarrier=Math.abs(highC-highA)<=horizontalTol&&Math.abs(highE-highA)<=horizontalTol&&lowerContracting;
+  const lowerBarrier=Math.abs(lowB-lowX)<=horizontalTol&&Math.abs(lowD-lowX)<=horizontalTol&&upperContracting;
+  const barrier=upperBarrier||lowerBarrier;
   const initialRange=Math.abs(a-x);
   const finalRange=Math.abs(e-d);
   const converging=initialRange>0&&finalRange<initialRange;
-  return{valid:contracting||expanding,contracting,expanding,converging,alternating};
+  return{valid:contracting||expanding||barrier,contracting,expanding,barrier,converging,alternating};
 }
 
 export function validateDoubleZigzag(prices:number[],bullishCorrection:boolean){
@@ -437,8 +445,8 @@ function correctionCandidates(c:Candle[]){
     out.push({
       points:sequencePoints(q).map((x,j)=>({...x,label:["X","A","B","C","D","E"][j]})),
       kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[5].price],
-      quality:tri.contracting?82:68,
-      rules:["X-A-B-C-D-E triangle geometry",tri.contracting?"Contracting triangle boundary detected":"Expanding triangle boundary detected"],
+      quality:tri.contracting?82:tri.barrier?78:68,
+      rules:["X-A-B-C-D-E triangle geometry",tri.contracting?"Contracting triangle boundary detected":tri.barrier?"Barrier triangle boundary detected":"Expanding triangle boundary detected"],
       strict:false,pattern:"Triangle"
     });
   }
