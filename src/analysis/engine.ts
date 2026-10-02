@@ -64,6 +64,11 @@ function pivots(c:Candle[],w=3):Pivot[]{
 }
 
 function clamp(n:number){return Math.max(0,Math.min(100,Math.round(n)))}
+export function classifyPremiumDiscount(price:number,high:number,low:number):"Premium"|"Discount"|"Equilibrium"{
+ if(!Number.isFinite(price)||!Number.isFinite(high)||!Number.isFinite(low)||high<=low)return "Equilibrium";
+ const mid=(high+low)/2;
+ return price>mid?"Premium":price<mid?"Discount":"Equilibrium";
+}
 export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}
 export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{
  return sweepIndex>=0
@@ -99,8 +104,9 @@ export function isEntryZoneCausal(zoneOrigin:number,sweepIndex:number,structureI
  }
  return isPostSweepZoneCausal(zoneOrigin,sweepIndex,structureIndex,maxGap);
 }
-function range(c:Candle[]){
- const q=c.slice(-60);
+function range(c:Candle[],asOf=c.length-1){
+ const q=c.slice(0,Math.min(asOf+1,c.length)).filter(x=>x.closed!==false).slice(-60);
+ if(!q.length)return{hi:0,lo:0};
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
 }
 function body(c:Candle){return Math.abs(c.close-c.open)}
@@ -133,7 +139,7 @@ function dealingRange(ps:Pivot[],c:Candle[],asOf:number){
    source:"confirmed-swing" as const
   };
  }
- const r=range(c);
+ const r=range(c,asOf);
  return{hi:r.hi,lo:r.lo,anchorIndex:Math.max(0,asOf-59),source:"fallback-60" as const};
 }
 function uniquePivots(ps:Pivot[],tol:number){
@@ -445,7 +451,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const vwap=recentCandles.reduce((sum,x)=>sum+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
  const structureDirection=events.at(-1)?.direction??null;
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
- const pd=last.close>mid?"Premium":last.close<mid?"Discount":"Equilibrium";
+ const pd=classifyPremiumDiscount(last.close,r.hi,r.lo);
  const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
  const sweep=rawDirection==="bullish"
   ?sweeps.slice().reverse().find(x=>x.type==="low"&&asOf-x.index<=20)
