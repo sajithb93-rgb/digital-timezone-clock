@@ -9,7 +9,12 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  const s=r.setup;
  if(s.status==="ACTIVE"&&s.direction!=="WAIT"&&s.entry!=null&&s.stop!=null&&s.targets[0]!=null&&s.rr!=null) return make(symbol,timeframe,"CONFIRMED",s.direction,s.confidence,null,s.entry,s.stop,s.targets[0],s.rr,"SMC ACTIVE · "+(s.confirmations.slice(0,3).join(" · ")||"all entry conditions passed"));
  const direction=s.direction==="WAIT"?(r.trend==="Bullish"?"BUY":r.trend==="Bearish"?"SELL":"NONE"):s.direction;
- const checks=[direction==="BUY"?r.trend==="Bullish":direction==="SELL"?r.trend==="Bearish":false,!!r.events.at(-1)&&((direction==="BUY"&&r.events.at(-1)?.direction==="bullish")||(direction==="SELL"&&r.events.at(-1)?.direction==="bearish")),!!r.entryZone,!!r.sweeps.at(-1),direction==="BUY"?r.premiumDiscount==="Discount":direction==="SELL"?r.premiumDiscount==="Premium":false,r.targets.length>0];
+ const latestEvent=r.events.at(-1);
+ const latestSweep=r.sweeps.at(-1);
+ const asOf=r.asOf??0;
+ const sweepRecent=!!latestSweep && latestSweep.index>=Math.max(0,asOf-20);
+ const sweepAligned=direction==="BUY" ? latestSweep?.type==="low" : direction==="SELL" ? latestSweep?.type==="high" : false;
+ const checks=[direction==="BUY"?r.trend==="Bullish":direction==="SELL"?r.trend==="Bearish":false,!!latestEvent&&((direction==="BUY"&&latestEvent.direction==="bullish")||(direction==="SELL"&&latestEvent.direction==="bearish")),!!r.entryZone,sweepRecent&&sweepAligned,direction==="BUY"?r.premiumDiscount==="Discount":direction==="SELL"?r.premiumDiscount==="Premium":false,r.targets.length>0];
  const passed=checks.filter(Boolean).length; const score=Math.round(passed/checks.length*100);
  const state:EntryScanState=score>=83?"SETUP":score>=66?"WATCH":"WAIT";
  const reason=state==="SETUP"?direction+" setup forming · waiting for active entry/retest":state==="WATCH"?direction+" watch · "+passed+"/"+checks.length+" entry conditions":"No qualifying SMC entry setup";
