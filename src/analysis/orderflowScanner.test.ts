@@ -34,4 +34,25 @@ describe("Order Flow pair scanner", () => {
     expect(row.state).toBe("WAIT");
     expect(row.direction).toBe("NONE");
   });
+
+  it("blocks a confluence-complete setup when trade geometry is invalid", () => {
+    const row = classifyOrderFlowSetup(
+      "BTCUSDT",
+      "5m",
+      {
+        ...base,
+        direction:"WAIT",
+        diagnostics:[{
+          key:"trade_geometry",
+          label:"Entry / SL / TP geometry",
+          passed:false,
+          detail:"Invalid stop side or target direction"
+        }],
+        rejectionReason:"Confirmed order-flow candidate · blocked by invalid entry/SL/TP geometry"
+      }
+    );
+    expect(row.state).toBe("WAIT");
+    expect(row.direction).toBe("BUY");
+    expect(row.reason).toContain("invalid entry/SL/TP geometry");
+  });
 });
