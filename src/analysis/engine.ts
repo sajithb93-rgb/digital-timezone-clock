@@ -154,12 +154,16 @@ function labelPivots(ps:Pivot[]){
 }
 function dealingRange(ps:Pivot[],c:Candle[],asOf:number){
  const confirmed=ps.filter(p=>(p.confirmedAt??p.index)<=asOf).sort((a,b)=>a.index-b.index);
+ const rangeMinWidth=Math.max(atrAt(c,asOf,14)*2,.0000001);
  for(let i=confirmed.length-1;i>0;i--){
   const a=confirmed[i],b=confirmed[i-1];
   if(a.type===b.type)continue;
   const high=a.type==="H"?a:b;
   const low=a.type==="L"?a:b;
-  if(high.price>low.price)return{
+  // A dealing range must have enough price separation to be meaningful.
+  // Reject tiny adjacent swings that would make Premium/Discount flip
+  // on insignificant noise.
+  if(high.price>low.price&&high.price-low.price>=rangeMinWidth)return{
    hi:high.price,lo:low.price,
    anchorIndex:Math.min(high.index,low.index),
    source:"confirmed-swing" as const
