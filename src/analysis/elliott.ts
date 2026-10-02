@@ -406,7 +406,7 @@ function diagonalCandidates(c:Candle[],bull:boolean){
   return out;
 }
 
-function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null{
+export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null{
   if(primary.kind!=="Impulse"&&primary.kind!=="Diagonal")return null;
   const xPoint=primary.points.at(-1);
   const endIndex=xPoint?.index??-1;
