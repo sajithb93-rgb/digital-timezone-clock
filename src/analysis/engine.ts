@@ -79,6 +79,9 @@ export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,
 export function isPostSweepZoneCausal(zoneOrigin:number,sweepIndex:number,structureIndex:number,maxGap=12):boolean{
  return zoneOrigin>=sweepIndex&&zoneOrigin<=structureIndex&&structureIndex-zoneOrigin<=maxGap;
 }
+export function isOrderBlockCausal(zoneOrigin:number,displacementIndex:number,structureIndex:number,maxGap=12):boolean{
+ return zoneOrigin<displacementIndex&&structureIndex>=displacementIndex&&structureIndex-zoneOrigin<=maxGap;
+}
 function range(c:Candle[]){
  const q=c.slice(-60);
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
@@ -201,7 +204,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
   }
   if(bullBreak>0){
-   const linked=events.some(e=>e.direction==="bullish"&&e.index>=i+1&&e.index<=Math.min(end,i+12));
+   const linked=events.some(e=>e.direction==="bullish"&&isOrderBlockCausal(i,bullBreak,e.index,12));
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bullBreak+1;j<=end;j++){
@@ -214,7 +217,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    }
   }
   if(bearBreak>0){
-   const linked=events.some(e=>e.direction==="bearish"&&e.index>=i+1&&e.index<=Math.min(end,i+12));
+   const linked=events.some(e=>e.direction==="bearish"&&isOrderBlockCausal(i,bearBreak,e.index,12));
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bearBreak+1;j<=end;j++){
