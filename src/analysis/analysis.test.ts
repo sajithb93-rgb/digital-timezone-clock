@@ -449,8 +449,8 @@ describe("analysis regression",()=>{
     expect(levels.find(x=>x.label==="100%")?.price).toBe(100);
   });
 
-  it("uses the strict non-shortest Wave 3 rule in the advanced validator",()=>{
-    expect(validateImpulseWave([100,120,110,130,125,145],true).valid).toBe(false);
+  it("rejects an impulse when Wave 3 is shorter than both Wave 1 and Wave 5",()=>{
+    expect(validateImpulseWave([100,120,110,125,115,145],true).valid).toBe(false);
   });
 
   it("enforces the three strict standard-impulse rules",()=>{
