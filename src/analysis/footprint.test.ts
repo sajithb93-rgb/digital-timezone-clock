@@ -90,6 +90,20 @@ describe("price-level footprint engine",()=>{
     expect(result.maxBuyImbalanceRatio).toBe(4);
   });
 
+  it("keeps tiny one-tick candle absorption bands disjoint",()=>{
+    const snapshot:any={
+      candleTime:60_000,intervalMs:60_000,confirmed:true,
+      levels:[
+        {price:100,buyVolume:1,sellVolume:4,delta:-3,totalVolume:5,buyTrades:1,sellTrades:1},
+        {price:101,buyVolume:4,sellVolume:1,delta:3,totalVolume:5,buyTrades:1,sellTrades:1}
+      ],
+      buyVolume:5,sellVolume:5,delta:0,deltaRatio:0,poc:100
+    };
+    const candle={time:60_000,open:100.5,high:101,low:100,close:100.5,volume:10,closed:true};
+    const result=analyzeFootprintSnapshot(snapshot,candle,1);
+    expect(result.absorption).toBe("NONE");
+  });
+
   it("does not classify zero-opposing-volume flow as seller absorption",()=>{
     const snapshot:any={
       candleTime:60_000,intervalMs:60_000,confirmed:true,
