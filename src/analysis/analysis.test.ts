@@ -161,6 +161,18 @@ describe("analysis regression",()=>{
     expect(makeBreakers([ob],data,3)).toEqual([]);
   });
 
+  it("does not create a breaker from an unfinished post-mitigation candle",()=>{
+    const ob={index:1,low:99,high:105,type:"bullish" as const,mitigated:true,mitigationIndex:3,strength:1};
+    const data=[
+      {...candles(1)[0],time:0,closed:true},
+      {...candles(1)[0],time:1,open:105,high:106,low:99,close:100,closed:true},
+      {...candles(1)[0],time:2,open:100,high:106,low:100,close:104,closed:true},
+      {...candles(1)[0],time:3,open:104,high:106,low:103,close:104.5,closed:true},
+      {...candles(1)[0],time:4,open:104,high:104.5,low:98,close:98.5,closed:false}
+    ];
+    expect(makeBreakers([ob],data,4)).toEqual([]);
+  });
+
   it("invalidates a breaker when price closes back through the flipped zone",()=>{
     const ob={index:1,low:99,high:105,type:"bullish" as const,mitigated:true,mitigationIndex:3,strength:1};
     const data=[
