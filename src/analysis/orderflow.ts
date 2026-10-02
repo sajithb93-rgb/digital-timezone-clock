@@ -362,7 +362,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     // Trade geometry is part of confirmation, not a presentation detail.
     // BUY must have SL strictly below entry and all TPs strictly above entry.
     // SELL must have SL strictly above entry and all TPs strictly below entry.
-    const validStopSide=entry!=null&&stop!=null&&(
+    const validStopSide=entry!=null&&stop!=null&&Number.isFinite(stop)&&stop>0&&(
       direction==="BUY" ? stop<entry : stop>entry
     );
     if(validStopSide){
