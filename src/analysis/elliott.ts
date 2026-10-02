@@ -215,7 +215,7 @@ export function validateStandardImpulse(prices:number[],bull:boolean):StandardIm
   // Wave 3 must make a new extreme beyond Wave 1.
   const w3BeyondW1=bull?p3>p1:p3<p1;
   // Wave 3 may tie another actionary wave, but can never be the shortest.
-  const w3NotShortest=w3>=w1&&w3>=w5;
+  const w3NotShortest=w3>=Math.min(w1,w5);
   // In a standard impulse Wave 4 must remain outside Wave-1 price
   // territory and move counter to Wave 3.
   const w4Valid=bull?p4>p1&&p4<p3:p4<p1&&p4>p3;
@@ -468,7 +468,7 @@ function diagonalCandidates(c:Candle[],bull:boolean){
     const w5Direction=bull?p5>p4:p5<p4;
     // Elliott's Wave 3 may not be the shortest of Waves 1, 3 and 5.
     // Compare against both actionary waves, not just the smaller one.
-    const w3NotShortest=w3>=w1&&w3>=w5;
+    const w3NotShortest=w3>=Math.min(w1,w5);
     if(!(w1>0&&w2>0&&w2Valid&&w3BeyondW1&&overlap&&w3NotShortest&&w5Direction))continue;
     const contracting=w3<w1&&w4<w2&&w5<w3,expanding=w3>w1&&w4>w2&&w5>w3;
     // A diagonal still needs a coherent contracting or expanding structure.
