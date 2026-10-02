@@ -34,10 +34,10 @@ export function normalizeNews(raw: any): NewsEvent[] {
     return { title, country, impact: toImpact(x.impact ?? x.importance ?? x.volatility, title), date: date ?? 0 };
   }).filter((x: NewsEvent) => x.title && x.date > 0 && x.country === "USD");
 }
-export function getNewsRisk(events: NewsEvent[], effectiveNow = Date.effectiveNow(), bufferMinutes = 30): NewsRisk {
+export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes = 30): NewsRisk {
   // Invalid clock input must never silently turn an active news window into
   // LOW risk. Fall back to the real current clock value.
-  const effectiveNow=Number.isFinite(effectiveNow)?effectiveNow:Date.effectiveNow();
+  const effectiveNow=Number.isFinite(now)?now:Date.now();
   // Treat invalid/negative windows as the safe default instead of allowing a
   // caller to accidentally disable the news block through NaN/negative input.
   const safeBufferMinutes=Number.isFinite(bufferMinutes)?Math.max(0,bufferMinutes):30;
