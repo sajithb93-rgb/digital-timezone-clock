@@ -453,6 +453,7 @@ export default function Home(){
   const controller=new AbortController();
   const tfMs=intervalMs(interval);const tick=selectedPair?.tickSize??0;const book=new FootprintBook(tfMs,tick,36);footprintBookRef.current=book;setFootprintVersion(v=>v+1);
   let pendingRevision=0,flushedRevision=0,lastConfirmedBucket=-1;
+  let historyLoading=true;
   const schedule=()=>{if(stop||retry)return;const delay=Math.min(15000,1000*Math.pow(2,Math.min(attempt++,4)));retry=window.setTimeout(()=>{retry=undefined;connect()},delay)};
   const connect=()=>{if(stop)return;try{socket?.close()}catch{};socket=new WebSocket(marketConfig[marketType].ws+symbol.toLowerCase()+"@aggTrade");
    socket.onopen=()=>{if(stop)return;attempt=0;setFootprintConnected(true)};
@@ -460,7 +461,23 @@ export default function Home(){
    socket.onerror=()=>{if(!stop)setFootprintConnected(false)};
    socket.onclose=()=>{if(stop)return;setFootprintConnected(false);schedule()};
   };
-  const loadHistory=async()=>{if(!symbol||!selectedPair?.tickSize)return;try{const lookback=Math.max(tfMs*14,60*60*1000);const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,controller.signal,12);if(stop)return;book.load(trades);pendingRevision+=1;setFootprintVersion(v=>v+1);setFootprintConnected(true)}catch{if(!stop)setFootprintConnected(false)}};
+  const loadHistory=async()=>{
+   if(!symbol||!selectedPair?.tickSize){historyLoading=false;return}
+   try{
+    const lookback=Math.max(tfMs*14,60*60*1000);
+    const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,controller.signal,12);
+    if(stop)return;
+    book.load(trades);
+    pendingRevision+=1;
+    setFootprintVersion(v=>v+1);
+    setFootprintConnected(true);
+   }catch{
+    if(!stop)setFootprintConnected(false);
+   }finally{
+    historyLoading=false;
+    if(!stop)setFootprintVersion(v=>v+1);
+   }
+  };
   void loadHistory();connect();
   flush=window.setInterval(()=>{
     if(stop)return;
@@ -469,7 +486,10 @@ export default function Home(){
     // Recompute on actual book changes, plus once when a newly closed bucket
     // crosses FootprintBook's 1.5s finalization boundary. Avoid a full
     // OrderFlow/Reversal recalculation every second when the stream is idle.
-    const boundaryReady=now>=justClosedBucket+1500&&justClosedBucket!==lastConfirmedBucket;
+    // Do not freeze a bucket while historical backfill is still in flight.
+    // Otherwise live data can finalize first and later backfill trades will be
+    // rejected by FootprintBook, leaving an artificially incomplete footprint.
+    const boundaryReady=!historyLoading&&now>=justClosedBucket+1500&&justClosedBucket!==lastConfirmedBucket;
     if(pendingRevision!==flushedRevision||boundaryReady){
       flushedRevision=pendingRevision;
       if(boundaryReady)lastConfirmedBucket=justClosedBucket;
