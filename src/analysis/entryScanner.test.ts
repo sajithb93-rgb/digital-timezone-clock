@@ -11,6 +11,7 @@ const baseEW:any={
 
 describe("entry scanners",()=>{
  it("confirms an active SMC setup",()=>{const r=classifySMCEntry("BTCUSDT","5m",baseSMC);expect(r.state).toBe("CONFIRMED");expect(r.direction).toBe("BUY");expect(r.entry).toBe(100)});
+ it("does not infer an SMC entry direction from trend when setup direction is WAIT",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,direction:"WAIT",status:"WAIT"}});expect(r.direction).toBe("NONE");expect(r.state).toBe("WAIT")});
  it("does not confirm an ACTIVE SMC setup on CHOCH alone",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,events:[{index:10,direction:"bullish",type:"CHOCH"}]});
    expect(r.state).not.toBe("CONFIRMED");
