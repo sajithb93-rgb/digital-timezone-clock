@@ -1,5 +1,6 @@
 import { analyzeSMC, type Candle, type SMCResult } from "./engine";
 import type { OrderFlowResult } from "./orderflow";
+import { normalizeCandleSeries } from "./candles";
 
 export type ReversalDirection = "BUY" | "SELL" | "NONE";
 export type ReversalState = "NONE" | "WATCH" | "SETUP" | "CONFIRMED";
@@ -176,15 +177,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
   const requireOrderFlow = options.requireOrderFlow !== false;
   // Reversal indices must remain stable even when the upstream exchange feed
   // arrives out of order or contains duplicate/malformed candles.
-  const byTime=new Map<number,Candle>();
-  for(const candle of candles){
-    if(!Number.isFinite(candle.time)||!Number.isFinite(candle.open)||!Number.isFinite(candle.high)||!Number.isFinite(candle.low)||!Number.isFinite(candle.close))continue;
-    if(candle.high<candle.low||candle.high<Math.max(candle.open,candle.close)||candle.low>Math.min(candle.open,candle.close))continue;
-    byTime.set(candle.time,candle);
-  }
-  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
-  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
-  const closed=(firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized);
+  const closed=normalizeCandleSeries(candles,true);
   if (closed.length < 30) return { ...EMPTY, asOf: closed.length - 1 };
 
   const asOf = closed.length - 1;
