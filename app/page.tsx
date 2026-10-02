@@ -294,7 +294,7 @@ export default function Home(){
     setMtfCandles(prev=>mtfIntervals.map(tf=>{
      const next=rows.find(x=>x?.interval===tf);
      if(next)return next;
-     return prev.find(x=>x.interval===tf)??{interval:tf,candles:[]};
+     return{interval:tf,candles:[]};
     }));
    }finally{
     inFlight=false;
