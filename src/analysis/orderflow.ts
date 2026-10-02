@@ -407,7 +407,9 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     label:"Entry / SL / TP geometry",
     passed:tradeGeometryValid,
     detail:tradeGeometryValid
-      ?"Entry/SL geometry is valid and targets pass shared geometry validation"
+      ?targetQualityValid
+        ?"Entry/SL geometry is valid and targets pass shared geometry validation"
+        :"Entry/SL geometry is valid; target quality is failed separately"
       :"Invalid entry/SL geometry or shared target geometry"
   });
 
