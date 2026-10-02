@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -89,7 +89,7 @@ describe("analysis regression",()=>{
     expect(isSMCCausalSequence(10,22,null)).toBe(false);
   });
 
-  it("classifies BOS and CHOCH only from the prior structure direction",()=>{
+  it("requires the protected swing for an SMC CHOCH",()=>{\n    expect(classifyProtectedStructureBreak("bullish","high","low")).toBe("BOS");\n    expect(classifyProtectedStructureBreak("bullish","low","low")).toBe("CHOCH");\n    expect(classifyProtectedStructureBreak("bearish","low","high")).toBe("BOS");\n    expect(classifyProtectedStructureBreak("bearish","high","high")).toBe("CHOCH");\n    expect(classifyProtectedStructureBreak("bullish","low",null)).toBeNull();\n    expect(classifyProtectedStructureBreak("bearish","high",null)).toBeNull();\n  });\n\n  it("classifies BOS and CHOCH only from the prior structure direction",()=>{
     expect(classifyStructureBreak(null,"bullish")).toBe("BOS");
     expect(classifyStructureBreak("bullish","bullish")).toBe("BOS");
     expect(classifyStructureBreak("bearish","bullish")).toBe("CHOCH");
