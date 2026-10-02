@@ -565,7 +565,7 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   // rather than close so a wick breach cannot revive an invalid count.
   const lastCandle=lastClosed;
   const liveNotInvalidated=bull?lastCandle.low>invalidation:lastCandle.high<invalidation;
-  const liveBeforeTarget=bull?lastClose<target:lastClose>target;
+  const liveBeforeTarget=bull?lastCandle.high<target:lastCandle.low>target;
   if(!liveNotInvalidated||!liveBeforeTarget)return null;
   const triggered=bull?lastClose>=entry:lastClose<=entry;
   const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0)+(flat.valid?0:2));
