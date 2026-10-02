@@ -144,7 +144,7 @@ export default function Home(){
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState(""),[smcEntryScanner,setSmcEntryScanner]=useState<EntryScanRow[]>([]),[elliottEntryScanner,setElliottEntryScanner]=useState<EntryScanRow[]>([]),[smcEntryTf,setSmcEntryTf]=useState("5m"),[elliottEntryTf,setElliottEntryTf]=useState("5m"),[smcEntryEnabled,setSmcEntryEnabled]=useState(false),[elliottEntryEnabled,setElliottEntryEnabled]=useState(false),[smcEntryBusy,setSmcEntryBusy]=useState(false),[elliottEntryBusy,setElliottEntryBusy]=useState(false),[smcEntryProgress,setSmcEntryProgress]=useState(""),[elliottEntryProgress,setElliottEntryProgress]=useState(""),[smcEntryUpdated,setSmcEntryUpdated]=useState(0),[elliottEntryUpdated,setElliottEntryUpdated]=useState(0),[smcEntryError,setSmcEntryError]=useState(""),[elliottEntryError,setElliottEntryError]=useState("");
- const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);
+ const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);\n const orderFlowScanInFlightRef=useRef(false);
  const scannerRef=useRef<Ticker[]>([]);
 
  const smc=useMemo(()=>analyzeSMC(analysisCandles),[analysisCandles]);
@@ -180,7 +180,8 @@ export default function Home(){
   const runId=++orderFlowScanRunRef.current;
   const isCurrent=()=>!stop&&!controller.signal.aborted&&orderFlowScanRunRef.current===runId;
   const scan=async()=>{
-   if(!isCurrent()||!orderFlowScannerEnabled||!pairs.length)return;
+   if(!isCurrent()||!orderFlowScannerEnabled||!pairs.length||orderFlowScanInFlightRef.current)return;
+   orderFlowScanInFlightRef.current=true;
    setOrderFlowScanBusy(true);
    // Start a fresh live-confirmed list for this scan run. Confirmed pairs are
    // added immediately as each worker finishes instead of waiting for all pairs.
@@ -243,7 +244,7 @@ export default function Home(){
       setOrderFlowScanProgress(`DONE · ${total} pairs · ${confirmed.length} confirmed`);
     }
    }catch(e){if(isCurrent())setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
-   finally{if(isCurrent())setOrderFlowScanBusy(false)}
+   finally{orderFlowScanInFlightRef.current=false;if(isCurrent())setOrderFlowScanBusy(false)}
   };
   scan();
   const id=window.setInterval(scan,180000);
