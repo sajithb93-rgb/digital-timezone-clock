@@ -430,16 +430,15 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const sweeps:Sweep[]=[];
  for(const p of [...liquidityHighs,...liquidityLows]){
   if(asOf-p.index>40)continue;
+  let latestValidSweep:Sweep|undefined;
   for(let j=p.index+1;j<=asOf;j++){
    const hit=p.type==="H"?data[j].high>p.price&&data[j].close<p.price:data[j].low<p.price&&data[j].close>p.price;
    if(!hit)continue;
    if(isValidLiquiditySweep(data,j,p.price,p.type==="H"?"high":"low",asOf)){
-    sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(data,j,atrAt(data,j))>=.7});
-    break;
+    latestValidSweep={index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(data,j,atrAt(data,j))>=.7};
    }
-   // An invalidated sweep must not suppress a later sweep of the same level.
-   // Continue scanning until the as-of candle for the newest currently valid event.
   }
+  if(latestValidSweep)sweeps.push(latestValidSweep);
  }
  const r=dealingRange(ps,data,asOf);
  const mid=(r.hi+r.lo)/2;
