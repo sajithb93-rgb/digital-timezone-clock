@@ -328,28 +328,28 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
  const out:OB[]=[];
  const end=Math.min(asOf,c.length-1);
  for(let i=1;i<=end-1;i++){
+  // Only closed, directional candles can be OB bases.
+  if(c[i].closed===false)continue;
   const bullishBase=c[i].close<c[i].open;
   const bearishBase=c[i].close>c[i].open;
+  if(!bullishBase&&!bearishBase)continue;
   let bullBreak=-1,bearBreak=-1,bullStrength=0,bearStrength=0;
   for(let k=1;k<=3&&i+k<=end;k++){
-   const d=displacementAt(c,i+k);
-   if(bullishBase&&c[i+k].close>c[i].high&&d>=.55){bullBreak=i+k;bullStrength=d;break}
-   if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
+   const j=i+k;
+   if(c[j].closed===false)continue;
+   const d=displacementAt(c,j);
+   if(bullishBase&&c[j].close>c[i].high&&d>=.55){bullBreak=j;bullStrength=d;break}
+   if(bearishBase&&c[j].close<c[i].low&&d>=.55){bearBreak=j;bearStrength=d;break}
   }
   if(bullBreak>0){
    const linked=events.some(e=>e.direction==="bullish"&&isOrderBlockCausal(i,bullBreak,e.index,12));
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bullBreak+1;j<=end;j++){
-     // Mitigation means price has actually entered the OB zone. For a
-     // bullish block the zone is [low, open], so testing the zone's upper
-     // boundary (open) is the correct first-touch condition.
+     if(c[j].closed===false)continue;
      if(m===undefined&&c[j].low<=c[i].open&&c[j].high>=c[i].low)m=j;
-     // A closed candle through the far boundary invalidates the block.
      if(c[j].close<c[i].low){invalid=j;break}
     }
-    // If the block is invalidated before its first mitigation, discard it.
-    // Once mitigated, keep it only as historical/mitigated state.
     if(invalid===undefined||(m!==undefined&&m<invalid)){
      out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
     }
@@ -360,11 +360,10 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bearBreak+1;j<=end;j++){
-     // Mitigation means price has actually entered the OB zone [open, high].
+     if(c[j].closed===false)continue;
      if(m===undefined&&c[j].high>=c[i].open&&c[j].low<=c[i].high)m=j;
-     // A closed candle through the far boundary invalidates the block.
      if(c[j].close>c[i].high){invalid=j;break}
-    }    // If the block is invalidated before its first mitigation, discard it.
+    }
     if(invalid===undefined||(m!==undefined&&m<invalid)){
      out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
     }
