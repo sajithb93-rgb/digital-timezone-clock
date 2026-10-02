@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeReversal } from "./reversal";
+import { analyzeReversal, analyzeReversalMTF } from "./reversal";
 import type { Candle, SMCResult } from "./engine";
 import type { OrderFlowResult } from "./orderflow";
 
@@ -207,5 +207,21 @@ describe("reversal engine",()=>{
     const base=smc({sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],events:[{index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},{index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}],fvgs:[{from:32,to:34,low:101,high:103,type:"bullish",filled:false,size:1}],orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}]});
     const ordered=analyzeReversal(candles,base,flow(),{requireOrderFlow:false}); const reversed=analyzeReversal([...candles].reverse(),base,flow(),{requireOrderFlow:false});
     expect(reversed.asOf).toBe(ordered.asOf); expect(reversed.sweepIndex).toBe(ordered.sweepIndex); expect(reversed.structureIndex).toBe(ordered.structureIndex);
+  });
+  it("does not increase MTF reversal score when 1h context is opposed",()=>{
+    const flat=Array.from({length:45},(_,i)=>candle(i,100,101,99,100));
+    const frames=[
+      {interval:"1h",candles:flat.map((x,i)=>({...x,time:i,close:100-i*0.2,open:100-i*0.2+0.05,high:100-i*0.2+0.1,low:100-i*0.2-0.1}))},
+      {interval:"15m",candles:flat},
+      {interval:"5m",candles:flat}
+    ];
+    const aligned=analyzeReversalMTF(frames);
+    const opposedFrames=[
+      {interval:"1h",candles:flat.map((x,i)=>({...x,time:i,close:100+i*0.2,open:100+i*0.2-0.05,high:100+i*0.2+0.1,low:100+i*0.2-0.1}))},
+      {interval:"15m",candles:flat},
+      {interval:"5m",candles:flat}
+    ];
+    const opposed=analyzeReversalMTF(opposedFrames);
+    expect(opposed.score).toBeLessThanOrEqual(aligned.score);
   });
 });
