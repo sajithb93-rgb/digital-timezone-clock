@@ -46,35 +46,48 @@ function sweepRemainsValid(candles:Candle[],sweep:OrderFlowBar|undefined,lastInd
 }
 function avg(v:number[]){return v.length?v.reduce((a,b)=>a+b,0)/v.length:0}
 
-function buildOrderFlowTargets(direction:"BUY"|"SELL",entry:number,risk:number,candles:Candle[]):number[]{
-  if(!Number.isFinite(entry)||!Number.isFinite(risk)||risk<=0)return [];
+function buildOrderFlowTargets(direction:"BUY"|"SELL",entry:number,risk:number,candles:Candle[]){
+  if(!Number.isFinite(entry)||!Number.isFinite(risk)||risk<=0)return {targets:[] as number[],structuralTargetCount:0};
   const minRR=1.5,maxRR=8;
   const window=candles.slice(-12,-1);
-  const levels:number[]=[];
+  const structuralLevels:number[]=[];
   for(let i=1;i<window.length-1;i++){
     const p=window[i];
-    if(direction==="BUY" && p.high>=window[i-1].high && p.high>=window[i+1].high && p.high>entry)levels.push(p.high);
-    if(direction==="SELL" && p.low<=window[i-1].low && p.low<=window[i+1].low && p.low<entry)levels.push(p.low);
+    if(direction==="BUY" && p.high>=window[i-1].high && p.high>=window[i+1].high && p.high>entry)structuralLevels.push(p.high);
+    if(direction==="SELL" && p.low<=window[i-1].low && p.low<=window[i+1].low && p.low<entry)structuralLevels.push(p.low);
   }
-  const fallback=direction==="BUY"
-    ?[entry+risk*1.5,entry+risk*2,entry+risk*3]
-    :[entry-risk*1.5,entry-risk*2,entry-risk*3];
-  const candidates=[...levels,...fallback]
-    .filter(Number.isFinite)
-    .filter(p=>{
-      const rr=Math.abs(p-entry)/risk;
-      return rr>=minRR&&rr<=maxRR;
-    })
-    .sort((a,b)=>direction==="BUY"?a-b:b-a);
-  const out:number[]=[];
+  const valid=(p:number)=>{
+    const rr=Math.abs(p-entry)/risk;
+    return Number.isFinite(p)&&rr>=minRR&&rr<=maxRR;
+  };
   const minSpacing=Math.max(risk*0.25,1e-12);
-  for(const p of candidates){
+  const out:number[]=[];
+  // Prefer actual prior swing/liquidity structure. Mathematical R targets are
+  // only used to fill remaining slots after structural levels are selected.
+  const structuralCandidates=structuralLevels
+    .filter(valid)
+    .sort((a,b)=>direction==="BUY"?a-b:b-a);
+  for(const p of structuralCandidates){
     if(out.every(x=>Math.abs(p-x)>=minSpacing)){
       out.push(p);
       if(out.length===3)break;
     }
   }
-  return out;
+  let structuralTargetCount=out.length;
+  const fallback=direction==="BUY"
+    ?[entry+risk*1.5,entry+risk*2,entry+risk*3]
+    :[entry-risk*1.5,entry-risk*2,entry-risk*3];
+  for(const p of fallback){
+    if(out.length===3||!valid(p))continue;
+    // Do not place a mathematical target before an already-selected structural
+    // level; fallback targets should extend beyond the last structural objective.
+    const beyondStructure=out.length===0
+      ?true
+      :direction==="BUY" ? p>out.at(-1)! : p<out.at(-1)!;
+    if(beyondStructure&&out.every(x=>Math.abs(p-x)>=minSpacing))out.push(p);
+  }
+  structuralTargetCount=Math.min(structuralTargetCount,out.length);
+  return {targets:out,structuralTargetCount};
 }
 
 function volumeSplit(c:Candle){
@@ -345,12 +358,15 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     );
     if(validStopSide){
       const risk=Math.abs(entry!-stop!);
-      const candidateTargets=buildOrderFlowTargets(direction,entry!,risk,closed);
-      const validTargets=candidateTargets.length===3&&candidateTargets.every((target)=>(
-        Number.isFinite(target)
-        &&(direction==="BUY" ? target>entry! : target<entry!)
-        &&Math.abs(target-entry!)/risk>=1.5
-      ));
+      const targetBuild=buildOrderFlowTargets(direction,entry!,risk,closed);
+      const candidateTargets=targetBuild.targets;
+      const validTargets=candidateTargets.length===3
+        &&targetBuild.structuralTargetCount>=1
+        &&candidateTargets.every((target)=>(
+          Number.isFinite(target)
+          &&(direction==="BUY" ? target>entry! : target<entry!)
+          &&Math.abs(target-entry!)/risk>=1.5
+        ));
       const sharedGeometryValid=validTargets&&isValidTradeGeometry(direction,entry!,stop!,candidateTargets,1.5);
       if(sharedGeometryValid){
         targets=candidateTargets;
@@ -375,8 +391,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     label:"Target quality / spacing",
     passed:targets.length===3,
     detail:targets.length===3
-      ?"3 ordered targets with minimum 1.5R and controlled spacing"
-      :"Fewer than 3 valid risk-adjusted targets"
+      ?"3 ordered targets with ≥1 structural/liquidity level, minimum 1.5R, and controlled spacing"
+      :"Need 3 valid risk-adjusted targets including at least 1 structural/liquidity level"
   });
   diagnostics.push({
     key:"trade_geometry",
