@@ -426,7 +426,7 @@ function correctionCandidates(c:Candle[]){
     const p=q.map(pt=>pt.price),bullishCorrection=upward,dz=validateDoubleZigzag(p,bullishCorrection);
     if(!dz.valid)continue;
     out.push({
-      points:sequencePoints(q).map((x,j)=>({...x,label:["W-A","W-B","W-C","W-C/X","X","Y-A","Y-B","Y-C"][j]})),
+      points:sequencePoints(q).map((x,j)=>({...x,label:["W","W-A","W-B","W-C","X","Y-A","Y-B","Y-C"][j]})),
       kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[7].price],
       quality:86,rules:["W-X-Y double zigzag geometry","Both component zigzags validated","Connector is smaller than the main correction legs"],
       strict:false,pattern:"Double Zigzag"
