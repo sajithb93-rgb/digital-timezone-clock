@@ -8,7 +8,9 @@ const base: OrderFlowResult = {
   pressureTrend: "BUYING PRESSURE INCREASING", imbalance: "BUY", imbalanceRatio: 3.5,
   absorption: "BUYER", absorptionStrength: 80, liquiditySweep: "LOW", liquiditySweepPrice: 100,
   microStructure: "BULLISH", direction: "WAIT", signal: "WAIT", confidence: 0, confirmations: [],
-  entry: 110, stop: 105, targets: [117.5,120,125], recentBars: [], footprint: {
+  entry: 110, stop: 105, targets: [117.5,120,125], recentBars: [],
+  diagnostics: [], rejectionReason: "test fixture",
+  footprint: {
     candleTime: 1, intervalMs: 300000, confirmed: true, levels: [], buyVolume: 70, sellVolume: 30,
     delta: 40, deltaRatio: 0.4, poc: 110, stackedBuyImbalances: 2, stackedSellImbalances: 0,
     maxBuyImbalanceRatio: 3.5, maxSellImbalanceRatio: 0, maxPositiveDelta: 40, maxNegativeDelta: 0,
