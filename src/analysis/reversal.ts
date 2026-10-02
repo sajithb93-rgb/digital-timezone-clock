@@ -142,11 +142,15 @@ function calculateTargets(candles: Candle[], entry: number, invalidation: number
   // Targets must be derived from structure that existed before the signal candle.
   // Including the current candle can select a level that price has already
   // touched before the reversal entry is considered active.
+  const signalCandle=candles.at(-1);
   const recent = candles.slice(0, -1).slice(-60);
   const minRR = 1.5;
+  // A structural level already touched by the signal candle is not a future
+  // objective. Require BUY targets above the signal high and SELL targets below
+  // the signal low before admitting them to the TP ladder.
   const levels = direction === "BUY"
-    ? recent.map(c => c.high).filter(p => p > entry + risk * minRR).sort((a, b) => a - b)
-    : recent.map(c => c.low).filter(p => p < entry - risk * minRR).sort((a, b) => b - a);
+    ? recent.map(c => c.high).filter(p => p > entry + risk * minRR && (!signalCandle || p > signalCandle.high)).sort((a, b) => a - b)
+    : recent.map(c => c.low).filter(p => p < entry - risk * minRR && (!signalCandle || p < signalCandle.low)).sort((a, b) => b - a);
   const unique: number[] = [];
   const spacing = risk * 0.25;
   for (const level of levels) {
