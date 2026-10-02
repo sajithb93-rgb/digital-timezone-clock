@@ -442,6 +442,11 @@ describe("analysis regression",()=>{
     expect(validateDiagonalWave([100,140,120,150,130,160],true).valid).toBe(false);
   });
 
+  it("rejects zero-length waves in exported Elliott validators",()=>{
+    expect(validateImpulseWave([100,120,120,150,140,160],true).valid).toBe(false);
+    expect(validateDiagonalWave([100,130,115,135,135,140],true).valid).toBe(false);
+  });
+
   it("applies the same strict impulse rules to bearish counts",()=>{
     expect(validateImpulseWave([200,180,190,150,165,130],false).valid).toBe(true);
     expect(validateImpulseWave([200,180,205,150,165,130],false).valid).toBe(false);
