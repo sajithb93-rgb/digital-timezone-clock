@@ -194,7 +194,7 @@ describe("order flow strategy",()=>{
     footprint[5]={...footprint[5],buyVolume:20,sellVolume:10,delta:10,deltaRatio:1/3,levels:[{...footprint[5].levels[0],buyVolume:20,sellVolume:10,delta:10,totalVolume:30}]};
     const result=analyzeOrderFlow(candles,footprint);
     expect(result.direction).toBe("WAIT");
-    expect(result.footprintHistoryCount).toBe(12);
+    expect(result.footprintHistoryCount).toBe(11);
     expect(result.diagnostics.find(d=>d.key==="footprint_coverage")?.passed).toBe(false);
   });
 
@@ -297,8 +297,14 @@ describe("order flow strategy",()=>{
   it("blocks a BUY when the latest three footprint bars lose directional flow",()=>{
     const candles=fullLongCandles();
     const footprint=confirmedFootprints("BUY");
-    footprint[9]={...footprint[9],deltaRatio:-0.2,delta:-20,buyVolume:40,sellVolume:60};
-    footprint[10]={...footprint[10],deltaRatio:-0.2,delta:-20,buyVolume:40,sellVolume:60};
+    footprint[9]={...footprint[9],buyVolume:40,sellVolume:60,delta:-20,deltaRatio:-0.2,
+      levels:[{price:100,buyVolume:40,sellVolume:60,delta:-20,totalVolume:100,buyTrades:1,sellTrades:1}],
+      stackedBuyImbalances:0,stackedSellImbalances:2,maxBuyImbalanceRatio:0,maxSellImbalanceRatio:4,
+      maxPositiveDelta:0,maxNegativeDelta:-20,absorption:"SELLER",absorptionStrength:80};
+    footprint[10]={...footprint[10],buyVolume:40,sellVolume:60,delta:-20,deltaRatio:-0.2,
+      levels:[{price:100,buyVolume:40,sellVolume:60,delta:-20,totalVolume:100,buyTrades:1,sellTrades:1}],
+      stackedBuyImbalances:0,stackedSellImbalances:2,maxBuyImbalanceRatio:0,maxSellImbalanceRatio:4,
+      maxPositiveDelta:0,maxNegativeDelta:-20,absorption:"SELLER",absorptionStrength:80};
     const r=analyzeOrderFlow(candles,footprint);
     expect(r.direction).toBe("WAIT");
     expect(r.diagnostics.find(d=>d.key==="recent_flow_buy")?.passed).toBe(false);
@@ -487,8 +493,14 @@ describe("order flow strategy",()=>{
   it("blocks a SELL when the latest three footprint bars lose directional flow",()=>{
     const candles=fullShortCandles();
     const footprint=confirmedFootprints("SELL");
-    footprint[9]={...footprint[9],deltaRatio:0.2,delta:20,buyVolume:60,sellVolume:40};
-    footprint[10]={...footprint[10],deltaRatio:0.2,delta:20,buyVolume:60,sellVolume:40};
+    footprint[9]={...footprint[9],buyVolume:60,sellVolume:40,delta:20,deltaRatio:0.2,
+      levels:[{price:100,buyVolume:60,sellVolume:40,delta:20,totalVolume:100,buyTrades:1,sellTrades:1}],
+      stackedBuyImbalances:2,stackedSellImbalances:0,maxBuyImbalanceRatio:4,maxSellImbalanceRatio:0,
+      maxPositiveDelta:20,maxNegativeDelta:0,absorption:"BUYER",absorptionStrength:80};
+    footprint[10]={...footprint[10],buyVolume:60,sellVolume:40,delta:20,deltaRatio:0.2,
+      levels:[{price:100,buyVolume:60,sellVolume:40,delta:20,totalVolume:100,buyTrades:1,sellTrades:1}],
+      stackedBuyImbalances:2,stackedSellImbalances:0,maxBuyImbalanceRatio:4,maxSellImbalanceRatio:0,
+      maxPositiveDelta:20,maxNegativeDelta:0,absorption:"BUYER",absorptionStrength:80};
     const r=analyzeOrderFlow(candles,footprint);
     expect(r.direction).toBe("WAIT");
     expect(r.diagnostics.find(d=>d.key==="recent_flow_sell")?.passed).toBe(false);
