@@ -612,7 +612,7 @@ describe("analysis regression",()=>{
   });
 
   it("requires the second zigzag Y to exceed the first W endpoint",()=>{
-    const incomplete=[100,115,108,120,110,118,113,117];
+    const incomplete=[100,115,108,120,110,118,113,119];
     const v=validateDoubleZigzag(incomplete,true);
     expect(v.secondValid).toBe(true);
     expect(v.yBeyondW).toBe(false);
