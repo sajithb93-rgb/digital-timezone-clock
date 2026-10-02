@@ -503,7 +503,14 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   const latest=findLatestValidLiquiditySweep(data,p.price,sweepType,p.index+1,asOf);
   if(latest){
    latest.displacement=displacementAt(data,latest.index)>=.7;
-   sweeps.push(latest);
+   // Only displacement-confirmed sweeps are actionable liquidity events.
+   // Keep the raw wick/close-back test in findLatestValidLiquiditySweep,
+   // then apply displacement here as the confirmation layer.
+   if(!latest.displacement)continue;
+   // Avoid duplicate sweep events when equal-level clustering and recent
+   // raw pivots resolve to effectively the same liquidity pool.
+   const duplicate=sweeps.some(x=>x.type===latest!.type&&Math.abs(x.price-latest!.price)<=tol&&x.index===latest!.index);
+   if(!duplicate)sweeps.push(latest);
   }
  }
  const r=dealingRange(ps,data,asOf);
