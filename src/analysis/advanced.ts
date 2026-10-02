@@ -272,8 +272,12 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     }
 
     let result=0,exitPrice=entry,closed=false,exitIndex=-1;
-    const tradeEnd=Math.min(closedCandles.length,entryBar+maxBars);
-    for(let j=entryBar;j<tradeEnd;j++){
+    // Entry-touch sequencing is unknowable from OHLC alone. Do not let the
+    // entry candle itself also manufacture a TP win/SL loss; manage the
+    // position only from the next closed candle.
+    const manageStart=entryBar+1;
+    const tradeEnd=Math.min(closedCandles.length,manageStart+maxBars-1);
+    for(let j=manageStart;j<tradeEnd;j++){
       const x=closedCandles[j];
       const stopHit=isBuy?x.low<=stop:x.high>=stop;
       const targetHit=isBuy?x.high>=target:x.low<=target;
@@ -293,7 +297,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
         break;
       }
       exitIndex=tradeEnd-1;
-      if(exitIndex<entryBar){
+      if(exitIndex<manageStart){
         cursor++;
         continue;
       }
