@@ -17,14 +17,30 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
 }
 
 export function classifyElliottEntry(symbol:string,timeframe:string,r:ElliottResult,currentPrice?:number):EntryScanRow{
- const p=r.primary;
- if(!p||p.entry==null||p.invalidation==null) return make(symbol,timeframe,"WAIT","NONE",0,null,null,null,null,null,"No strict actionable Elliott count");
- const direction=p.direction==="bullish"?"BUY":"SELL";
- const rulesOk=p.strict!==false&&r.setupState!=="INVALIDATED";
- const target=p.targets?.[0]??null; const risk=Math.abs(p.entry-p.invalidation); const rr=target!=null&&risk>0?Math.abs(target-p.entry)/risk:null;
- const nearEntry=currentPrice==null||risk<=0?false:Math.abs(currentPrice-p.entry)<=risk*0.35;
- const confirmed=rulesOk&&nearEntry&&target!=null&&rr!=null&&rr>=1.5;
- const score=Math.min(100,Math.round((r.confidence||p.quality||0)+(p.strict?10:0)));
- if(confirmed) return make(symbol,timeframe,"CONFIRMED",direction,score,currentPrice??null,p.entry,p.invalidation,target,rr,"ELLIOTT "+direction+" · strict count · price is within entry trigger band");
- return make(symbol,timeframe,score>=70?"SETUP":"WATCH",direction,score,currentPrice??null,p.entry,p.invalidation,target,rr,rulesOk?(nearEntry?"Strict count · waiting for final entry confirmation":"Strict count · price is away from entry band"):"Wave count invalidated or non-strict");
+ const live=r.liveSetup;
+ if(!live||live.entry==null||live.invalidation==null){
+   return make(symbol,timeframe,"WAIT","NONE",0,currentPrice??null,null,null,null,null,
+     "No live Elliott continuation setup · historical Wave 1–5 counts are not entry signals");
+ }
+
+ const direction=live.direction==="bullish"?"BUY":"SELL";
+ const target=live.targets?.[0]??null;
+ const risk=Math.abs(live.entry-live.invalidation);
+ const rr=target!=null&&risk>0?Math.abs(target-live.entry)/risk:null;
+ const trigger=live.direction==="bullish"
+   ? (currentPrice!=null&&currentPrice>=live.entry)
+   : (currentPrice!=null&&currentPrice<=live.entry);
+ const score=Math.min(100,Math.round((r.confidence||live.quality||0)+(live.strict?5:0)));
+ const confirmed=live.strict!==false&&trigger&&target!=null&&rr!=null&&rr>=1.5;
+
+ if(confirmed){
+   return make(symbol,timeframe,"CONFIRMED",direction,score,currentPrice??null,live.entry,live.invalidation,target,rr,
+     "ELLIOTT "+direction+" · ABC correction confirmed · Wave B trigger broken");
+ }
+
+ const state:EntryScanState=score>=70?"SETUP":"WATCH";
+ return make(symbol,timeframe,state,direction,score,currentPrice??null,live.entry,live.invalidation,target,rr,
+   trigger
+     ? "ABC correction confirmed · waiting for RR/target validation"
+     : "ABC correction confirmed · waiting for Wave B trigger");
 }
