@@ -6,10 +6,14 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, dev
 
 const consoleErrors = [];
 const pageErrors = [];
+const requestFailures = [];
+const badResponses = [];
 page.on("console", (message) => {
   if (message.type() === "error") consoleErrors.push(message.text());
 });
 page.on("pageerror", (error) => pageErrors.push(error.message));
+page.on("requestfailed", (request) => requestFailures.push(`${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? "failed"}`));
+page.on("response", (response) => { if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`); });
 
 try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
@@ -21,10 +25,8 @@ try {
   }, { timeout: 60_000 });
 
   await page.waitForFunction(() => {
-    const status = Array.from(document.querySelectorAll(".status-line")).find((el) =>
-      el.textContent?.includes("REST")
-    );
-    return status?.textContent?.includes("CONNECTED") ?? false;
+    const status = document.querySelector(".data-status");
+    return status?.textContent?.includes("LIVE DATA") ?? false;
   }, { timeout: 60_000 });
 
   const result = await page.evaluate(() => {
@@ -45,8 +47,7 @@ try {
       overlayContentNodes: overlay ? overlay.childElementCount : 0,
       candleCount: candleText ? Number(candleText[1]) : 0,
       debugText: debug?.textContent ?? "",
-      restConnected: Array.from(document.querySelectorAll(".status-line"))
-        .some((el) => el.textContent?.includes("REST") && el.textContent?.includes("CONNECTED")),
+      restConnected: document.querySelector(".data-status")?.textContent?.includes("LIVE DATA") ?? false,
       errorAlert: !!document.querySelector(".alert"),
       errorAlertText: document.querySelector(".alert")?.textContent ?? ""
     };
@@ -67,7 +68,7 @@ try {
   if (consoleErrors.length) throw new Error(`Console errors: ${consoleErrors.join(" | ")}`);
 
   await page.screenshot({ path: "artifacts/browser-smoke.png", fullPage: true });
-  console.log(JSON.stringify({ pass: true, ...result, consoleErrors, pageErrors }, null, 2));
+  console.log(JSON.stringify({ pass: true, ...result, consoleErrors, pageErrors, requestFailures, badResponses }, null, 2));
 } finally {
   await browser.close();
 }
