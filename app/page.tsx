@@ -542,7 +542,7 @@ export default function Home(){
 
  const lastClosed=candles.at(-1)?.closed!==false?candles.at(-1):candles.at(-2);
  const lastClosedTime=lastClosed?.time??0;
- useEffect(()=>{if(!lastClosedTime)return;setAnalysisCandles(prev=>prev.at(-1)?.time===lastClosedTime?prev:candles.filter(x=>x.closed!==false))},[lastClosedTime]);
+ useEffect(()=>{if(!lastClosedTime)return;const normalized=normalizeCandleSeries(candles,true);setAnalysisCandles(prev=>prev.at(-1)?.time===lastClosedTime?prev:normalized)},[candles,lastClosedTime]);
 
  useEffect(()=>{
   let stop=false;
