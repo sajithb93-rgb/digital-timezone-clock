@@ -98,8 +98,12 @@ function buildOrderFlowTargets(direction:"BUY"|"SELL",entry:number,risk:number,c
 
 function volumeSplit(c:Candle){
   if(Number.isFinite(c.takerBuyVolume)){
+    // A value outside [0, total volume] is not trustworthy exchange data.
+    // Clamp it for safe arithmetic, but mark the bar as estimated so exact
+    // footprint confirmation cannot be granted from malformed input.
+    const validExact=c.takerBuyVolume!>=0&&c.takerBuyVolume!<=c.volume;
     const buy=Math.max(0,Math.min(c.volume,c.takerBuyVolume!));
-    return {buy,sell:Math.max(0,c.volume-buy),exact:true};
+    return {buy,sell:Math.max(0,c.volume-buy),exact:validExact};
   }
   const range=barRange(c);
   const bodyBias=Math.max(-1,Math.min(1,(c.close-c.open)/range));
