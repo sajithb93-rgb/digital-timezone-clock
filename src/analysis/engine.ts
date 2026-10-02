@@ -277,7 +277,7 @@ export function classifyProtectedStructureBreak(
  }
  return null;
 }
-function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
+export function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
  const events:StructureEvent[]=[];
  let structure:"bullish"|"bearish"|null=null;
  let activeH:Pivot|null=null,activeL:Pivot|null=null;
