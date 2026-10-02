@@ -51,6 +51,25 @@ describe("advanced flow/regime input normalization",()=>{
     expect(r.cumulativeDelta).toBeLessThan(r.delta);
   });
 
+  it("stops flow pressure at the first forming candle",()=>{
+    const prefix=Array.from({length:20},(_,i)=>({...candle(i),takerBuyVolume:20}));
+    const gap={...candle(20),time:20,closed:false,high:150};
+    const later=Array.from({length:20},(_,i)=>({...candle(21+i),takerBuyVolume:90}));
+    const expected=flowSnapshot(prefix);
+    const actual=flowSnapshot([...prefix,gap,...later]);
+    expect(actual).toEqual(expected);
+    expect(actual.pressure).toBe("SELLERS");
+  });
+
+  it("stops regime detection at the first forming candle",()=>{
+    const prefix=Array.from({length:25},(_,i)=>({...candle(i),close:100-i*0.2,open:100-i*0.2+0.05,high:100-i*0.2+0.1,low:100-i*0.2-0.1}));
+    const gap={...candle(25),time:25,closed:false,high:150};
+    const later=Array.from({length:25},(_,i)=>({...candle(26+i),close:110+i,open:109.9+i,high:110.1+i,low:109.8+i}));
+    const expected=detectRegime(prefix);
+    const actual=detectRegime([...prefix,gap,...later]);
+    expect(actual).toEqual(expected);
+  });
+
   it("does not treat an impossible taker-buy volume as exact data",()=>{
     const bars=[
       {...candle(1),volume:100,takerBuyVolume:200},
