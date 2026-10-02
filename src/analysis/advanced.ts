@@ -36,15 +36,24 @@ export type ConfluenceBreakdown = {
 };
 
 export function flowSnapshot(c:Candle[]):FlowSnapshot{
-  const closed=c.filter(x=>x.closed!==false);
+  // Realtime feeds can arrive out of order or contain duplicate/malformed bars.
+  // Normalize them before cumulative/order-flow calculations so the result is
+  // causal and independent of transport ordering.
+  const byTime=new Map<number,Candle>();
+  for(const x of c){
+    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
+    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+    if(x.closed!==false)byTime.set(x.time,x);
+  }
+  const closed=[...byTime.values()].sort((a,b)=>a.time-b.time);
   if(!closed.length)return{buyVolume:0,sellVolume:0,delta:0,deltaRatio:0,cumulativeDelta:0,volumeRatio:0,pressure:"BALANCED"};
   let buy=0,sell=0,cum=0;
   for(const x of closed){
     // Binance klines expose taker-buy base-asset volume. When present, use it
     // directly and derive taker-sell volume as total volume minus taker buys.
-    if(Number.isFinite(x.takerBuyVolume)){
-      const b=Math.max(0,Math.min(x.volume,x.takerBuyVolume!));
-      const s=Math.max(0,x.volume-b);
+    if(Number.isFinite(x.takerBuyVolume)&&x.takerBuyVolume!>=0&&x.takerBuyVolume!<=x.volume){
+      const b=x.takerBuyVolume!;
+      const s=x.volume-b;
       buy+=b;sell+=s;cum+=b-s;
       continue;
     }
@@ -64,7 +73,15 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
 }
 
 export function detectRegime(c:Candle[]):Regime{
-  const closed=c.filter(x=>x.closed!==false);
+  // Regime classification must use the same normalized, closed-candle stream
+  // as flowSnapshot; otherwise feed ordering can change ATR and slope.
+  const byTime=new Map<number,Candle>();
+  for(const x of c){
+    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
+    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+    if(x.closed!==false)byTime.set(x.time,x);
+  }
+  const closed=[...byTime.values()].sort((a,b)=>a.time-b.time);
   if(closed.length<20)return{regime:"TRANSITION",strength:0,atr:0,rangePercent:0};
   const n=14;
   const tr=closed.slice(-n).map((x,i,a)=>i===0?x.high-x.low:Math.max(x.high-x.low,Math.abs(x.high-a[i-1].close),Math.abs(x.low-a[i-1].close)));
