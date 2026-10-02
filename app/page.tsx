@@ -22,7 +22,7 @@ const intervals=["1m","5m","15m","1h","4h","1d"] as const;
 const mtfIntervals=["4h","1h","15m","5m"];
 const marketConfig:Record<MarketKind,{label:string;rest:string;ws:string;aggRest:string}>={
  spot:{label:"SPOT",rest:"https://api.binance.com/api/v3",ws:"wss://stream.binance.com:9443/ws/",aggRest:"https://api.binance.com/api/v3/aggTrades"},
- usdm:{label:"USDⓈ-M FUTURES",rest:"https://fapi.binance.com/fapi/v1",ws:"wss://fstream.binance.com/ws/",aggRest:"https://fapi.binance.com/fapi/v1/aggTrades"},
+ usdm:{label:"USDⓈ-M FUTURES",rest:"https://fapi.binance.com/fapi/v1",ws:"wss://fstream.binance.com/public/ws/",aggRest:"https://fapi.binance.com/fapi/v1/aggTrades"},
  coinm:{label:"COIN-M FUTURES",rest:"https://dapi.binance.com/dapi/v1",ws:"wss://dstream.binance.com/ws/",aggRest:"https://dapi.binance.com/dapi/v1/aggTrades"}
 };
 
@@ -62,7 +62,13 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
    binanceRestState.lastRequestAt=Date.now();
    const target=proxyBinanceUrl(url);
    const requestInit:RequestInit={...(init??{}),cache:"no-store"};
-   const r=await fetch(target,requestInit);
+   let r=await fetch(target,requestInit);
+   // Binance can return 451/403 from a server-region IP even when the user
+   // can access the public API directly. In a browser, fall back to the
+   // original Binance URL so the user's network/region can provide live data.
+   if(!r.ok && target!==url && (r.status===451 || r.status===403)){
+    r=await fetch(url,requestInit);
+   }
    if(r.ok)return r.json();
    if(r.status===429||r.status===418){
     const retryAfter=Number(r.headers.get("Retry-After")||0);
