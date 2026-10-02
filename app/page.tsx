@@ -333,7 +333,6 @@ export default function Home(){
   let ws:WebSocket|undefined;
   let stop=false;
   let retryTimer:ReturnType<typeof setTimeout>|undefined;
-  let restFallbackTimer:ReturnType<typeof setInterval>|undefined;
   let staleTimer:ReturnType<typeof setTimeout>|undefined;
   let stableTimer:ReturnType<typeof setTimeout>|undefined;
   let uiFlushTimer:ReturnType<typeof setTimeout>|undefined;
@@ -370,7 +369,6 @@ export default function Home(){
 
   const clearTimers=()=>{
    if(retryTimer){clearTimeout(retryTimer);retryTimer=undefined}
-   if(restFallbackTimer){clearInterval(restFallbackTimer);restFallbackTimer=undefined}
    if(staleTimer){clearTimeout(staleTimer);staleTimer=undefined}
    if(stableTimer){clearTimeout(stableTimer);stableTimer=undefined}
    if(uiFlushTimer){clearTimeout(uiFlushTimer);uiFlushTimer=undefined}
@@ -479,9 +477,9 @@ export default function Home(){
 
   // REST remains a live-data fallback when the Binance WebSocket is blocked,
   // intermittently unavailable, or dropped by the browser/network.
-  void (restFallbackTimer=window.setInterval(()=>{
+  const restFallbackTimerId=window.setInterval(()=>{
    if(!stop&&(!ws||ws.readyState!==WebSocket.OPEN))void syncFromRest();
-  },15_000));
+  },15_000);
 
   fetchKlines(symbol,interval,350,marketType,controller.signal).then(data=>{
    if(stop)return;
@@ -508,6 +506,7 @@ export default function Home(){
    stop=true;
    controller.abort();
    clearTimers();
+   clearInterval(restFallbackTimerId);
    const oldSocket=ws;
    ws=undefined;
    try{oldSocket?.close(1000,"effect cleanup")}catch{}
