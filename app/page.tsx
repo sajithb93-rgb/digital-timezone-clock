@@ -402,14 +402,6 @@ export default function Home(){
        ||c.time<=0||c.volume<0||c.high<c.low||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))return;
      if(c.closed)flushRealtimeCandle(c);
      else queueRealtimeCandle(c);
-     if(c.closed){
-      setAnalysisCandles(prev=>{
-       const byTime=new Map<number,Candle>();
-       for(const item of prev)byTime.set(item.time,item);
-       byTime.set(c.time,c);
-       return [...byTime.values()].sort((a,b)=>a.time-b.time).slice(-350);
-      });
-     }
      armStaleTimer(socket);
     }catch{}
    };
