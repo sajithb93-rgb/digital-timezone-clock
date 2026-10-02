@@ -741,14 +741,16 @@ export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValid
  const w1=Math.abs(p1-p0),w2=Math.abs(p2-p1),w3=Math.abs(p3-p2),w4=Math.abs(p4-p3),w5=Math.abs(p5-p4);
  const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
  const w3BeyondW1=bull?p3>p1:p3<p1;
- const w3NotShortest=w3>=w1&&w3>=w5;
- const w4OverlapsW1=bull?p4<=p1&&p4>p2:p4>=p1&&p4<p2;
+ const w3NotShortest=w3>=Math.min(w1,w5);
+ const w4OverlapsW1=bull?p4<=p1&&p4>p0:p4>=p1&&p4<p0;
+ // Retain this as diagnostic information, but do not use it as a hard
+ // validity gate. Valid diagonals can have deeper Wave-4 retracements.
  const w4DoesNotPassW2=bull?p4>p2:p4<p2;
  const w5DirectionValid=bull?p5>p4:p5<p4;
  const w5BeyondW3=bull?p5>p3:p5<p3;
  const contracting=w3<w1&&w4<w2&&w5<w3;
  const expanding=w3>w1&&w4>w2&&w5>w3;
- return{w2Valid,w3BeyondW1,w3NotShortest,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4OverlapsW1&&w4DoesNotPassW2&&w5DirectionValid};
+ return{w2Valid,w3BeyondW1,w3NotShortest,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4OverlapsW1&&w5DirectionValid};
 }
 
 export function analyzeElliott(c:Candle[]):AdvancedElliottResult{
