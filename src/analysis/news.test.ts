@@ -34,6 +34,12 @@ describe("news filter",()=>{
     expect(getNewsRisk([event],now,Number.NaN).blocked).toBe(true);
   });
 
+  it("fails safe when the analysis clock is invalid",()=>{
+    const event={title:"Upcoming CPI",country:"USD",impact:"high" as const,date:Date.now()+5*60_000};
+    expect(getNewsRisk([event],Number.NaN,30).level).toBe("HIGH");
+    expect(getNewsRisk([event],Number.POSITIVE_INFINITY,30).level).toBe("HIGH");
+  });
+
   it("parses numeric-string epoch timestamps",()=>{
     const rows=normalizeNews([{title:"Epoch CPI",country:"USD",impact:"high",date:"1790938800000"}]);
     expect(rows).toHaveLength(1);
