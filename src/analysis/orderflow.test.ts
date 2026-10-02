@@ -180,7 +180,12 @@ describe("order flow strategy",()=>{
 
   it("confirms BUY only when the complete causal sequence is present",()=>{
     const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
-    expect(r.direction).toBe("BUY");
+    expect(r.direction, JSON.stringify({
+      diagnostics:r.diagnostics.filter(d=>!d.passed),
+      rejectionReason:r.rejectionReason,
+      latestFootprint:r.footprint,
+      recent:r.recentBars.slice(-4)
+    })).toBe("BUY");
     expect(r.signal).toBe("BUY CONFIRMED — CLOSED CANDLE");
     expect(r.confidence).toBe(100);
     expect(r.confirmations).toContain("Sell-side liquidity sweep → buyer absorption");
