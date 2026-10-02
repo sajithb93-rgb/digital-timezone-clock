@@ -62,6 +62,20 @@ describe("price-level footprint engine",()=>{
     expect(result.maxBuyImbalanceRatio).toBe(4);
   });
 
+  it("does not classify zero-opposing-volume flow as seller absorption",()=>{
+    const snapshot:any={
+      candleTime:60_000,intervalMs:60_000,confirmed:true,
+      levels:[
+        {price:100.9,buyVolume:10,sellVolume:0,delta:10,totalVolume:10,buyTrades:2,sellTrades:0}
+      ],
+      buyVolume:10,sellVolume:0,delta:10,deltaRatio:1,poc:100.9
+    };
+    const candle={time:60_000,open:100,high:101,low:99,close:99.2,volume:10,closed:true};
+    const result=analyzeFootprintSnapshot(snapshot,candle,0.1);
+    expect(result.absorption).toBe("NONE");
+    expect(result.absorptionStrength).toBe(0);
+  });
+
   it("does not classify zero-opposing-volume flow as buyer absorption",()=>{
     const snapshot:any={
       candleTime:60_000,intervalMs:60_000,confirmed:true,
