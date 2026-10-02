@@ -120,6 +120,13 @@ function floorToStep(value:number,step:number){
   return Number(floored.toFixed(decimals));
 }
 
+export function backtestCostR(entryExecution:number,exitExecution:number,riskDistance:number,feeBps:number,riskR=1):number{
+  if(!Number.isFinite(entryExecution)||!Number.isFinite(exitExecution)||!Number.isFinite(riskDistance)||riskDistance<=0
+    ||!Number.isFinite(feeBps)||feeBps<0||!Number.isFinite(riskR)||riskR<=0)return 0;
+  const feeRate=feeBps/10000;
+  return ((Math.abs(entryExecution)+Math.abs(exitExecution))*feeRate/riskDistance)*riskR;
+}
+
 export function riskPlan(account:number,riskPercent:number,entry:number|null,stop:number|null,constraints:RiskConstraints={},direction:"BUY"|"SELL"|"WAIT"="WAIT") {
   const validAccount=Number.isFinite(account)&&account>0;
   const validRisk=Number.isFinite(riskPercent)&&riskPercent>0&&riskPercent<=10;
@@ -156,7 +163,13 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   }
 
   let positionSize=desiredPositionSize;
-  const {minQty=0,maxQty=Infinity,stepSize=0,minNotional=0,maxNotional=Infinity}=constraints;
+  const rawMinQty=constraints.minQty,rawMaxQty=constraints.maxQty,rawStepSize=constraints.stepSize;
+  const rawMinNotional=constraints.minNotional,rawMaxNotional=constraints.maxNotional;
+  const minQty=Number.isFinite(rawMinQty)&&rawMinQty>=0?rawMinQty:0;
+  const maxQty=Number.isFinite(rawMaxQty)&&rawMaxQty>0?rawMaxQty:Infinity;
+  const stepSize=Number.isFinite(rawStepSize)&&rawStepSize>0?rawStepSize:0;
+  const minNotional=Number.isFinite(rawMinNotional)&&rawMinNotional>=0?rawMinNotional:0;
+  const maxNotional=Number.isFinite(rawMaxNotional)&&rawMaxNotional>0?rawMaxNotional:Infinity;
   if(Number.isFinite(maxQty)&&maxQty>0)positionSize=Math.min(positionSize,maxQty);
   if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize);
   if(positionSize<Math.max(0,minQty)){
@@ -307,8 +320,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     const slip=Math.max(0,slippageBps)/10000;
     const entryExec=entry*(1+side*slip);
     const exitExec=Math.max(exitPrice,1e-12)*(1-side*slip);
-    const feeRate=Math.max(0,feeBps)/10000;
-    const tradeCostR=((entryExec+exitExec)*feeRate)/riskDistance;
+    const tradeCostR=backtestCostR(entryExec,exitExec,riskDistance,feeBps,riskR);
     const netResult=(isBuy?exitExec-entryExec:entryExec-exitExec)/riskDistance*riskR-tradeCostR;
 
     grossR+=result;
