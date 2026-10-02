@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FootprintBook, normalizeAggTrade } from "./footprint";
+import { FootprintBook, analyzeFootprintSnapshot, normalizeAggTrade } from "./footprint";
 
 describe("price-level footprint engine",()=>{
   it("maps m=false to aggressive buy and m=true to aggressive sell",()=>{
