@@ -369,6 +369,7 @@ export default function Home(){
 
   const clearTimers=()=>{
    if(retryTimer){clearTimeout(retryTimer);retryTimer=undefined}
+   if(restFallbackTimer){clearInterval(restFallbackTimer);restFallbackTimer=undefined}
    if(staleTimer){clearTimeout(staleTimer);staleTimer=undefined}
    if(stableTimer){clearTimeout(stableTimer);stableTimer=undefined}
    if(uiFlushTimer){clearTimeout(uiFlushTimer);uiFlushTimer=undefined}
@@ -474,6 +475,12 @@ export default function Home(){
     scheduleReconnect();
    };
   };
+
+  // REST remains a live-data fallback when the Binance WebSocket is blocked,
+  // intermittently unavailable, or dropped by the browser/network.
+  restFallbackTimer=window.setInterval(()=>{
+   if(!stop&&(!ws||ws.readyState!==WebSocket.OPEN))void syncFromRest();
+  },15_000);
 
   fetchKlines(symbol,interval,350,marketType,controller.signal).then(data=>{
    if(stop)return;
