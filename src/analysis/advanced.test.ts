@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { backtestCostR, flowSnapshot, detectRegime, riskPlan, runSMCBacktest, confluence } from "./advanced";
 import type { Candle } from "./engine";
+import { normalizeCandleSeries } from "./candles";
 
 function candle(i:number):Candle {
   return {time:i,open:100,high:101,low:99,close:100,volume:100,takerBuyVolume:50,closed:true};
 }
 
-describe("confluence zone integrity",()=>{\n  it("preserves a duplicate candle when only the optional taker-buy field is missing",()=>{
-    const base=candles(40);
+describe("confluence zone integrity",()=>{
+  it("preserves a duplicate candle when only the optional taker-buy field is missing",()=>{
+    const base=Array.from({length:40},(_,i)=>candle(i));
     const duplicate={...base[20],takerBuyVolume:undefined};
     const result=normalizeCandleSeries([...base,duplicate],true);
     expect(result).toHaveLength(base.length);
