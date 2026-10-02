@@ -621,22 +621,43 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const orderFlowMarker = showOrderFlow ? (() => {
   const bars=orderFlow.recentBars;
   const latest=bars.at(-1);
-  const level=(price:number|null|undefined,cls:string,label:string)=>{if(price==null)return null;const y=yOf(price);if(y==null)return null;return <g><line x1={x0} x2={xLast} y1={y} y2={y} className={cls}/>{text(xLast-100,y,label,cls+"-label")}</g>};
+  const latestChartIndex=latest?candles.findIndex(c=>c.time===latest.time):-1;
+  const orderFlowXLast=latestChartIndex>=0?(xOf(latestChartIndex)??xLast):xLast;
+  const level=(price:number|null|undefined,cls:string,label:string)=>{
+   if(price==null)return null;
+   const y=yOf(price);if(y==null)return null;
+   return <g><line x1={x0} x2={orderFlowXLast} y1={y} y2={y} className={cls}/>{text(Math.max(8,orderFlowXLast-100),y,label,cls+"-label")}</g>;
+  };
   return <g className="orderflow-chart-layer">
-   {bars.map((b:any,i:number)=>{const x=xOf(b.index),closeY=yOf(candles[b.index]?.close??0),sweepY=b.sweepPrice!=null?yOf(b.sweepPrice):null;if(x==null)return null;const barH=Math.max(3,Math.min(24,Math.abs(b.deltaRatio)*30));const base=height-16;return <g key={"ofb"+b.index}>
-    <line x1={x} x2={x} y1={base} y2={base-(b.deltaRatio>=0?barH:-barH)} className={b.deltaRatio>=0?"orderflow-delta-buy":"orderflow-delta-sell"}/>
-    {b.imbalance!=="NONE"&&closeY!=null&&<circle cx={x} cy={closeY} r="5" className={b.imbalance==="BUY"?"of-buy-marker":"of-sell-marker"}/>}
-    {b.absorption!=="NONE"&&closeY!=null&&<text x={x+5} y={closeY-8} className="orderflow-absorption-label">{b.absorption==="BUYER"?"ABS BUY":"ABS SELL"}</text>}
-    {b.liquiditySweep!=="NONE"&&sweepY!=null&&<g><line x1={x-12} x2={x+12} y1={sweepY} y2={sweepY} className="orderflow-sweep-line"/><text x={x+8} y={sweepY-5} className="orderflow-sweep-label">{b.liquiditySweep==="LOW"?"OF SWEEP LOW":"OF SWEEP HIGH"}</text></g>}
-   </g>})}
+   {bars.map((b:any)=>{
+    const chartIndex=candles.findIndex(c=>c.time===b.time);
+    const x=chartIndex>=0?xOf(chartIndex):null;
+    const closeY=chartIndex>=0?yOf(candles[chartIndex].close):null;
+    const sweepY=b.sweepPrice!=null?yOf(b.sweepPrice):null;
+    if(x==null)return null;
+    const barH=Math.max(3,Math.min(24,Math.abs(b.deltaRatio)*30));
+    const base=height-16;
+    return <g key={"ofb"+b.time}>
+     <line x1={x} x2={x} y1={base} y2={base-(b.deltaRatio>=0?barH:-barH)} className={b.deltaRatio>=0?"orderflow-delta-buy":"orderflow-delta-sell"}/>
+     {b.imbalance!=="NONE"&&closeY!=null&&<circle cx={x} cy={closeY} r="5" className={b.imbalance==="BUY"?"of-buy-marker":"of-sell-marker"}/>}
+     {b.absorption!=="NONE"&&closeY!=null&&<text x={x+5} y={closeY-8} className="orderflow-absorption-label">{b.absorption==="BUYER"?"ABS BUY":"ABS SELL"}</text>}
+     {b.liquiditySweep!=="NONE"&&sweepY!=null&&<g><line x1={x-12} x2={x+12} y1={sweepY} y2={sweepY} className="orderflow-sweep-line"/><text x={x+8} y={sweepY-5} className="orderflow-sweep-label">{b.liquiditySweep==="LOW"?"OF SWEEP LOW":"OF SWEEP HIGH"}</text></g>}
+    </g>;
+   })}
    {latest&&<g>
-    {latest.microStructure!=="NEUTRAL"&&latest.index>=0&&<text x={Math.max(8,(xOf(latest.index)??xLast)-42)} y={latest.microStructure==="BULLISH"?22:height-22} className="orderflow-structure-label">{latest.microStructure==="BULLISH"?"OF BULL BREAK":"OF BEAR BREAK"}</text>}
-    {latest.deltaRatio!==0&&<text x={Math.max(8,xLast-170)} y={22} className="orderflow-delta-label">DELTA {(latest.deltaRatio*100).toFixed(1)}% · {latest.imbalance}</text>}
+    {latest.microStructure!=="NEUTRAL"&&latestChartIndex>=0&&<text x={Math.max(8,orderFlowXLast-42)} y={latest.microStructure==="BULLISH"?22:height-22} className="orderflow-structure-label">{latest.microStructure==="BULLISH"?"OF BULL BREAK":"OF BEAR BREAK"}</text>}
+    {latest.deltaRatio!==0&&<text x={Math.max(8,orderFlowXLast-170)} y={22} className="orderflow-delta-label">DELTA {(latest.deltaRatio*100).toFixed(1)}% · {latest.imbalance}</text>}
    </g>}
    {level(orderFlow.entry,"orderflow-entry-line","OF ENTRY "+(orderFlow.entry!=null?orderFlow.entry.toFixed(4):"—"))}
    {level(orderFlow.stop,"orderflow-sl-line","OF SL "+(orderFlow.stop!=null?orderFlow.stop.toFixed(4):"—"))}
    {(orderFlow.targets||[]).slice(0,3).map((p:number,i:number)=>level(p,"orderflow-tp-line","OF TP"+(i+1)+" "+p.toFixed(4)))}
-   {latest&&orderFlow.direction!=="WAIT"&&<g>{(()=>{const latestIndex=candles.findIndex(c=>c.time===latest.time);const x=xOf(latestIndex),y=yOf(latestIndex>=0?candles[latestIndex].close:latest.index>=0?candles[latest.index]?.close??0:0);if(x==null||y==null)return null;const label=orderFlow.direction==="BUY"?"OF BUY CONFIRMED":"OF SELL CONFIRMED";return <><circle cx={x} cy={y} r="8" className={orderFlow.direction==="BUY"?"of-buy-marker":"of-sell-marker"}/>{text(Math.min(x+10,width-125),y,label,"orderflow-signal-label")}</>})()}</g>}
+   {latest&&orderFlow.direction!=="WAIT"&&latestChartIndex>=0&&<g>{(()=>{
+    const x=xOf(latestChartIndex);
+    const y=yOf(candles[latestChartIndex].close);
+    if(x==null||y==null)return null;
+    const label=orderFlow.direction==="BUY"?"OF BUY CONFIRMED":"OF SELL CONFIRMED";
+    return <><circle cx={x} cy={y} r="8" className={orderFlow.direction==="BUY"?"of-buy-marker":"of-sell-marker"}/>{text(Math.min(x+10,width-125),y,label,"orderflow-signal-label")}</>;
+   })()}</g>}
   </g>;
  })() : null;
  const footprintOverlay = showOrderFlow && orderFlow.footprint ? (() => {
