@@ -1,5 +1,32 @@
 import { analyzeElliottAdvanced, type AdvancedElliottResult } from "./elliott";
 export type Candle={time:number;open:number;high:number;low:number;close:number;volume:number;takerBuyVolume?:number;closed?:boolean};
+export function normalizeCandleSeries(candles:Candle[],stopAtOpen=true):Candle[]{
+ const byTime=new Map<number,Candle>();
+ const ambiguous=new Set<number>();
+ for(const x of candles){
+  if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
+  if(x.time<=0||x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+  if(ambiguous.has(x.time))continue;
+  const prev=byTime.get(x.time);
+  if(!prev){byTime.set(x.time,x);continue;}
+  const prevClosed=prev.closed!==false,nextClosed=x.closed!==false;
+  if(prevClosed!==nextClosed){
+   if(nextClosed)byTime.set(x.time,x);
+   continue;
+  }
+  const sameCore=prev.open===x.open&&prev.high===x.high&&prev.low===x.low&&prev.close===x.close&&prev.volume===x.volume
+    &&(prev.takerBuyVolume??null)===(x.takerBuyVolume??null);
+  if(!sameCore){
+   byTime.delete(x.time);
+   ambiguous.add(x.time);
+  }
+ }
+ const ordered=[...byTime.values()].sort((a,b)=>a.time-b.time);
+ if(!stopAtOpen)return ordered;
+ const firstUnclosed=ordered.findIndex(x=>x.closed===false);
+ return firstUnclosed>=0?ordered.slice(0,firstUnclosed):ordered;
+}
+
 export type Pivot={index:number;price:number;type:"H"|"L";label?:string;strength?:number;confirmedAt?:number};
 export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"bearish";filled:boolean;fillIndex?:number;partial?:boolean;partialFillIndex?:number;size?:number};
 export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mitigated:boolean;mitigationIndex?:number;strength?:number};
@@ -548,17 +575,8 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  // Core SMC indices are causal positions, so normalize the exchange feed before
  // any pivot/event calculation. Keep only valid OHLC candles, dedupe timestamps,
  // sort chronologically, and stop at the first open candle.
- const byTime=new Map<number,Candle>();
- for(const x of c){
-  if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
-  if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-  byTime.set(x.time,x);
- }
- const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
- // An open candle creates a causal boundary. Never consume later candles
- // from a feed that already contains a forming-bar gap.
- const firstUnclosed=normalized.findIndex(x=>x.closed===false);
- const closedEnd=firstUnclosed>=0?firstUnclosed-1:normalized.length-1;
+ const normalized=normalizeCandleSeries(c,true);
+ const closedEnd=normalized.length-1;
  if(closedEnd<24)return empty;
  const data=normalized.slice(0,closedEnd+1);
  const a=atr(data),ps=labelPivots(pivots(data,3)),internal=labelPivots(pivots(data,1));
