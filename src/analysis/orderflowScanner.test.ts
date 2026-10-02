@@ -35,6 +35,54 @@ describe("Order Flow pair scanner", () => {
     expect(row.direction).toBe("NONE");
   });
 
+  it("blocks a confirmed direction when the sweep-freshness diagnostic fails", () => {
+    const row = classifyOrderFlowSetup(
+      "BTCUSDT",
+      "5m",
+      {
+        ...base,
+        direction: "BUY",
+        diagnostics: [
+          {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:false,detail:"6 bars ago"},
+          {key:"target_quality",label:"Target quality / spacing",passed:true,detail:"3 valid targets"},
+          {key:"trade_geometry",label:"Entry / SL / TP geometry",passed:true,detail:"Valid"},
+          {key:"closed",label:"Closed candle",passed:true,detail:"Closed"},
+          {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
+          {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
+          {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
+          {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:true,detail:"100%"},
+          {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"}
+        ]
+      }
+    );
+    expect(row.state).toBe("WAIT");
+    expect(row.reason).toContain("stale/invalid liquidity sweep");
+  });
+
+  it("blocks a confirmed direction when target quality fails", () => {
+    const row = classifyOrderFlowSetup(
+      "BTCUSDT",
+      "5m",
+      {
+        ...base,
+        direction: "BUY",
+        diagnostics: [
+          {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:true,detail:"1 bar ago"},
+          {key:"target_quality",label:"Target quality / spacing",passed:false,detail:"Only 2 valid targets"},
+          {key:"trade_geometry",label:"Entry / SL / TP geometry",passed:true,detail:"Valid"},
+          {key:"closed",label:"Closed candle",passed:true,detail:"Closed"},
+          {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
+          {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
+          {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
+          {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:true,detail:"100%"},
+          {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"}
+        ]
+      }
+    );
+    expect(row.state).toBe("WAIT");
+    expect(row.reason).toContain("target quality");
+  });
+
   it("blocks a confluence-complete setup when trade geometry is invalid", () => {
     const row = classifyOrderFlowSetup(
       "BTCUSDT",
