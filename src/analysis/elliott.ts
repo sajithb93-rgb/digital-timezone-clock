@@ -277,10 +277,13 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
   const endIndex=primary.points.at(-1)?.index??-1;
   const bull=primary.direction==="bullish";
   const ps=alternatePivots(swingPivots(c,2)).filter(p=>p.index>endIndex);
-  if(ps.length<3)return null;
+  // A live continuation correction must be represented as X-A-B-C.
+  // The previous implementation passed only A-B-C (3 points) to validators
+  // that explicitly require 4 points, making every live correction invalid.
+  if(ps.length<4)return null;
 
-  const q=ps.slice(-3);
-  const expected=bull?["L","H","L"]:["H","L","H"];
+  const q=ps.slice(-4);
+  const expected=bull?["H","L","H","L"]:["L","H","L","H"];
   if(q.some((p,i)=>p.type!==expected[i]))return null;
 
   const prices=q.map(p=>p.price);
@@ -292,7 +295,8 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
     : validateFlat(prices,true);
   if(!correction.valid&&!flat.valid)return null;
 
-  const [a,b,cPoint]=prices;
+  const [,a,b,cPoint]=prices;
+  // Entry is the B trigger after C completes; C is the invalidation point.
   const entry=b;
   const invalidation=cPoint;
   const risk=abs(entry-invalidation);
@@ -303,7 +307,7 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
   const target=entry+dir*extension;
   const lastClose=c.at(-1)?.close??entry;
   const triggered=bull?lastClose>=entry:lastClose<=entry;
-  const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0));
+  const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0)+(flat.valid?0:2));
 
   return{
     points:sequencePoints(q).map((x,i)=>({...x,label:["A","B","C"][i]})),
@@ -314,7 +318,7 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
     targets:[target],
     quality,
     rules:[
-      correction.valid?"ABC zigzag correction confirmed":"ABC flat correction confirmed",
+      correction.valid?"X-A-B-C zigzag correction confirmed":"X-A-B-C flat correction confirmed",
       "Wave C completed after the prior Wave 5",
       triggered?"Price reclaimed/crossed the Wave B trigger":"Waiting for Wave B trigger break",
       "Stop invalidates the correction at Wave C"
