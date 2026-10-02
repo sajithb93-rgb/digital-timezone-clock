@@ -203,28 +203,39 @@ function uniquePivots(ps:Pivot[],tol:number){
  return out.sort((a,b)=>a.index-b.index);
 }
 function equalLevels(ps:Pivot[],tol:number){
+ // Cluster by price using a running band rather than a single seed. This
+ // avoids missing transitive equal levels (A≈B, B≈C, but A slightly > C)
+ // while still requiring each liquidity test to be separated in time.
  const ordered=[...ps].sort((a,b)=>a.price-b.price);
- const used=new Set<number>();
  const reps:Pivot[]=[];
- for(let i=0;i<ordered.length;i++){
-  if(used.has(i))continue;
-  const seed=ordered[i];
-  const cluster:number[]=[i];
-  for(let j=i+1;j<ordered.length;j++){
-   if(used.has(j))continue;
-   const p=ordered[j];
-   if(Math.abs(p.price-seed.price)>tol)break;
-   // Two equal highs/lows should represent separate tests, not adjacent
-   // pivot noise. Require a minimum bar separation.
-   if(Math.abs(p.index-seed.index)>=3)cluster.push(j);
+ let cluster:Pivot[]=[];
+ const flush=()=>{
+  if(cluster.length<2){cluster=[];return;}
+  // Require at least two distinct tests with >=3 bars separation.
+  let separated=false;
+  for(let i=0;i<cluster.length&&!separated;i++){
+   for(let j=i+1;j<cluster.length;j++){
+    if(Math.abs(cluster[j].index-cluster[i].index)>=3){separated=true;break;}
+   }
   }
-  if(cluster.length>=2){
-   cluster.forEach(j=>used.add(j));
-   // Keep the most recent confirmed level as the actionable liquidity pool.
-   const repIndex=cluster.reduce((best,j)=>ordered[j].index>ordered[best].index?j:best,cluster[0]);
-   reps.push(ordered[repIndex]);
+  if(separated){
+   const latest=cluster.reduce((best,p)=>p.index>best.index?p:best,cluster[0]);
+   reps.push(latest);
+  }
+  cluster=[];
+ };
+ for(const p of ordered){
+  if(!cluster.length){cluster=[p];continue;}
+  const bandLow=Math.min(...cluster.map(x=>x.price));
+  const bandHigh=Math.max(...cluster.map(x=>x.price));
+  if(p.price-bandLow<=tol&&p.price-bandHigh<=tol){
+   cluster.push(p);
+  }else{
+   flush();
+   cluster=[p];
   }
  }
+ flush();
  return reps.sort((a,b)=>a.index-b.index);
 }
 export function classifyStructureBreak(
