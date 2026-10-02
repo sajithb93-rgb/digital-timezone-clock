@@ -331,29 +331,30 @@ export function validateTriangle(prices:number[],bullish:boolean):TriangleValida
     : a<x&&b>a&&c<b&&d>c&&e<d;
   if(!alternating)return{valid:false,contracting:false,expanding:false,barrier:false,converging:false,alternating:false};
 
-  // Upper boundary uses A/C/E; lower boundary uses X/B/D.
-  // Contracting requires both boundaries to move inward. Expanding is the
-  // inverse. Monotonic swing shrink/expansion is intentionally not required
-  // because Elliott triangles are defined by boundary geometry, not equal leg
-  // lengths.
+  // Triangle boundaries are A-C-E (upper) and B-D (lower). X is the
+  // correction anchor and must not be used as a boundary point.
+  // Contracting/expanding classification compares successive confirmed
+  // boundary extremes, not arbitrary wave-length shrinkage.
   const highA=a,highC=c,highE=e;
-  const lowX=x,lowB=b,lowD=d;
-  const upperContracting=highC<=highA&&highE<=highC;
-  const lowerContracting=lowB>=lowX&&lowD>=lowB;
-  const upperExpanding=highC>=highA&&highE>=highC;
-  const lowerExpanding=lowB<=lowX&&lowD<=lowB;
+  const lowB=b,lowD=d;
+  const upperContracting=highC<highA&&highE<highC;
+  const lowerContracting=lowD>lowB;
+  const upperExpanding=highC>highA&&highE>highC;
+  const lowerExpanding=lowD<lowB;
   const contracting=upperContracting&&lowerContracting;
   const expanding=upperExpanding&&lowerExpanding;
-  // Barrier triangles have one approximately horizontal boundary while the
-  // opposite boundary contracts. Use a tolerance derived from the smallest
-  // observed subwave so this remains scale-aware without requiring ATR.
-  const horizontalTol=Math.max(Math.min(...swings)*0.15,1e-12);
+  // A barrier triangle has one approximately horizontal boundary and an
+  // opposite boundary that continues to contract toward that horizontal side.
+  // Use a range-relative tolerance so a single tiny subwave does not make the
+  // horizontal test impossibly strict.
+  const triangleRange=Math.max(...prices)-Math.min(...prices);
+  const horizontalTol=Math.max(triangleRange*0.03,1e-12);
   const upperBarrier=Math.abs(highC-highA)<=horizontalTol&&Math.abs(highE-highA)<=horizontalTol&&lowerContracting;
-  const lowerBarrier=Math.abs(lowB-lowX)<=horizontalTol&&Math.abs(lowD-lowX)<=horizontalTol&&upperContracting;
+  const lowerBarrier=Math.abs(lowD-lowB)<=horizontalTol&&upperContracting;
   const barrier=upperBarrier||lowerBarrier;
-  const initialRange=Math.abs(a-x);
-  const finalRange=Math.abs(e-d);
-  const converging=initialRange>0&&finalRange<initialRange;
+  const initialWidth=Math.abs(a-b);
+  const finalWidth=Math.abs(e-d);
+  const converging=initialWidth>0&&finalWidth<initialWidth;
   return{valid:contracting||expanding||barrier,contracting,expanding,barrier,converging,alternating};
 }
 
