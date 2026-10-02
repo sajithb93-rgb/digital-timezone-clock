@@ -17,6 +17,8 @@ export type RiskConstraints = {
   stepSize?:number;
   minNotional?:number;
   maxNotional?:number;
+  contractSize?:number;
+  inverseContract?:boolean;
 };
 
 export type Regime = {
@@ -153,7 +155,18 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid stop distance"};
   }
 
-  const desiredPositionSize=riskAmount/stopDistance;
+  // COIN-M contracts are inverse instruments. Quantity is contracts, so one
+  // contract does not represent one base-asset unit. Use contractSize to
+  // convert the stop distance into quote-denominated risk per contract.
+  const inverse=constraints.inverseContract===true;
+  const contractSize=typeof constraints.contractSize==="number"&&Number.isFinite(constraints.contractSize)&&constraints.contractSize>0
+    ?constraints.contractSize:1;
+  const riskPerUnit=inverse?contractSize*(stopDistance/entry):stopDistance;
+  if(!Number.isFinite(riskPerUnit)||riskPerUnit<=0){
+    return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance,valid:false,reason:"Invalid per-unit contract risk"};
+  }
+
+  const desiredPositionSize=riskAmount/riskPerUnit;
   if(!Number.isFinite(desiredPositionSize)||desiredPositionSize<=0){
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance,valid:false,reason:"Position size is zero"};
   }
