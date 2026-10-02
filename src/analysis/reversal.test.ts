@@ -86,10 +86,42 @@ describe("reversal engine",()=>{
     expect(r.reason).toContain("structural MTF mode");
   });
 
-  it("does not use the signal candle high/low as an already-reached reversal target",()=>{\n    const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));\n    candles[31]=candle(31,100,101,95,99);\n    candles[32]=candle(32,99,100,96,98);\n    candles[33]=candle(33,98,106,97,105);\n    candles[34]=candle(34,105,130,103,107);\n    const r=analyzeReversal(candles,smc({\n      sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],\n      events:[\n        {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},\n        {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}\n      ],\n      fvgs:[{from:32,to:33,low:101,high:103,type:"bullish",filled:false,size:1}],\n      orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}],\n    }),flow());\n    expect(r.targets.every(t=>t<130)).toBe(true);\n  });\n\n  it("ignores the forming candle",()=>{
+  it("does not use the signal candle high/low as an already-reached reversal target",()=>{
+    const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[31]=candle(31,100,101,95,99);
+    candles[32]=candle(32,99,100,96,98);
+    candles[33]=candle(33,98,106,97,105);
+    candles[34]=candle(34,105,130,103,107);
+    const r=analyzeReversal(candles,smc({
+      sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],
+      events:[
+        {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},
+        {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}
+      ],
+      fvgs:[{from:32,to:33,low:101,high:103,type:"bullish",filled:false,size:1}],
+      orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}],
+    }),flow());
+    expect(r.targets.every(t=>t<130)).toBe(true);
+  });
+
+  it("ignores the forming candle",()=>{
     const candles = Array.from({length:30},(_,i)=>candle(i,100,101,99,100));
     candles[29]={...candle(29,100,112,94,111),closed:false};
     const r=analyzeReversal(candles,smc({asOf:28,sweeps:[{index:28,price:94,type:"low",confirmed:true,displacement:true}]}),flow());
     expect(r.asOf).toBe(28);
+  });
+  it("does not accept pressure plus absorption as full order-flow confirmation",()=>{
+    const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[31]=candle(31,100,101,95,99); candles[32]=candle(32,99,100,96,98); candles[33]=candle(33,98,106,97,105); candles[34]=candle(34,105,108,103,107);
+    const r=analyzeReversal(candles,smc({sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],events:[{index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},{index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}],fvgs:[{from:32,to:34,low:101,high:103,type:"bullish",filled:false,size:1}],orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}]}),flow({direction:"WAIT",pressure:"BUYERS",absorption:"BUYER",signal:"CONTEXT ONLY"}));
+    expect(r.orderflowConfirmed).toBe(false); expect(r.state).not.toBe("CONFIRMED");
+  });
+
+  it("uses the normalized chronological candle sequence for reversal indices",()=>{
+    const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[31]=candle(31,100,101,95,99); candles[32]=candle(32,99,100,96,98); candles[33]=candle(33,98,106,97,105); candles[34]=candle(34,105,108,103,107);
+    const base=smc({sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],events:[{index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},{index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}],fvgs:[{from:32,to:34,low:101,high:103,type:"bullish",filled:false,size:1}],orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}]});
+    const ordered=analyzeReversal(candles,base,flow(),{requireOrderFlow:false}); const reversed=analyzeReversal([...candles].reverse(),base,flow(),{requireOrderFlow:false});
+    expect(reversed.asOf).toBe(ordered.asOf); expect(reversed.sweepIndex).toBe(ordered.sweepIndex); expect(reversed.structureIndex).toBe(ordered.structureIndex);
   });
 });
