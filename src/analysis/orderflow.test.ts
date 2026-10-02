@@ -511,7 +511,7 @@ describe("order flow strategy",()=>{
 
   it("returns WAIT when BUY causal context or current structure break is missing",()=>{
     const fp=confirmedFootprints("BUY");
-    const noSweep=fullLongCandles().map((c,i)=>i===8?{...c,low:99.5}:c);
+    const noSweep=fullLongCandles().map((c,i)=>(i===8||i===9)?{...c,low:99.5,close:100.2}:c);
     expect(analyzeOrderFlow(noSweep,fp).direction).toBe("WAIT");
 
     const noAbsorption=fullLongCandles().map((c,i)=>i===9?{...c,close:c.open,low:c.open-0.1}:c);
