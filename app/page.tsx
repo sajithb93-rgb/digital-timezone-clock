@@ -483,7 +483,24 @@ export default function Home(){
  const lastClosedTime=lastClosed?.time??0;
  useEffect(()=>{if(!lastClosedTime)return;setAnalysisCandles(prev=>prev.at(-1)?.time===lastClosedTime?prev:candles.filter(x=>x.closed!==false))},[lastClosedTime]);
 
- useEffect(()=>{let stop=false;const load=async()=>{try{const cfg=marketConfig[marketType==="spot"?"usdm":marketType];const [o,p,tt]=await Promise.all([binanceFetchJson(`${cfg.rest}/openInterest?symbol=${encodeURIComponent(symbol)}`),binanceFetchJson(`${cfg.rest}/premiumIndex?symbol=${encodeURIComponent(symbol)}`),binanceFetchJson(`${cfg.rest}/ticker/24hr?symbol=${encodeURIComponent(symbol)}`)]);if(!stop)setDerivatives({openInterest:o.openInterest,fundingRate:p.lastFundingRate,change24h:tt.priceChangePercent})}catch{if(!stop)setDerivatives(null)}};if(symbol)load();const id=window.setInterval(load,60000);return()=>{stop=true;clearInterval(id)}},[symbol,marketType]);
+ useEffect(()=>{
+  let stop=false;
+  const controller=new AbortController();
+  const load=async()=>{
+   try{
+    const cfg=marketConfig[marketType==="spot"?"usdm":marketType];
+    const [o,p,tt]=await Promise.all([
+      binanceFetchJson(`${cfg.rest}`/openInterest?symbol=${encodeURIComponent(symbol)}`,{signal:controller.signal}),
+      binanceFetchJson(`${cfg.rest}`/premiumIndex?symbol=${encodeURIComponent(symbol)}`,{signal:controller.signal}),
+      binanceFetchJson(`${cfg.rest}`/ticker/24hr?symbol=${encodeURIComponent(symbol)}`,{signal:controller.signal})
+    ]);
+    if(!stop)setDerivatives({openInterest:o.openInterest,fundingRate:p.lastFundingRate,change24h:tt.priceChangePercent})
+   }catch{if(!stop&&!controller.signal.aborted)setDerivatives(null)}
+  };
+  if(symbol)load();
+  const id=window.setInterval(load,60000);
+  return()=>{stop=true;controller.abort();clearInterval(id)}
+},[symbol,marketType]);
 
  useEffect(()=>{
   let disposed=false;
