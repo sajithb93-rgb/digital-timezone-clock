@@ -294,9 +294,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  for(const p of [...liquidityHighs,...liquidityLows]){
   if(asOf-p.index>40)continue;
   for(let j=p.index+1;j<=asOf;j++){
-   const hit=p.type==="H"?c[j].high>p.price&&c[j].close<p.price:c[j].low<p.price&&c[j].close>p.price;
+   const hit=p.type==="H"?data[j].high>p.price&&data[j].close<p.price:data[j].low<p.price&&data[j].close>p.price;
    if(hit){
-    sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(c,j,atrAt(c,j))>=.7});
+    sweeps.push({index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(data,j,atrAt(data,j))>=.7});
     break;
    }
   }
