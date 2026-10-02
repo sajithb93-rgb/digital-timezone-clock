@@ -446,6 +446,16 @@ describe("analysis regression",()=>{
     expect(e.primary?.strict).toBe(true);
   });
 
+  it("makes advanced Elliott counting independent of feed ordering and duplicate timestamps",()=>{
+    const base=candles(120);
+    const duplicate={...base[60],close:base[60].close+0.2};
+    const ordered=analyzeElliottAdvanced(base);
+    const reversed=analyzeElliottAdvanced([...base,duplicate].reverse());
+    expect(reversed.asOf).toBe(ordered.asOf);
+    expect(reversed.setupState).toBe(ordered.setupState);
+    expect(reversed.primary?.points.map(p=>p.index)).toEqual(ordered.primary?.points.map(p=>p.index));
+  });
+
   it("permanently invalidates a completed Elliott count after an origin close",()=>{
     const primary={
       points:[0,2,4,6,8,10].map((index,i)=>({index,price:[100,120,110,150,135,165][i],label:String(i)})),
