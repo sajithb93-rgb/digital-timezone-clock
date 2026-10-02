@@ -9,7 +9,7 @@ const base: OrderFlowResult = {
   absorption: "BUYER", absorptionStrength: 80, liquiditySweep: "LOW", liquiditySweepPrice: 100,
   microStructure: "BULLISH", direction: "WAIT", signal: "WAIT", confidence: 0, confirmations: [],
   entry: 110, stop: 105, targets: [117.5,120,125], recentBars: [],
-  diagnostics: [], rejectionReason: "test fixture",
+  rejectionReason: "test fixture",
   footprint: {
     candleTime: 1, intervalMs: 300000, confirmed: true, levels: [], buyVolume: 70, sellVolume: 30,
     delta: 40, deltaRatio: 0.4, poc: 110, stackedBuyImbalances: 2, stackedSellImbalances: 0,
