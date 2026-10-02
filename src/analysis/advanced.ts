@@ -65,10 +65,14 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
     if(recentTimes.has(x.time)){buy+=b;sell+=s;}
   }
   const last=recent.at(-1)!;
-  const base=recent.slice(0,-1).reduce((s,x)=>s+x.volume,0)/Math.max(1,recent.length-1);
+  const prior=recent.slice(0,-1);
+  const base=prior.length?prior.reduce((s,x)=>s+x.volume,0)/prior.length:0;
   const delta=buy-sell, total=buy+sell;
   const ratio=delta/Math.max(total,1e-12);
-  return{buyVolume:buy,sellVolume:sell,delta,deltaRatio:ratio,cumulativeDelta:cum,volumeRatio:last.volume/Math.max(base,1e-12),pressure:ratio>.08?"BUYERS":ratio<-.08?"SELLERS":"BALANCED"};
+  // A volume ratio needs a meaningful reference sample. With fewer than five
+  // prior closed bars, returning a ratio would over-weight one noisy candle.
+  const volumeRatio=prior.length>=5?last.volume/Math.max(base,1e-12):0;
+  return{buyVolume:buy,sellVolume:sell,delta,deltaRatio:ratio,cumulativeDelta:cum,volumeRatio,pressure:ratio>.08?"BUYERS":ratio<-.08?"SELLERS":"BALANCED"};
 }
 
 export function detectRegime(c:Candle[]):Regime{
