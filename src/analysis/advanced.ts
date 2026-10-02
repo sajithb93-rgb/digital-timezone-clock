@@ -100,7 +100,7 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
   const recent=(index:number)=>index>=Math.max(0,lastIndex-20);
   const structure=s.events.some((x:any)=>recent(x.index))?15:0;
   const liquidity=s.sweeps.some((x:any)=>recent(x.index))?15:0;
-  const zones=(s.fvgs.some((x:any)=>!x.filled&&recent(x.to))?7:0)+(s.orderBlocks.some((x:any)=>!x.mitigated&&recent(x.index))?8:0);
+  const zones=(s.fvgs.some((x:any)=>!x.filled&&!x.partial&&recent(x.to))?7:0)+(s.orderBlocks.some((x:any)=>!x.mitigated&&recent(x.index))?8:0);
   const location=(s.premiumDiscount!=="Equilibrium"?10:3);
   const momentum=s.displacement>=.7?15:5;
   const volume=Math.min(10,Math.round(Math.max(0,flow.volumeRatio-0.7)*6));
