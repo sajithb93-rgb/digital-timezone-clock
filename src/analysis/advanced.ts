@@ -163,13 +163,16 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   }
 
   let positionSize=desiredPositionSize;
-  const rawMinQty=constraints.minQty,rawMaxQty=constraints.maxQty,rawStepSize=constraints.stepSize;
-  const rawMinNotional=constraints.minNotional,rawMaxNotional=constraints.maxNotional;
-  const minQty=Number.isFinite(rawMinQty)&&rawMinQty>=0?rawMinQty:0;
-  const maxQty=Number.isFinite(rawMaxQty)&&rawMaxQty>0?rawMaxQty:Infinity;
-  const stepSize=Number.isFinite(rawStepSize)&&rawStepSize>0?rawStepSize:0;
-  const minNotional=Number.isFinite(rawMinNotional)&&rawMinNotional>=0?rawMinNotional:0;
-  const maxNotional=Number.isFinite(rawMaxNotional)&&rawMaxNotional>0?rawMaxNotional:Infinity;
+  const rawMinQty=constraints.minQty;
+  const rawMaxQty=constraints.maxQty;
+  const rawStepSize=constraints.stepSize;
+  const rawMinNotional=constraints.minNotional;
+  const rawMaxNotional=constraints.maxNotional;
+  const minQty=typeof rawMinQty==="number"&&Number.isFinite(rawMinQty)&&rawMinQty>=0?rawMinQty:0;
+  const maxQty=typeof rawMaxQty==="number"&&Number.isFinite(rawMaxQty)&&rawMaxQty>0?rawMaxQty:Infinity;
+  const stepSize=typeof rawStepSize==="number"&&Number.isFinite(rawStepSize)&&rawStepSize>0?rawStepSize:0;
+  const minNotional=typeof rawMinNotional==="number"&&Number.isFinite(rawMinNotional)&&rawMinNotional>=0?rawMinNotional:0;
+  const maxNotional=typeof rawMaxNotional==="number"&&Number.isFinite(rawMaxNotional)&&rawMaxNotional>0?rawMaxNotional:Infinity;
   if(Number.isFinite(maxQty)&&maxQty>0)positionSize=Math.min(positionSize,maxQty);
   if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize);
   if(positionSize<Math.max(0,minQty)){
