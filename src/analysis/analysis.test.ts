@@ -86,6 +86,8 @@ describe("analysis regression",()=>{
     expect(partialGap?.low).toBe(100);
     expect(partialGap?.high).toBe(101);
     expect(partialGap?.filled).toBe(false);
+    expect(partialGap?.partial).toBe(true);
+    expect(partialGap?.partialFillIndex).toBe(3);
 
     const full=findFvgs([...base,
       {time:3,open:102,high:103,low:100.5,close:101,volume:100,closed:true},
@@ -107,6 +109,8 @@ describe("analysis regression",()=>{
     expect(partialGap?.low).toBe(99);
     expect(partialGap?.high).toBe(100);
     expect(partialGap?.filled).toBe(false);
+    expect(partialGap?.partial).toBe(true);
+    expect(partialGap?.partialFillIndex).toBe(3);
 
     const full=findFvgs([...base,
       {time:3,open:98,high:99.5,low:97,close:99,volume:100,closed:true},
@@ -127,6 +131,7 @@ describe("analysis regression",()=>{
     const gaps=findFvgs(c,1,3);
     const gap=gaps.find(x=>x.from===0&&x.to===2&&x.type==="bullish");
     expect(gap?.filled).toBe(false);
+    expect(gap?.partial).toBe(false);
     expect(gap?.fillIndex).toBeUndefined();
   });
 
