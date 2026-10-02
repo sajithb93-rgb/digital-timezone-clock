@@ -518,7 +518,7 @@ function chooseEntryZone(
   candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked:true,distance});
  }
  for(const f of fvgs){
-  if(f.type!==direction||f.filled)continue;
+  if(f.type!==direction||f.filled||f.partial)continue;
   const origin=f.to,age=asOf-origin;
   if(age<0||age>40)continue;
   if(!isEntryZoneCausal(origin,sweepIndex,latestEvent.index,"FVG",12))continue;
