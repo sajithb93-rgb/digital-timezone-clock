@@ -395,7 +395,7 @@ describe("order flow strategy",()=>{
       candle(8,103,104,100,103,100,40),
       candle(9,103,104,101,102.5,100,40),
       candle(10,102.5,103.5,101.5,103.2,100,60),
-      candle(11,103.2,104.5,102,104.2,100,65)
+      candle(11,104.2,104.6,102,104.4,100,65)
     ];
     const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
     expect(r.direction).toBe("WAIT");
@@ -414,7 +414,7 @@ describe("order flow strategy",()=>{
       candle(8,97,98,96,97,100,70),
       candle(9,97,97,96.5,96.8,100,60),
       candle(10,96.8,97,96.2,96.7,100,60),
-      candle(11,96.7,97,95.2,95.4,100,65)
+      candle(11,96.7,96.5,94.8,95.8,100,65)
     ];
     const r=analyzeOrderFlow(candles,confirmedFootprints("SELL"));
     expect(r.direction).toBe("WAIT");
