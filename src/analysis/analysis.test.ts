@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, buildLiveContinuationSetup, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
 
@@ -487,6 +487,19 @@ describe("analysis regression",()=>{
     expect(e.engine).toBe("ADVANCED_ELLIOTT_V2");
     expect(e.primary?.kind).toBe("Impulse");
     expect(e.primary?.strict).toBe(true);
+  });
+
+  it("invalidates live Elliott continuation when the signal candle wick reaches the target",()=>{
+    const history=Array.from({length:21},(_,i)=>({time:i,open:100,high:101,low:99,close:100,volume:100,closed:true}));
+    const correction=[
+      {time:21,open:130,high:130,low:119,close:120,volume:100,closed:true},
+      {time:22,open:120,high:126,low:119,close:125,volume:100,closed:true},
+      {time:23,open:125,high:126,low:114,close:115,volume:100,closed:true},
+      {time:24,open:115,high:142,low:114,close:130,volume:100,closed:true},
+    ];
+    const primary:any={kind:"Impulse",direction:"bullish",points:[{index:20,price:130}]};
+    const live=buildLiveContinuationSetup([...history,...correction],primary);
+    expect(live).toBeNull();
   });
 
   it("makes advanced Elliott counting independent of feed ordering and duplicate timestamps",()=>{
