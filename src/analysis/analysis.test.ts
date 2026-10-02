@@ -21,6 +21,13 @@ function candles(count:number, start=100):Candle[]{
 }
 
 describe("analysis regression",()=>{
+  it("allows Wave 3 to tie Wave 1 when Wave 5 is longer",()=>{
+    const prices=[100,110,105,115,112,120];
+    const v=validateImpulseWave(prices,true);
+    expect(v.w3NotShortest).toBe(true);
+    expect(v.valid).toBe(true);
+  });
+
   it("validates double zigzag W-X-Y with an explicit countertrend X connector",()=>{
     const bullish=[100,110,105,115,106,116,111,123];
     const bearish=[123,113,118,108,117,107,112,100];
