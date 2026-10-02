@@ -14,6 +14,19 @@ describe("news filter",()=>{
     expect(r.minutesToEvent).toBe(10);
   });
 
+  it("prefers an upcoming medium-impact event over a nearer completed one",()=>{
+    const now=1_000_000;
+    const events=[
+      {title:"Recent PPI",country:"USD",impact:"medium" as const,date:now-5*60_000},
+      {title:"Upcoming PMI",country:"USD",impact:"medium" as const,date:now+8*60_000},
+    ];
+    const r=getNewsRisk(events,now,30);
+    expect(r.level).toBe("MEDIUM");
+    expect(r.nextEvent?.title).toBe("Upcoming PMI");
+    expect(r.minutesToEvent).toBe(8);
+    expect(r.minutesSinceEvent).toBeUndefined();
+  });
+
   it("falls back safely for invalid news buffer values",()=>{
     const now=1_000_000;
     const event={title:"Upcoming CPI",country:"USD",impact:"high" as const,date:now+5*60_000};
