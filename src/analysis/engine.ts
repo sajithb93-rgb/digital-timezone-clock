@@ -337,7 +337,13 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bullBreak+1;j<=end;j++){
-     if(m===undefined&&c[j].low<=c[i].open)m=j;     if(c[j].close<c[i].low){invalid=j;break}    }
+     // Mitigation means price has actually entered the OB zone. For a
+     // bullish block the zone is [low, open], so testing the zone's upper
+     // boundary (open) is the correct first-touch condition.
+     if(m===undefined&&c[j].low<=c[i].open&&c[j].high>=c[i].low)m=j;
+     // A closed candle through the far boundary invalidates the block.
+     if(c[j].close<c[i].low){invalid=j;break}
+    }
     // If the block is invalidated before its first mitigation, discard it.
     // Once mitigated, keep it only as historical/mitigated state.
     if(invalid===undefined||(m!==undefined&&m<invalid)){
@@ -350,7 +356,9 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bearBreak+1;j<=end;j++){
-     if(m===undefined&&c[j].high>=c[i].open)m=j;
+     // Mitigation means price has actually entered the OB zone [open, high].
+     if(m===undefined&&c[j].high>=c[i].open&&c[j].low<=c[i].high)m=j;
+     // A closed candle through the far boundary invalidates the block.
      if(c[j].close>c[i].high){invalid=j;break}
     }    // If the block is invalidated before its first mitigation, discard it.
     if(invalid===undefined||(m!==undefined&&m<invalid)){
