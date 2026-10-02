@@ -47,6 +47,21 @@ describe("price-level footprint engine",()=>{
     expect(s.levels.some(x=>x.price===100.3)).toBe(false);
   });
 
+  it("does not treat arbitrary prices as adjacent when tick size is unavailable",()=>{
+    const snapshot:any={
+      candleTime:60_000,intervalMs:60_000,confirmed:true,
+      levels:[
+        {price:99,buyVolume:0,sellVolume:1,delta:-1,totalVolume:1,buyTrades:0,sellTrades:1},
+        {price:100,buyVolume:4,sellVolume:0,delta:4,totalVolume:4,buyTrades:1,sellTrades:0},
+        {price:105,buyVolume:30,sellVolume:0,delta:30,totalVolume:30,buyTrades:1,sellTrades:0}
+      ],
+      buyVolume:34,sellVolume:1,delta:33,deltaRatio:33/35,poc:105
+    };
+    const result=analyzeFootprintSnapshot(snapshot,undefined,0);
+    expect(result.stackedBuyImbalances).toBe(0);
+    expect(result.maxBuyImbalanceRatio).toBe(0);
+  });
+
   it("does not build a stacked imbalance across a missing price step",()=>{
     const snapshot:any={
       candleTime:60_000,intervalMs:60_000,confirmed:true,
