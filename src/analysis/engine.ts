@@ -38,6 +38,11 @@ export type ElliottResult={
 export type MTFFrame={interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string;available:boolean;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;elliottPhase:string};
 export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;frames:MTFFrame[]};
 
+export function mtfFrameWeight(interval:string):number{
+ const weights:Record<string,number>={"1d":3.5,"4h":3,"1h":2,"15m":1.5,"5m":1,"1m":0.75};
+ return weights[interval]??1;
+}
+
 function trueRange(c:Candle[],i:number){if(i===0)return c[i].high-c[i].low;return Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close))}
 function atr(c:Candle[],n=14){return atrAt(c,c.length-1,n)}
 function atrAt(c:Candle[],end:number,n=14){if(!c.length||end<0)return 0;const e=Math.min(end,c.length-1),start=Math.max(0,e-n+1);return c.slice(start,e+1).reduce((v,_,i)=>v+trueRange(c,start+i),0)/Math.max(1,e-start+1)}
@@ -613,15 +618,19 @@ export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResul
   const available=f.candles.length>=25;
   if(!available)return{interval:f.interval,trend:"Neutral" as const,score:0,structure:"UNAVAILABLE",available:false,elliottTrend:"Neutral" as const,elliottScore:0,elliottPhase:"UNAVAILABLE"};
   const smc=analyzeSMC(f.candles),ew=analyzeElliott(f.candles);
-  const elliottTrend=ew.primary?.direction==="bullish"?"Bullish":ew.primary?.direction==="bearish"?"Bearish":"Neutral";
+  // An Elliott count that has already crossed its Wave-1 origin is historical
+  // evidence of invalidation, not current directional bias.
+  const elliottUsable=ew.setupState!=="INVALIDATED"&&!!ew.primary;
+  const elliottTrend=elliottUsable&&ew.primary?.direction==="bullish"?"Bullish"
+    :elliottUsable&&ew.primary?.direction==="bearish"?"Bearish":"Neutral";
   const smcSigned=smc.trend==="Bullish"?smc.score:smc.trend==="Bearish"?-smc.score:0;
   const ewSigned=elliottTrend==="Bullish"?ew.score:elliottTrend==="Bearish"?-ew.score:0;
   const signed=(smcSigned+ewSigned)/2;
   const trend:MTFFrame["trend"]=signed>12?"Bullish":signed<-12?"Bearish":"Neutral";
-  return{interval:f.interval,trend,score:clamp(50+signed/2),structure:smc.events.at(-1)?.type??"No event",available:true,elliottTrend,elliottScore:ew.score,elliottPhase:ew.phase};
+  return{interval:f.interval,trend,score:clamp(50+signed/2),structure:smc.events.at(-1)?.type??"No event",available:true,elliottTrend,elliottScore:elliottUsable?ew.score:0,elliottPhase:ew.phase};
  });
  const usable=rows.filter(r=>r.available);
- const weight=(r:MTFFrame)=>r.interval==="4h"||r.interval==="1h"?1.4:1;
+ const weight=(r:MTFFrame)=>mtfFrameWeight(r.interval);
  const totalWeight=usable.reduce((sum,r)=>sum+weight(r),0);
  const weightedCentered=usable.reduce((sum,r)=>sum+(r.score-50)*weight(r),0)/Math.max(1,totalWeight);
  const elliottSigned=usable.reduce((sum,r)=>sum+(r.elliottTrend==="Bullish"?r.elliottScore:r.elliottTrend==="Bearish"?-r.elliottScore:0)*weight(r),0)/Math.max(1,totalWeight);
