@@ -51,8 +51,16 @@ export function normalizeAggTrade(raw: any): AggTrade | null {
 
 function priceKey(price: number, tickSize: number): number {
   if (!Number.isFinite(tickSize) || tickSize <= 0) return price;
-  const decimals = Math.max(0, Math.min(12, Math.ceil(-Math.log10(tickSize))));
-  return Number((Math.round(price / tickSize) * tickSize).toFixed(decimals));
+  // Derive decimal precision from the tick itself. A log10-based estimate
+  // breaks fractional ticks such as 0.25 (which need two decimals).
+  let decimals = 0;
+  let scaled = tickSize;
+  while (decimals < 12 && Math.abs(Math.round(scaled) - scaled) > 1e-10) {
+    scaled *= 10;
+    decimals += 1;
+  }
+  const steps = Math.round(price / tickSize);
+  return Number((steps * tickSize).toFixed(decimals));
 }
 
 function bucketStart(time: number, intervalMs: number): number {
@@ -81,7 +89,11 @@ export function analyzeFootprintSnapshot(
   tickSize: number,
 ): FootprintSnapshot {
   const levels = [...snapshot.levels].sort((a, b) => a.price - b.price);
-  const ratio = (a: number, b: number) => a / Math.max(b, 1e-12);
+  const ratio = (a: number, b: number) => a > 0 && b > 0 ? a / b : 0;
+  const isAdjacent=(a:number,b:number)=>{
+    if(!Number.isFinite(tickSize)||tickSize<=0)return true;
+    return Math.abs(Math.abs(a-b)/tickSize-1)<=1e-6;
+  };
   let stackedBuyImbalances = 0;
   let stackedSellImbalances = 0;
   let maxBuyImbalanceRatio = 0;
@@ -93,7 +105,7 @@ export function analyzeFootprintSnapshot(
     const below = levels[i - 1];
     const above = levels[i + 1];
 
-    if (below) {
+    if (below && isAdjacent(cur.price,below.price) && cur.buyVolume>0 && below.sellVolume>0) {
       const r = ratio(cur.buyVolume, below.sellVolume);
       maxBuyImbalanceRatio = Math.max(maxBuyImbalanceRatio, r);
       if (r >= 3) {
@@ -106,7 +118,7 @@ export function analyzeFootprintSnapshot(
       buyRun = 0;
     }
 
-    if (above) {
+    if (above && isAdjacent(cur.price,above.price) && cur.sellVolume>0 && above.buyVolume>0) {
       const r = ratio(cur.sellVolume, above.buyVolume);
       maxSellImbalanceRatio = Math.max(maxSellImbalanceRatio, r);
       if (r >= 3) {
@@ -137,8 +149,11 @@ export function analyzeFootprintSnapshot(
     const highSell = high.reduce((s, x) => s + x.sellVolume, 0);
     const closeLocation = (candle.close - candle.low) / range;
     const upperLocation = (candle.high - candle.close) / range;
-    const buyerAbsorb = lowSell > lowBuy * 1.5 && closeLocation >= 0.55;
-    const sellerAbsorb = highBuy > highSell * 1.5 && upperLocation >= 0.55;
+    // Absorption requires meaningful flow on both sides. A zero passive/aggressive
+    // side must never be interpreted as absorption merely because division would
+    // otherwise produce an infinite ratio.
+    const buyerAbsorb = lowSell > 0 && lowBuy > 0 && lowSell / lowBuy >= 1.5 && closeLocation >= 0.55;
+    const sellerAbsorb = highBuy > 0 && highSell > 0 && highBuy / highSell >= 1.5 && upperLocation >= 0.55;
     if (buyerAbsorb && !sellerAbsorb) {
       absorption = "BUYER";
       absorptionStrength = Math.max(0, Math.min(100, Math.round((lowSell / Math.max(lowBuy, 1e-12)) * 25 + closeLocation * 35)));
