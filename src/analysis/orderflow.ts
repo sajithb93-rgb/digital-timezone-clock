@@ -215,7 +215,12 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     .filter(f=>f.confirmed && Number.isFinite(f.candleTime))
     .sort((a,b)=>a.candleTime-b.candleTime)
     .slice(-36);
-  const footprintByTime=new Map(fpAll.map(f=>[f.candleTime,f]));
+  const footprintByTime=new Map<number,FootprintSnapshot>();
+  let duplicateFootprintTime=false;
+  for(const f of fpAll){
+    if(footprintByTime.has(f.candleTime))duplicateFootprintTime=true;
+    footprintByTime.set(f.candleTime,f);
+  }
   const expectedClosed=closed.slice(-12);
   const expectedFootprintTimes=expectedClosed.map(c=>c.time);
   const fpRecent=expectedFootprintTimes
@@ -243,6 +248,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     });
   const useFootprint=expectedFootprintTimes.length===12
     && fpRecent.length===12
+    && !duplicateFootprintTime
     && footprintCoverageValid
     && latestFootprintCoverage>=0.99
     && latestFootprintCoverage<=1.05;
@@ -307,6 +313,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"closed",label:"Closed candle",passed:true,detail:"Latest analysis candle is closed"},
     {key:"history",label:"12+ closed candles",passed:sufficientHistory,detail:`${closed.length}/12 closed candles`},
     {key:"exact",label:"Real Binance taker/footprint flow",passed:confirmedFlowData,detail:useFootprint?"Confirmed Binance footprint window available":allExact?"Exact kline taker-buy volume available":"One or more candles use estimated volume"},
+    {key:"footprint_unique",label:"Unique footprint candle times",passed:!duplicateFootprintTime,detail:duplicateFootprintTime?"Duplicate footprint snapshots detected":"No duplicate candle times"},
     {key:"footprint_history",label:"12 confirmed footprint bars",passed:expectedFootprintTimes.length===12&&fpRecent.length===12,detail:`${fpRecent.length}/12 confirmed footprint bars`},
     {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:footprintCoverageValid,detail:`Minimum per-bar coverage ${(footprintCoverage*100).toFixed(1)}% · bars above 105% are rejected`},
     {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:latestFootprintCoverage>=0.99,detail:`Latest candle coverage ${(latestFootprintCoverage*100).toFixed(1)}%`},
