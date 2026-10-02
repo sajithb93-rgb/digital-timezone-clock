@@ -137,6 +137,7 @@ describe("reversal engine",()=>{
 
   it("supports a structural confirmation mode without pretending order flow exists",()=>{
     const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[20]=candle(20,100,160,99,100);
     candles[31]=candle(31,100,101,95,99);
     candles[32]=candle(32,99,100,96,98);
     candles[33]=candle(33,98,106,97,105);
