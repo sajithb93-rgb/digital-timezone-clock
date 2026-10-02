@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -193,6 +193,23 @@ describe("analysis regression",()=>{
     expect(isEntryZoneCausal(34,25,30,"BREAKER")).toBe(true);
     expect(isEntryZoneCausal(44,25,30,"BREAKER")).toBe(false);
     expect(isEntryZoneCausal(28,25,30,"BREAKER")).toBe(false);
+  });
+
+  it("classifies premium and discount only from a valid dealing range",()=>{
+    expect(classifyPremiumDiscount(110,120,100)).toBe("Equilibrium");
+    expect(classifyPremiumDiscount(115,120,100)).toBe("Premium");
+    expect(classifyPremiumDiscount(105,120,100)).toBe("Discount");
+    expect(classifyPremiumDiscount(100,100,100)).toBe("Equilibrium");
+  });
+
+  it("does not let an unfinished candle alter the SMC dealing range",()=>{
+    const base=candles(80);
+    const live={time:80,open:1,high:10000,low:1,close:9999,volume:100,closed:false};
+    const a=analyzeSMC(base);
+    const b=analyzeSMC([...base,live]);
+    expect(b.asOf).toBe(a.asOf);
+    expect(b.premiumDiscountRange).toEqual(a.premiumDiscountRange);
+    expect(b.premiumDiscount).toBe(a.premiumDiscount);
   });
 
   it("rejects SMC trade geometry when the stop is on the wrong side",()=>{
