@@ -170,13 +170,14 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const sufficientHistory=closed.length>=12;
   const latestBuyFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio>=0.08&&latestFootprint.maxBuyImbalanceRatio>=3&&latestFootprint.stackedBuyImbalances>=2&&latestFootprint.absorption==="BUYER";
   const latestSellFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio<=-0.08&&latestFootprint.maxSellImbalanceRatio>=3&&latestFootprint.stackedSellImbalances>=2&&latestFootprint.absorption==="SELLER";
-  const longConfirmed=sufficientHistory&&allExact&&useFootprint&&longContext&&pressure==="BUYERS"&&latestBuyFootprint&&last.microStructure==="BULLISH";
-  const shortConfirmed=sufficientHistory&&allExact&&useFootprint&&shortContext&&pressure==="SELLERS"&&latestSellFootprint&&last.microStructure==="BEARISH";
+  const confirmedFlowData=useFootprint||allExact;
+  const longConfirmed=sufficientHistory&&useFootprint&&longContext&&pressure==="BUYERS"&&latestBuyFootprint&&last.microStructure==="BULLISH";
+  const shortConfirmed=sufficientHistory&&useFootprint&&shortContext&&pressure==="SELLERS"&&latestSellFootprint&&last.microStructure==="BEARISH";
 
   const diagnostics:OrderFlowDiagnostic[]=[
-    {key:"closed",label:"Closed candle",passed:last.time>0,detail:last.time>0?"Latest candle is closed":"No closed candle"},
+    {key:"closed",label:"Closed candle",passed:true,detail:"Latest analysis candle is closed"},
     {key:"history",label:"12+ closed candles",passed:sufficientHistory,detail:`${closed.length}/12 closed candles`},
-    {key:"exact",label:"Real Binance taker/footprint flow",passed:allExact,detail:allExact?"Exact taker-buy volume available":"One or more candles use estimated volume"},
+    {key:"exact",label:"Real Binance taker/footprint flow",passed:confirmedFlowData,detail:useFootprint?"Confirmed Binance footprint window available":allExact?"Exact kline taker-buy volume available":"One or more candles use estimated volume"},
     {key:"footprint_history",label:"12 confirmed footprint bars",passed:useFootprint,detail:`${fpRecent.length}/12 confirmed footprint bars`},
     {key:"latest_fp",label:"Latest closed footprint",passed:!!latestFootprint,detail:latestFootprint?"Latest candle has a confirmed footprint":"Latest closed candle has no confirmed footprint snapshot"},
     {key:"sweep_buy",label:"Sell-side liquidity sweep",passed:!!sweepLow,detail:sweepLow?`Sweep at index ${sweepLow.index} · ${sweepLow.sweepPrice??"—"}`:"No low sweep in recent window"},
