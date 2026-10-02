@@ -46,17 +46,33 @@ describe("risk sizing precision",()=>{
     expect(Number.isFinite(r.positionSize)).toBe(true);
   });
 
-  it("uses contract face value for inverse COIN-M notional limits",()=>{
+  it("uses exact inverse COIN-M loss sizing and respects the risk budget",()=>{
     const r=riskPlan(10000,1,1000,900,{
       inverseContract:true,
       contractSize:100,
+      contractMultiplier:1,
       minQty:1,
       stepSize:1,
-      minNotional:500,
-      maxNotional:1500
+      minNotional:0
     },"BUY");
     expect(r.valid).toBe(true);
-    expect(r.positionSize).toBe(10);
+    expect(r.positionSize).toBe(9);
+    const riskPerContract=100*Math.abs(1/1000-1/900)*1000;
+    expect(r.positionSize*riskPerContract).toBeLessThanOrEqual(100);
+  });
+
+  it("rejects an inverse COIN-M minimum quantity that would exceed the risk budget",()=>{
+    const r=riskPlan(1000,1,1000,900,{
+      inverseContract:true,
+      contractSize:100,
+      contractMultiplier:1,
+      minQty:1,
+      stepSize:1,
+      minNotional:0
+    },"BUY");
+    expect(r.valid).toBe(false);
+    expect(r.positionSize).toBe(0);
+    expect(r.reason).toContain("risk");
   });
 
   it("preserves decimal step precision when minQty is large",()=>{
