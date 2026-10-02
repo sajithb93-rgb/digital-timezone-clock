@@ -154,40 +154,51 @@ function findRelevantOb(smc: SMCResult, direction: ReversalDirection, sweepIndex
   return item ? { low: item.low, high: item.high, index: item.index } : null;
 }
 
-function calculateTargets(candles: Candle[], entry: number, invalidation: number, direction: ReversalDirection): number[] {
+function calculateTargets(candles: Candle[], entry: number, invalidation: number, direction: ReversalDirection): {targets:number[];structuralTargetCount:number} {
   const risk = Math.abs(entry - invalidation);
-  if (!risk || !Number.isFinite(risk) || direction === "NONE") return [];
+  if (!risk || !Number.isFinite(risk) || direction === "NONE") return {targets:[],structuralTargetCount:0};
   // Targets must be derived from structure that existed before the signal candle.
   // Including the current candle can select a level that price has already
   // touched before the reversal entry is considered active.
   const signalCandle=candles.at(-1);
   const recent = candles.slice(0, -1).slice(-60);
   const minRR = 1.5;
-  // A structural level already touched by the signal candle is not a future
-  // objective. Require BUY targets above the signal high and SELL targets below
-  // the signal low before admitting them to the TP ladder.
-  const levels = direction === "BUY"
-    ? recent.map(c => c.high).filter(p => p > entry + risk * minRR && (!signalCandle || p > signalCandle.high)).sort((a, b) => a - b)
-    : recent.map(c => c.low).filter(p => p < entry - risk * minRR && (!signalCandle || p < signalCandle.low)).sort((a, b) => b - a);
-  const unique: number[] = [];
-  const spacing = risk * 0.25;
-  for (const level of levels) {
-    if (!unique.some(x => Math.abs(x - level) <= spacing)) unique.push(level);
-    if (unique.length >= 3) break;
+  const signalHigh=signalCandle?.high??Infinity;
+  const signalLow=signalCandle?.low??-Infinity;
+  // Use confirmed local structure, not every candle extreme. A target may only
+  // qualify as structural when it is a local swing extreme in the pre-signal
+  // window and remains beyond the signal candle.
+  const structuralLevels:number[]=[];
+  for(let i=2;i<recent.length-2;i++){
+    const p=recent[i];
+    if(direction==="BUY"){
+      const swingHigh=p.high>=recent[i-1].high&&p.high>=recent[i-2].high&&p.high>recent[i+1].high&&p.high>recent[i+2].high;
+      if(swingHigh&&p.high>entry+risk*minRR&&p.high>signalHigh)structuralLevels.push(p.high);
+    }else if(direction==="SELL"){
+      const swingLow=p.low<=recent[i-1].low&&p.low<=recent[i-2].low&&p.low<recent[i+1].low&&p.low<recent[i+2].low;
+      if(swingLow&&p.low<entry-risk*minRR&&p.low<signalLow)structuralLevels.push(p.low);
+    }
   }
-  const fallback = direction === "BUY"
-    ? [entry + risk * 1.5, entry + risk * 2, entry + risk * 3]
-    : [entry - risk * 1.5, entry - risk * 2, entry - risk * 3];
-  for (const level of fallback) {
-    if (unique.length >= 3) break;
+  const unique:number[]=[];
+  const spacing=risk*0.25;
+  for(const level of structuralLevels.sort((a,b)=>direction==="BUY"?a-b:b-a)){
+    if(!unique.some(x=>Math.abs(x-level)<=spacing))unique.push(level);
+    if(unique.length>=3)break;
+  }
+  const structuralTargetCount=unique.length;
+  const fallback=direction==="BUY"
+    ?[entry+risk*1.5,entry+risk*2,entry+risk*3]
+    :[entry-risk*1.5,entry-risk*2,entry-risk*3];
+  for(const level of fallback){
+    if(unique.length>=3)break;
     if(signalCandle){
       const futureSide=direction==="BUY"?level>signalCandle.high:level<signalCandle.low;
       if(!futureSide)continue;
     }
-    if (!unique.some(x => Math.abs(x - level) <= spacing)) unique.push(level);
+    if(!unique.some(x=>Math.abs(x-level)<=spacing))unique.push(level);
   }
-  unique.sort((a, b) => direction === "BUY" ? a - b : b - a);
-  return unique.slice(0, 3);
+  unique.sort((a,b)=>direction==="BUY"?a-b:b-a);
+  return{targets:unique.slice(0,3),structuralTargetCount};
 }
 
 export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: OrderFlowResult, options: { requireOrderFlow?: boolean } = {}): ReversalEngineResult {
@@ -280,12 +291,13 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const sweepCandle = closed[sweep.index];
     const sweepExtreme = sweepCandle ? (direction === "BUY" ? sweepCandle.low : sweepCandle.high) : sweep.price;
     const invalidation = direction === "BUY" ? sweepExtreme - buffer : sweepExtreme + buffer;
-    const targets = zone ? calculateTargets(closed, entry, invalidation, direction) : [];
+    const targetPlan = zone ? calculateTargets(closed, entry, invalidation, direction) : {targets:[],structuralTargetCount:0};
+    const targets = targetPlan.targets;
     const risk=Math.abs(entry-invalidation);
     const validEntryGeometry=!!zone&&Number.isFinite(invalidation)&&invalidation>0&&risk>0&&(
       direction==="BUY"?invalidation<entry:invalidation>entry
     );
-    const validTargets=targets.length===3&&targets.every(t=>Number.isFinite(t)&&(
+    const validTargets=targets.length===3&&targetPlan.structuralTargetCount>=1&&targets.every(t=>Number.isFinite(t)&&(
       direction==="BUY"?t>entry:t<entry
     )&&Math.abs(t-entry)/risk>=1.5);
     const confirmationReady=validEntryGeometry&&validTargets;
