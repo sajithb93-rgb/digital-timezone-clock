@@ -1,5 +1,6 @@
 import { isValidTradeGeometry, type Candle } from "./engine";
 import type { FootprintSnapshot } from "./footprint";
+import { normalizeCandleSeries } from "./candles";
 
 export type OrderFlowPressure = "BUYERS" | "SELLERS" | "BALANCED";
 export type OrderFlowDirection = "BUY" | "SELL" | "WAIT";
@@ -183,15 +184,7 @@ function emptyResult():OrderFlowResult{
 export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]=[]):OrderFlowResult{
   // Normalize the feed so causal analysis cannot be broken by bad ordering,
   // duplicate timestamps, malformed OHLC, or impossible candles.
-  const byTime=new Map<number,Candle>();
-  for(const c of candles){
-    if(!Number.isFinite(c.time)||!Number.isFinite(c.open)||!Number.isFinite(c.high)||!Number.isFinite(c.low)||!Number.isFinite(c.close)||!Number.isFinite(c.volume))continue;
-    if(c.volume<0||c.high<c.low||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))continue;
-    byTime.set(c.time,c);
-  }
-  const normalized=[...byTime.values()].sort((x,y)=>x.time-y.time);
-  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
-  const closed=(firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized);
+  const closed=normalizeCandleSeries(candles,true);
   if(!closed.length)return emptyResult();
 
   let cumulativeDelta=0,allExact=true;
