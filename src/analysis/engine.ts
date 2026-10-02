@@ -79,17 +79,32 @@ export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,int
   &&internalBreakIndex-swingBreakIndex<=maxGap;
 }
 export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
- if(sweepIndex<0||sweepIndex>asOf||sweepIndex>=c.length)return false;
+ let closedEnd=Math.min(asOf,c.length-1);
+ while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ if(sweepIndex<0||sweepIndex>closedEnd||sweepIndex>=c.length)return false;
  const sweepCandle=c[sweepIndex];
+ if(sweepCandle.closed===false)return false;
  const hit=type==="high"
   ?sweepCandle.high>level&&sweepCandle.close<level
   :sweepCandle.low<level&&sweepCandle.close>level;
  if(!hit)return false;
- for(let i=sweepIndex+1;i<=Math.min(asOf,c.length-1);i++){
+ for(let i=sweepIndex+1;i<=closedEnd;i++){
   if(type==="high"&&c[i].close>level)return false;
   if(type==="low"&&c[i].close<level)return false;
  }
  return true;
+}
+export function findLatestValidLiquiditySweep(c:Candle[],level:number,type:"high"|"low",startIndex:number,asOf=c.length-1):Sweep|null{
+ let closedEnd=Math.min(asOf,c.length-1);
+ while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+ if(startIndex>closedEnd)return null;
+ let latest:Sweep|null=null;
+ for(let i=Math.max(0,startIndex);i<=closedEnd;i++){
+  if(isValidLiquiditySweep(c,i,level,type,closedEnd)){
+   latest={index:i,price:level,type,confirmed:true};
+  }
+ }
+ return latest;
 }
 export function isPostSweepZoneCausal(zoneOrigin:number,sweepIndex:number,structureIndex:number,maxGap=12):boolean{
  return zoneOrigin>=sweepIndex&&zoneOrigin<=structureIndex&&structureIndex-zoneOrigin<=maxGap;
@@ -430,15 +445,12 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const sweeps:Sweep[]=[];
  for(const p of [...liquidityHighs,...liquidityLows]){
   if(asOf-p.index>40)continue;
-  let latestValidSweep:Sweep|undefined;
-  for(let j=p.index+1;j<=asOf;j++){
-   const hit=p.type==="H"?data[j].high>p.price&&data[j].close<p.price:data[j].low<p.price&&data[j].close>p.price;
-   if(!hit)continue;
-   if(isValidLiquiditySweep(data,j,p.price,p.type==="H"?"high":"low",asOf)){
-    latestValidSweep={index:j,price:p.price,type:p.type==="H"?"high":"low",confirmed:true,displacement:displacementAt(data,j,atrAt(data,j))>=.7};
-   }
+  const sweepType=p.type==="H"?"high":"low";
+  const latest=findLatestValidLiquiditySweep(data,p.price,sweepType,p.index+1,asOf);
+  if(latest){
+   latest.displacement=displacementAt(data,latest.index,atrAt(data,latest.index))>=.7;
+   sweeps.push(latest);
   }
-  if(latestValidSweep)sweeps.push(latestValidSweep);
  }
  const r=dealingRange(ps,data,asOf);
  const mid=(r.hi+r.lo)/2;
