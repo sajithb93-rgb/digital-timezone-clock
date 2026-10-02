@@ -83,14 +83,23 @@ describe("Order Flow pair scanner", () => {
         direction: "BUY",
         diagnostics: [
           {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:false,detail:"6 bars ago"},
-          {key:"target_quality",label:"Target quality / spacing",passed:true,detail:"3 valid targets"},
-          {key:"trade_geometry",label:"Entry / SL / TP geometry",passed:true,detail:"Valid"},
+          {key:"sweep_integrity_buy",label:"Sell-side sweep still valid",passed:true,detail:"Valid"},
+          {key:"abs_buy",label:"Buyer absorption after sweep",passed:true,detail:"Valid"},
+          {key:"recent_flow_buy",label:"3-bar buyer flow alignment",passed:true,detail:"Aligned"},
+          {key:"entry_chase_buy",label:"BUY entry not overextended",passed:true,detail:"Valid"},
+          {key:"pressure_buy",label:"12-bar buyer pressure",passed:true,detail:"Valid"},
+          {key:"delta_buy",label:"Positive delta ≥ 0.08",passed:true,detail:"Valid"},
+          {key:"imb_buy",label:"2+ stacked buy / 3× imbalance",passed:true,detail:"Valid"},
+          {key:"structure_buy",label:"Bullish structure break",passed:true,detail:"Valid"},
           {key:"closed",label:"Closed candle",passed:true,detail:"Closed"},
           {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
           {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
           {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
           {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:true,detail:"100%"},
-          {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"}
+          {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:true,detail:"100%"},
+          {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"},
+          {key:"target_quality",label:"Target quality / spacing",passed:true,detail:"3 valid targets"},
+          {key:"trade_geometry",label:"Entry / SL / TP geometry",passed:true,detail:"Valid"}
         ]
       }
     );
