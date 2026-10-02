@@ -39,6 +39,10 @@ describe("analysis regression",()=>{
     expect(f.delta).toBeCloseTo(50);
   });
 
+  it("rejects risk sizing when direction is WAIT",()=>{
+    expect(riskPlan(1000,1,100,95,{}, "WAIT").valid).toBe(false);
+  });
+
   it("rejects risk when stop is on the wrong side",()=>{
     expect(riskPlan(1000,1,100,105,{}, "BUY").valid).toBe(false);
     expect(riskPlan(1000,1,100,95,{}, "SELL").valid).toBe(false);
