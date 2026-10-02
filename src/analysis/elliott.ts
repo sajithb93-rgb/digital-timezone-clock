@@ -7,6 +7,9 @@ export type ElliottPattern =
   | "Diagonal"
   | "Zigzag"
   | "Flat"
+  | "Expanded Flat"
+  | "Running Flat"
+  | "Double Zigzag"
   | "Triangle"
   | "Correction";
 
@@ -29,7 +32,7 @@ export type AdvancedElliottResult = ElliottResult & {
   candidateCount: number;
   correctionCandidates: number;
   nested: NestedWaveEvidence[];
-  correctionPattern: "Zigzag" | "Flat" | "Triangle" | "None";
+  correctionPattern: "Zigzag" | "Flat" | "Expanded Flat" | "Running Flat" | "Double Zigzag" | "Triangle" | "None";
   engine: "ADVANCED_ELLIOTT_V2";
 };
 
@@ -236,57 +239,147 @@ export function validateZigzag(prices:number[],bullishCorrection:boolean){
   return{valid,bRetracement,cProjection};
 }
 
-export function validateFlat(prices:number[],bullishCorrection:boolean){
-  if(prices.length<4)return{valid:false,bRetracement:0,cProjection:0};
+export type FlatValidation={
+  valid:boolean;
+  subtype:"Regular Flat"|"Expanded Flat"|"Running Flat"|"None";
+  bRetracement:number;
+  cProjection:number;
+};
+
+export function validateFlat(prices:number[],bullishCorrection:boolean):FlatValidation{
+  if(prices.length<4)return{valid:false,subtype:"None",bRetracement:0,cProjection:0};
   const [x,a,b,c]=prices,xa=Math.abs(a-x),ab=Math.abs(b-a),bc=Math.abs(c-b);
-  if(xa<=0||ab<=0||bc<=0)return{valid:false,bRetracement:0,cProjection:0};
+  if(xa<=0||ab<=0||bc<=0)return{valid:false,subtype:"None",bRetracement:0,cProjection:0};
   const aUp=a>x;
-  const bRetracement=ab/xa,cProjection=bc/ab;
-  const direction=aUp ? "bullish" : "bearish";
-  const cReversesA=aUp ? c>b : c<b;
-  const valid=direction===(bullishCorrection?"bullish":"bearish")&&bRetracement>=.9&&bRetracement<=1.1&&cReversesA&&cProjection>=.618&&cProjection<=1.618;
-  return{valid,bRetracement,cProjection};
+  const bRetracement=ab/xa;
+  const cProjection=bc/ab;
+  const direction=aUp?"bullish":"bearish";
+  const bSameDirection=b>a;
+  const cReversesA=aUp?c<b:c>b;
+  if(direction!==(bullishCorrection?"bullish":"bearish")||!cReversesA)return{valid:false,subtype:"None",bRetracement,cProjection};
+
+  // Regular: B approximately returns to the start of A and C stays within/near A.
+  const regular=bRetracement>=.90&&bRetracement<=1.10&&cProjection>=.618&&cProjection<=1.618&&
+    (aUp?c>=x:c<=x);
+  // Expanded: B exceeds X and C travels beyond A.
+  const expanded=bRetracement>1.00&&bRetracement<=1.382&&
+    (aUp?b>x:b<x)&&cProjection>=.618&&
+    (aUp?c<a:c>a);
+  // Running: B exceeds X but C fails to fully retrace A.
+  const running=bRetracement>1.00&&bRetracement<=1.382&&
+    (aUp?b>x:b<x)&&cProjection>=.618&&cProjection<1.0&&
+    (aUp?c>a&&c<a:c<a&&c>a);
+
+  const subtype=expanded?"Expanded Flat":running?"Running Flat":regular?"Regular Flat":"None";
+  return{valid:subtype!=="None",subtype,bRetracement,cProjection};
 }
 
-export function validateTriangle(prices:number[],bullish:boolean){
-  if(prices.length<5)return{valid:false,contracting:false,expanding:false};
-  const seg=prices.slice(1).map((p,i)=>Math.abs(p-prices[i]));
-  const contracting=seg[0]>seg[1]&&seg[1]>seg[2]&&seg[2]>seg[3];
-  const expanding=seg[0]<seg[1]&&seg[1]<seg[2]&&seg[2]<seg[3];
-  const high=Math.max(...prices),low=Math.min(...prices),range=high-low;
-  const endInside=range>0&&Math.abs(prices.at(-1)!-prices[0])<range*.95;
-  return{valid:(contracting||expanding)&&endInside,contracting,expanding};
+export type TriangleValidation={
+  valid:boolean;
+  contracting:boolean;
+  expanding:boolean;
+  converging:boolean;
+  alternating:boolean;
+};
+
+export function validateTriangle(prices:number[],bullish:boolean):TriangleValidation{
+  if(prices.length<5)return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+  const [x,a,b,c,d]=prices;
+  const swings=[Math.abs(a-x),Math.abs(b-a),Math.abs(c-b),Math.abs(d-c)];
+  if(swings.some(v=>v<=0))return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+  const alternating=bullish
+    ? a>x&&b<a&&c>b&&d<c
+    : a<x&&b>a&&c<b&&d>c;
+  if(!alternating)return{valid:false,contracting:false,expanding:false,converging:false,alternating:false};
+
+  const highs=[a,c], lows=[x,b,d];
+  const highSlope=highs[1]-highs[0];
+  const lowSlope=lows[2]-lows[0];
+  const contracting=Math.abs(swings[1])<swings[0]&&Math.abs(swings[2])<swings[1]&&Math.abs(swings[3])<swings[2] &&
+    highSlope<=0 && lowSlope>=0;
+  const expanding=Math.abs(swings[1])>swings[0]&&Math.abs(swings[2])>swings[1]&&Math.abs(swings[3])>swings[2] &&
+    highSlope>=0 && lowSlope<=0;
+  const initialRange=Math.abs(a-x);
+  const finalRange=Math.abs(c-b);
+  const converging=initialRange>0&&finalRange<initialRange;
+  return{valid:contracting||expanding,contracting,expanding,converging,alternating};
+}
+
+export function validateDoubleZigzag(prices:number[],bullishCorrection:boolean){
+  if(prices.length<8)return{valid:false,firstValid:false,secondValid:false,connectorValid:false};
+  const first=prices.slice(0,4);
+  const connector=prices.slice(3,5);
+  const second=prices.slice(4,8);
+  const a=validateZigzag(first,bullishCorrection);
+  const b=validateZigzag(second,bullishCorrection);
+  const connectorSize=Math.abs(connector[1]-connector[0]);
+  const firstSize=Math.abs(first[3]-first[0]);
+  const secondSize=Math.abs(second[3]-second[0]);
+  const connectorValid=connectorSize>0&&connectorSize<Math.max(firstSize,secondSize)*.618;
+  return{valid:a.valid&&b.valid&&connectorValid,firstValid:a.valid,secondValid:b.valid,connectorValid};
 }
 
 function correctionCandidates(c:Candle[]){
   const ps=alternatePivots(swingPivots(c,2)),out:(WaveCount & {pattern:ElliottPattern})[]=[];
+
+  // Single zigzag / flat: X-A-B-C.
   for(let i=0;i<=ps.length-4;i++){
-    const q=ps.slice(i,i+4),downward=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L",upward=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H";
+    const q=ps.slice(i,i+4);
+    const downward=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L";
+    const upward=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H";
     if(!downward&&!upward)continue;
-    const p=q.map(x=>x.price),isBullishCorrection=upward,z=validateZigzag(p,isBullishCorrection),f=validateFlat(p,isBullishCorrection);
-    const abc=q.slice(1),direction=upward?"bullish":"bearish";
+    const p=q.map(x=>x.price),isBullishCorrection=upward;
+    const z=validateZigzag(p,isBullishCorrection),f=validateFlat(p,isBullishCorrection);
+    const direction=upward?"bullish":"bearish";
     if(z.valid)out.push({
-      points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction,invalidation:q[0].price,entry:null,targets:[q[3].price],
-      quality:80,rules:["A–B–C zigzag geometry","B retraces 38.2–78.6% of X–A","C extends beyond A"],strict:false,pattern:"Zigzag"
+      points:sequencePoints(q).map((x,j)=>({...x,label:["X","A","B","C"][j]})),
+      kind:"Correction",direction,invalidation:q[0].price,entry:null,targets:[q[3].price],
+      quality:80,rules:["X-A-B-C zigzag geometry","B retraces 38.2–78.6% of X-A","C extends beyond A"],
+      strict:false,pattern:"Zigzag"
     });
     else if(f.valid)out.push({
-      points:sequencePoints(abc).map((x,j)=>({...x,label:["A","B","C"][j]})),kind:"Correction",direction,invalidation:q[0].price,entry:null,targets:[q[3].price],
-      quality:74,rules:["A–B–C flat geometry","B retraces roughly 90–110% of X–A","C reverses A with common projection"],strict:false,pattern:"Flat"
+      points:sequencePoints(q).map((x,j)=>({...x,label:["X","A","B","C"][j]})),
+      kind:"Correction",direction,invalidation:q[0].price,entry:null,targets:[q[3].price],
+      quality:f.subtype==="Expanded Flat"?78:f.subtype==="Running Flat"?76:74,
+      rules:[`${f.subtype} geometry`,"B-wave retracement and C-wave projection validated"],
+      strict:false,pattern:f.subtype==="Expanded Flat"?"Expanded Flat":f.subtype==="Running Flat"?"Running Flat":"Flat"
     });
   }
-  for(let i=0;i<=ps.length-5;i++){
-    const q=ps.slice(i,i+5),upward=q[0].type==="L"&&q[1].type==="H",downward=q[0].type==="H"&&q[1].type==="L";
+
+  // Double zigzag W-X-Y: two valid zigzags joined by a smaller connector.
+  for(let i=0;i<=ps.length-8;i++){
+    const q=ps.slice(i,i+8);
+    const upward=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H"&&q[4].type==="L"&&q[5].type==="H"&&q[6].type==="L"&&q[7].type==="H";
+    const downward=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L"&&q[4].type==="H"&&q[5].type==="L"&&q[6].type==="H"&&q[7].type==="L";
     if(!upward&&!downward)continue;
-    const p=q.map(x=>x.price),tri=validateTriangle(p,upward);
+    const p=q.map(x=>x.price),bullishCorrection=upward,dz=validateDoubleZigzag(p,bullishCorrection);
+    if(!dz.valid)continue;
+    out.push({
+      points:sequencePoints(q).map((x,j)=>({...x,label:["W-X-A-B-C","X","A","B","Y","A","B","C"][j]})),
+      kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[7].price],
+      quality:86,rules:["W-X-Y double zigzag geometry","Both component zigzags validated","Connector is smaller than the main correction legs"],
+      strict:false,pattern:"Double Zigzag"
+    });
+  }
+
+  // Triangle A-B-C-D-E. The validator enforces alternation and boundary geometry.
+  for(let i=0;i<=ps.length-5;i++){
+    const q=ps.slice(i,i+5);
+    const upward=q[0].type==="L"&&q[1].type==="H";
+    const downward=q[0].type==="H"&&q[1].type==="L";
+    if(!upward&&!downward)continue;
+    const tri=validateTriangle(q.map(x=>x.price),upward);
     if(!tri.valid)continue;
     out.push({
-      points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C","D","E"][j]})),kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[4].price],
-      quality:tri.contracting?82:68,rules:["A–B–C–D–E triangle candidate",tri.contracting?"Contracting triangle proportions detected":"Triangle range/geometry detected"],strict:false,pattern:"Triangle"
+      points:sequencePoints(q).map((x,j)=>({...x,label:["A","B","C","D","E"][j]})),
+      kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[4].price],
+      quality:tri.contracting?82:68,
+      rules:["A-B-C-D-E triangle geometry",tri.contracting?"Contracting triangle proportions detected":"Expanding triangle proportions detected"],
+      strict:false,pattern:"Triangle"
     });
   }
   return out.sort((a,b)=>b.quality-a.quality||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1)));
 }
-
 function diagonalCandidates(c:Candle[],bull:boolean){
   const ps=alternatePivots(swingPivots(c,2)),out:WaveCount[]=[];
   for(let i=0;i<=ps.length-6;i++){
@@ -423,7 +516,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     r.correctionCandidates=corrections.length;
     r.phase=correction ? correction.pattern + " correction candidate" : "No recent qualified Elliott count";
     r.pattern=correction?.pattern??"Correction";
-    r.correctionPattern=(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Triangle")?correction.pattern:"None";
+    r.correctionPattern=(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Expanded Flat"||correction?.pattern==="Running Flat"||correction?.pattern==="Double Zigzag"||correction?.pattern==="Triangle")?correction.pattern:"None";
     r.activeWave=correction ? (String(correction.points.at(-1)?.label||"C") as AdvancedElliottResult["activeWave"]) : "None";
     return r;
   }
@@ -464,6 +557,6 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     fibLevels,channel,phase,score:primary.quality,confidence,setupState,
     setupReason,pattern,degree,countState:setupState,activeWave:liveActiveWave,liveSetup,
     candidateCount:action.length,correctionCandidates:corrections.length,nested,
-    correctionPattern:(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Triangle")?correction.pattern:"None",engine:"ADVANCED_ELLIOTT_V2"
+    correctionPattern:(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Expanded Flat"||correction?.pattern==="Running Flat"||correction?.pattern==="Double Zigzag"||correction?.pattern==="Triangle")?correction.pattern:"None",engine:"ADVANCED_ELLIOTT_V2"
   };
 }
