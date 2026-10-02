@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
 
@@ -307,6 +307,30 @@ describe("analysis regression",()=>{
     expect(m.frames[0].elliottTrend).toBeDefined();
     expect(m.frames[0].elliottScore).toBeDefined();
     expect(m.elliottTrend).toBeDefined();
+  });
+
+  it("weights higher MTF frames more than lower frames",()=>{
+    expect(mtfFrameWeight("1d")).toBeGreaterThan(mtfFrameWeight("4h"));
+    expect(mtfFrameWeight("4h")).toBeGreaterThan(mtfFrameWeight("1h"));
+    expect(mtfFrameWeight("1h")).toBeGreaterThan(mtfFrameWeight("15m"));
+    expect(mtfFrameWeight("15m")).toBeGreaterThan(mtfFrameWeight("5m"));
+    expect(mtfFrameWeight("5m")).toBeGreaterThan(mtfFrameWeight("1m"));
+  });
+
+  it("does not count an invalidated Elliott primary as current MTF directional evidence",()=>{
+    const base=[100,120,110,150,135,165,160,155,150,145,140,135,130,125,120,115,110,105,100,95,90,85,80,75,70,65,60,55,50,45]
+      .map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    const extended=[
+      ...base,
+      {time:30,open:45,high:46,low:44,close:40,volume:100,closed:true},
+      {time:31,open:40,high:41,low:39,close:39,volume:100,closed:true}
+    ];
+    const m=analyzeMTF([{interval:"4h",candles:extended}]);
+    const ew=analyzeElliottAdvanced(extended);
+    if(ew.setupState==="INVALIDATED"){
+      expect(m.frames[0].elliottTrend).toBe("Neutral");
+      expect(m.frames[0].elliottScore).toBe(0);
+    }
   });
 
   it("marks missing MTF frames as unavailable without treating them as neutral evidence",()=>{
