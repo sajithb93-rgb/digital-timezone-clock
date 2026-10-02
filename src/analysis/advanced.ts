@@ -18,6 +18,7 @@ export type RiskConstraints = {
   minNotional?:number;
   maxNotional?:number;
   contractSize?:number;
+  contractMultiplier?:number;
   inverseContract?:boolean;
 };
 
@@ -161,13 +162,18 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance:0,valid:false,reason:"Invalid stop distance"};
   }
 
-  // COIN-M contracts are inverse instruments. Quantity is contracts, so one
-  // contract does not represent one base-asset unit. Use contractSize to
-  // convert the stop distance into quote-denominated risk per contract.
+  // COIN-M contracts are inverse instruments. Binance's documented PnL is
+  // direction * quantity * contract value * (1/entry - 1/exit). Convert that
+  // coin-denominated loss back to quote currency at the entry price so the
+  // sizing budget is expressed in the same account currency as riskAmount.
   const inverse=constraints.inverseContract===true;
   const contractSize=typeof constraints.contractSize==="number"&&Number.isFinite(constraints.contractSize)&&constraints.contractSize>0
     ?constraints.contractSize:1;
-  const riskPerUnit=inverse?contractSize*(stopDistance/entry):stopDistance;
+  const contractMultiplier=typeof constraints.contractMultiplier==="number"&&Number.isFinite(constraints.contractMultiplier)&&constraints.contractMultiplier>0
+    ?constraints.contractMultiplier:1;
+  const riskPerUnit=inverse
+    ?contractSize*contractMultiplier*Math.abs(1/entry-1/stop)*entry
+    :stopDistance;
   if(!Number.isFinite(riskPerUnit)||riskPerUnit<=0){
     return{riskAmount,desiredPositionSize:0,positionSize:0,stopDistance,valid:false,reason:"Invalid per-unit contract risk"};
   }
