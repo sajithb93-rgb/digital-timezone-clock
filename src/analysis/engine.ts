@@ -130,9 +130,15 @@ function range(c:Candle[],asOf=c.length-1){
  return{hi:Math.max(...q.map(x=>x.high)),lo:Math.min(...q.map(x=>x.low))};
 }
 function body(c:Candle){return Math.abs(c.close-c.open)}
-function displacementAt(c:Candle[],i:number,a:number){
+function displacementAt(c:Candle[],i:number,a?:number){
+ if(i<0||i>=c.length)return 0;
+ // Use the ATR available before the candidate candle. Including the current
+ // candle's true range in its own denominator suppresses displacement exactly
+ // when the candle is unusually large, which can make genuine BOS/OB impulses
+ // look ordinary. This keeps the displacement test causal and stable.
+ const priorAtr=a??atrAt(c,i-1,14);
  const tr=Math.max(trueRange(c,i),.0000001);
- const bodyAtr=a>0?body(c[i])/a:0;
+ const bodyAtr=priorAtr>0?body(c[i])/priorAtr:0;
  const bodyEfficiency=body(c[i])/tr;
  return bodyAtr*.65+bodyEfficiency*.35;
 }
