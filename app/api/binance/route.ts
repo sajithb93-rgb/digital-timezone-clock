@@ -14,6 +14,14 @@ const ALLOWED_ENDPOINTS = new Set([
   "/premiumIndex",
   "/aggTrades",
 ]);
+const ALLOWED_QUERY_KEYS = new Set([
+  "symbol",
+  "interval",
+  "limit",
+  "startTime",
+  "endTime",
+  "fromId",
+]);
 
 type Market = keyof typeof BASES;
 
@@ -28,7 +36,27 @@ export async function GET(request: NextRequest) {
 
   const query = new URLSearchParams();
   for (const [key, value] of request.nextUrl.searchParams) {
-    if (key !== "market" && key !== "path") query.append(key, value);
+    if (key === "market" || key === "path") continue;
+    if (!ALLOWED_QUERY_KEYS.has(key)) {
+      return NextResponse.json({ error: "Invalid Binance query parameter" }, { status: 400 });
+    }
+    query.append(key, value);
+  }
+
+  const limit = query.get("limit");
+  if (limit !== null) {
+    const n = Number(limit);
+    if (!Number.isInteger(n) || n < 1 || n > 1000) {
+      return NextResponse.json({ error: "Binance limit must be an integer from 1 to 1000" }, { status: 400 });
+    }
+  }
+  const symbol = query.get("symbol");
+  if (symbol !== null && !/^[A-Za-z0-9._-]{1,40}$/.test(symbol)) {
+    return NextResponse.json({ error: "Invalid Binance symbol" }, { status: 400 });
+  }
+  const interval = query.get("interval");
+  if (interval !== null && !/^([1-9]\d*)(s|m|h|d|w|M)$/.test(interval)) {
+    return NextResponse.json({ error: "Invalid Binance interval" }, { status: 400 });
   }
 
   const target = BASES[market] + path + (query.size ? "?" + query.toString() : "");
