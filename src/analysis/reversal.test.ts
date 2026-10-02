@@ -117,6 +117,22 @@ describe("reversal engine",()=>{
     expect(r.orderflowConfirmed).toBe(false); expect(r.state).not.toBe("CONFIRMED");
   });
 
+  it("requires a symmetric six-vs-six delta history for divergence",()=>{
+    const candles=Array.from({length:35},(_,i)=>i<29
+      ? candle(i,100,102,99,101)
+      : candle(i,100,103,95,102));
+    const recentBars=Array.from({length:12},(_,i)=>({
+      index:i,time:i,buyVolume:0,sellVolume:0,delta:0,deltaRatio:i<6?-0.2:0.1,
+      buyerPressure:0,sellerPressure:0,imbalanceRatio:1,imbalance:"NONE" as const,
+      absorption:"NONE" as const,absorptionStrength:0,liquiditySweep:"NONE" as const,
+      sweepPrice:null,microStructure:"NEUTRAL" as const
+    }));
+    const r=analyzeReversal(candles,smc({sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}]}),flow({
+      direction:"WAIT",recentBars
+    }),{requireOrderFlow:false});
+    expect(r.deltaDivergence).toBe(true);
+  });
+
   it("stops Reversal analysis before a middle forming candle",()=>{
     const base=Array.from({length:40},(_,i)=>candle(i,100,101,99,100));
     const prefix=base.slice(0,30);
