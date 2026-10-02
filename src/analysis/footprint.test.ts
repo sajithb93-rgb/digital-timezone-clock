@@ -37,4 +37,19 @@ describe("price-level footprint engine",()=>{
     const s=book.snapshot(60_000,undefined,120_000)!;
     expect(s.stackedBuyImbalances).toBeGreaterThanOrEqual(1);
   });
+
+  it("does not count separated imbalance levels as a stacked run",()=>{
+    const snapshot:any={
+      candleTime:60_000,intervalMs:60_000,confirmed:true,
+      levels:[
+        {price:98,buyVolume:0,sellVolume:1,delta:-1,totalVolume:1,buyTrades:0,sellTrades:1},
+        {price:99,buyVolume:4,sellVolume:0,delta:4,totalVolume:4,buyTrades:1,sellTrades:0},
+        {price:100,buyVolume:0,sellVolume:10,delta:-10,totalVolume:10,buyTrades:0,sellTrades:1},
+        {price:101,buyVolume:30,sellVolume:0,delta:30,totalVolume:30,buyTrades:1,sellTrades:0}
+      ],
+      buyVolume:34,sellVolume:11,delta:23,deltaRatio:23/45,poc:101
+    };
+    const result=analyzeFootprintSnapshot(snapshot,undefined,1);
+    expect(result.stackedBuyImbalances).toBe(1);
+  });
 });
