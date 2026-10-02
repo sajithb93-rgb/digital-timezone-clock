@@ -179,7 +179,7 @@ export default function Home(){
 
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
- const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
+ const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[footprintHistoryReady,setFootprintHistoryReady]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState(""),[smcEntryScanner,setSmcEntryScanner]=useState<EntryScanRow[]>([]),[elliottEntryScanner,setElliottEntryScanner]=useState<EntryScanRow[]>([]),[smcEntryTf,setSmcEntryTf]=useState("5m"),[elliottEntryTf,setElliottEntryTf]=useState("5m"),[smcEntryEnabled,setSmcEntryEnabled]=useState(false),[elliottEntryEnabled,setElliottEntryEnabled]=useState(false),[smcEntryBusy,setSmcEntryBusy]=useState(false),[elliottEntryBusy,setElliottEntryBusy]=useState(false),[smcEntryProgress,setSmcEntryProgress]=useState(""),[elliottEntryProgress,setElliottEntryProgress]=useState(""),[smcEntryUpdated,setSmcEntryUpdated]=useState(0),[elliottEntryUpdated,setElliottEntryUpdated]=useState(0),[smcEntryError,setSmcEntryError]=useState(""),[elliottEntryError,setElliottEntryError]=useState("");
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);
@@ -190,7 +190,7 @@ export default function Home(){
  const elliott=useMemo(()=>analyzeElliott(analysisCandles),[analysisCandles]);
  const mtf=useMemo(()=>analyzeMTF(mtfCandles),[mtfCandles]);
  const flow=useMemo(()=>flowSnapshot(analysisCandles),[analysisCandles]);
- const footprintSnapshots=useMemo<FootprintSnapshot[]>(()=>footprintBookRef.current?.snapshots(analysisCandles,Date.now())??[],[analysisCandles,footprintVersion]);
+ const footprintSnapshots=useMemo<FootprintSnapshot[]>(()=>!footprintHistoryReady?[]:(footprintBookRef.current?.snapshots(analysisCandles,Date.now())??[]),[analysisCandles,footprintVersion,footprintHistoryReady]);
  const orderFlow=useMemo(()=>analyzeOrderFlow(analysisCandles,footprintSnapshots),[analysisCandles,footprintSnapshots]);
  const reversal=useMemo<ReversalEngineResult>(()=>analyzeReversal(analysisCandles,smc,orderFlow),[analysisCandles,smc,orderFlow]);
  const mtfReversal=useMemo(()=>analyzeReversalMTF(mtfCandles),[mtfCandles]);
@@ -492,7 +492,7 @@ export default function Home(){
  useEffect(()=>{
   let stop=false;let socket:WebSocket|undefined;let retry:number|undefined;let flush:number|undefined;let attempt=0;
   const controller=new AbortController();
-  const tfMs=intervalMs(interval);const tick=selectedPair?.tickSize??0;const book=new FootprintBook(tfMs,tick,36);footprintBookRef.current=book;setFootprintVersion(v=>v+1);
+  const tfMs=intervalMs(interval);const tick=selectedPair?.tickSize??0;const book=new FootprintBook(tfMs,tick,36);footprintBookRef.current=book;setFootprintHistoryReady(false);setFootprintVersion(v=>v+1);
   let pendingRevision=0,flushedRevision=0,lastConfirmedBucket=-1;
   let historyLoading=true;
   const schedule=()=>{if(stop||retry)return;const delay=Math.min(15000,1000*Math.pow(2,Math.min(attempt++,4)));retry=window.setTimeout(()=>{retry=undefined;connect()},delay)};
@@ -503,7 +503,7 @@ export default function Home(){
    socket.onclose=()=>{if(stop)return;setFootprintConnected(false);schedule()};
   };
   const loadHistory=async()=>{
-   if(!symbol||!selectedPair?.tickSize){historyLoading=false;return}
+   if(!symbol||!selectedPair?.tickSize){historyLoading=false;if(!stop)setFootprintHistoryReady(true);return}
    try{
     const lookback=Math.max(tfMs*14,60*60*1000);
     const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
@@ -537,7 +537,7 @@ export default function Home(){
       setFootprintVersion(v=>v+1);
     }
   },1000);
-  return()=>{stop=true;controller.abort();if(retry)clearTimeout(retry);if(flush)clearInterval(flush);try{socket?.close(1000,"cleanup")}catch{};if(footprintBookRef.current===book)footprintBookRef.current=null;setFootprintConnected(false)};
+  return()=>{stop=true;controller.abort();if(retry)clearTimeout(retry);if(flush)clearInterval(flush);try{socket?.close(1000,"cleanup")}catch{};if(footprintBookRef.current===book)footprintBookRef.current=null;setFootprintHistoryReady(false);setFootprintConnected(false)};
  },[symbol,interval,marketType,selectedPair?.tickSize]);
 
  const lastClosed=candles.at(-1)?.closed!==false?candles.at(-1):candles.at(-2);
