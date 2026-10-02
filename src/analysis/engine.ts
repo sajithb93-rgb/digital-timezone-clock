@@ -311,7 +311,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
   const bearishBase=c[i].close>c[i].open;
   let bullBreak=-1,bearBreak=-1,bullStrength=0,bearStrength=0;
   for(let k=1;k<=3&&i+k<=end;k++){
-   const d=displacementAt(c,i+k,atrAt(c,i+k));
+   const d=displacementAt(c,i+k);
    if(bullishBase&&c[i+k].close>c[i].high&&d>=.55){bullBreak=i+k;bullStrength=d;break}
    if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
   }
