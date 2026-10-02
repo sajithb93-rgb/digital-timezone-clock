@@ -50,9 +50,15 @@ export function classifyElliottEntry(symbol:string,timeframe:string,r:ElliottRes
      "ELLIOTT "+direction+" · ABC correction confirmed · Wave B trigger broken");
  }
 
+ const validRisk=Number.isFinite(risk)&&risk>0;
+ const validTarget=target!=null&&Number.isFinite(target)&&geometryValid;
+ if(!validRisk||!validTarget){
+   return make(symbol,timeframe,"WAIT",direction,score,currentPrice??null,live.entry,live.invalidation,target,rr,
+     "Elliott setup rejected · invalid risk/target geometry");
+ }
  const state:EntryScanState=score>=70?"SETUP":"WATCH";
  return make(symbol,timeframe,state,direction,score,currentPrice??null,live.entry,live.invalidation,target,rr,
    trigger
-     ? "ABC correction confirmed · waiting for RR/target validation"
+     ? "ABC correction confirmed · waiting for RR validation"
      : "ABC correction confirmed · waiting for Wave B trigger");
 }
