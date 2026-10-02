@@ -487,7 +487,9 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const endIndex=xPoint?.index??-1;
   if(!xPoint||endIndex<0)return null;
   const bull=primary.direction==="bullish";
-  const ps=alternatePivots(swingPivots(c,2)).filter(p=>p.index>endIndex);
+  const closedCandleEnd=c.reduce((lastIndex,candle,index)=>candle.closed===false?lastIndex:index,-1);
+  const data=c.slice(0,closedCandleEnd+1);
+  const ps=alternatePivots(swingPivots(data,2)).filter(p=>p.index>endIndex);
   // Wave 5 end is the X anchor. The correction must then be the next
   // three confirmed pivots A-B-C; never substitute a later pivot for X.
   if(ps.length<3)return null;
@@ -495,6 +497,7 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const originPivot:Pivot={index:endIndex,price:xPoint.price,type:bull?"H":"L",confirmedAt:endIndex};
   let best:{q:Pivot[];correction:ReturnType<typeof validateZigzag>;flat:ReturnType<typeof validateFlat>}|null=null;
   const expected=bull?["L","H","L"]:["H","L","H"];
+  const parentOrigin=primary.points[0].price;
   for(let i=0;i<=ps.length-3;i++){
     const q=[originPivot,...ps.slice(i,i+3)];
     if(q.slice(1).some((p,j)=>p.type!==expected[j]))continue;
@@ -506,6 +509,12 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
       ? validateFlat(prices,false)
       : validateFlat(prices,true);
     if(!correction.valid&&!flat.valid)continue;
+    // Reject only this candidate if C violates the parent Wave-1 origin;
+    // continue searching so an earlier valid ABC is not discarded merely
+    // because a later pivot forms an invalid alternate correction.
+    const cPoint=prices[3];
+    const nonInvalidatingC=bull?cPoint>parentOrigin:cPoint<parentOrigin;
+    if(!nonInvalidatingC)continue;
     if(!best||q[3].index>best.q[3].index)best={q,correction,flat};
   }
   if(!best)return null;
@@ -516,12 +525,6 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const prices=q.map(p=>p.price);
 
   const [,a,b,cPoint]=prices;
-  // The completed ABC correction must not break the parent impulse origin.
-  // Once C crosses that boundary, the parent 1–5 count is no longer a valid
-  // continuation context even if price later reclaims the level.
-  const parentOrigin=primary.points[0].price;
-  const nonInvalidatingC=bull?cPoint>parentOrigin:cPoint<parentOrigin;
-  if(!nonInvalidatingC)return null;
 
   // Entry is the B trigger after C completes; C is the invalidation point.
   const entry=b;
@@ -532,15 +535,17 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const dir=bull?1:-1;
   const extension=Math.max(abs(b-a),risk)*1.618;
   const target=entry+dir*extension;
-  const lastClose=c.at(-1)?.close??entry;
+  const lastClosed=data.at(-1);
+  if(!lastClosed)return null;
+  const lastClose=lastClosed.close;
   // A live continuation is only actionable while price is still inside the
   // correction-invalidated-to-target window. Reclaims after invalidation, or
   // moves that already reached/passed the target, do not revive the old setup.
   // The live continuation remains invalid only while the latest closed
   // candle has not crossed the C invalidation level. Use the candle extreme
   // rather than close so a wick breach cannot revive an invalid count.
-  const lastCandle=c.at(-1);
-  const liveNotInvalidated=!!lastCandle&&(bull?lastCandle.low>invalidation:lastCandle.high<invalidation);
+  const lastCandle=lastClosed;
+  const liveNotInvalidated=bull?lastCandle.low>invalidation:lastCandle.high<invalidation;
   const liveBeforeTarget=bull?lastClose<target:lastClose>target;
   if(!liveNotInvalidated||!liveBeforeTarget)return null;
   const triggered=bull?lastClose>=entry:lastClose<=entry;
