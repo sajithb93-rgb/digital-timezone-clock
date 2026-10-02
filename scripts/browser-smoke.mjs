@@ -17,7 +17,7 @@ try {
 
   await page.waitForFunction(() => {
     const text = document.body.innerText;
-    return /\\d+ candles/.test(text) && text.includes("BINANCE");
+    return /\d+ candles/.test(text) && text.includes("BINANCE");
   }, { timeout: 60_000 });
 
   await page.waitForFunction(() => {
@@ -32,7 +32,7 @@ try {
     const canvas = chart?.querySelector("canvas");
     const overlay = document.querySelector("svg.chart-overlay");
     const debug = document.querySelector(".analysis-debug");
-    const candleText = document.body.innerText.match(/(\\d+) candles/);
+    const candleText = document.body.innerText.match(/(\d+) candles/);
     const canvasRect = canvas?.getBoundingClientRect();
     const chartRect = chart?.getBoundingClientRect();
 
