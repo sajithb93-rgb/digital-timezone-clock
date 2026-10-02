@@ -161,7 +161,7 @@ describe("analysis regression",()=>{
 
   it("creates a breaker only after a mitigated order block is broken",()=>{
     const ob={index:1,low:99,high:105,type:"bullish" as const,mitigated:true,mitigationIndex:3,strength:1};
-    const candles=[
+    const breakerCandles=[
       {...candles(1)[0],time:0,closed:true},
       {...candles(1)[0],time:1,open:105,high:106,low:99,close:100,closed:true},
       {...candles(1)[0],time:2,open:100,high:106,low:100,close:104,closed:true},
@@ -169,7 +169,7 @@ describe("analysis regression",()=>{
       {...candles(1)[0],time:4,open:104,high:104.5,low:98,close:98.5,closed:true},
       {...candles(1)[0],time:5,open:98.5,high:101,low:97.5,close:100,closed:true}
     ];
-    const breakers=makeBreakers([ob],candles,5);
+    const breakers=makeBreakers([ob],breakerCandles,5);
     expect(breakers).toHaveLength(1);
     expect(breakers[0]).toMatchObject({index:4,type:"bearish",low:99,high:105,active:true});
   });
