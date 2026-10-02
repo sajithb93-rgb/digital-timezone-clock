@@ -36,9 +36,10 @@ export type ConfluenceBreakdown = {
 };
 
 export function flowSnapshot(c:Candle[]):FlowSnapshot{
-  if(!c.length)return{buyVolume:0,sellVolume:0,delta:0,deltaRatio:0,cumulativeDelta:0,volumeRatio:0,pressure:"BALANCED"};
+  const closed=c.filter(x=>x.closed!==false);
+  if(!closed.length)return{buyVolume:0,sellVolume:0,delta:0,deltaRatio:0,cumulativeDelta:0,volumeRatio:0,pressure:"BALANCED"};
   let buy=0,sell=0,cum=0;
-  for(const x of c){
+  for(const x of closed){
     // Binance klines expose taker-buy base-asset volume. When present, use it
     // directly and derive taker-sell volume as total volume minus taker buys.
     if(Number.isFinite(x.takerBuyVolume)){
@@ -54,8 +55,8 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
     const b=x.volume*buyShare,s=x.volume-b;
     buy+=b;sell+=s;cum+=b-s;
   }
-  const last=c.at(-1)!;
-  const recent=c.slice(-20);
+  const last=closed.at(-1)!;
+  const recent=closed.slice(-20);
   const base=recent.slice(0,-1).reduce((s,x)=>s+x.volume,0)/Math.max(1,recent.length-1);
   const delta=buy-sell, total=buy+sell;
   const ratio=delta/Math.max(total,1e-12);
@@ -63,11 +64,12 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
 }
 
 export function detectRegime(c:Candle[]):Regime{
-  if(c.length<20)return{regime:"TRANSITION",strength:0,atr:0,rangePercent:0};
+  const closed=c.filter(x=>x.closed!==false);
+  if(closed.length<20)return{regime:"TRANSITION",strength:0,atr:0,rangePercent:0};
   const n=14;
-  const tr=c.slice(-n).map((x,i,a)=>i===0?x.high-x.low:Math.max(x.high-x.low,Math.abs(x.high-a[i-1].close),Math.abs(x.low-a[i-1].close)));
+  const tr=closed.slice(-n).map((x,i,a)=>i===0?x.high-x.low:Math.max(x.high-x.low,Math.abs(x.high-a[i-1].close),Math.abs(x.low-a[i-1].close)));
   const atr=tr.reduce((a,b)=>a+b,0)/tr.length;
-  const q=c.slice(-60),hi=Math.max(...q.map(x=>x.high)),lo=Math.min(...q.map(x=>x.low));
+  const q=closed.slice(-60),hi=Math.max(...q.map(x=>x.high)),lo=Math.min(...q.map(x=>x.low));
   const rangePercent=(hi-lo)/Math.max(q.at(-1)!.close,1e-12)*100;
   const first=q[0].close,last=q.at(-1)!.close;
   const slope=(last-first)/Math.max(first,1e-12)*100;
