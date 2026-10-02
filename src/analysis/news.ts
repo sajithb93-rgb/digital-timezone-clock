@@ -9,8 +9,8 @@ const MEDIUM_KEYWORDS = /ppi|producer price|pmi|durable goods|consumer confidenc
 
 function toImpact(value: unknown, title: string): NewsImpact {
   const v = String(value ?? "").toLowerCase();
-  if (v.includes("high") || v.includes("3")) return "high";
-  if (v.includes("medium") || v.includes("2")) return "medium";
+  if (v === "high" || v === "3" || v === "3.0") return "high";
+  if (v === "medium" || v === "2" || v === "2.0") return "medium";
   if (HIGH_KEYWORDS.test(title)) return "high";
   if (MEDIUM_KEYWORDS.test(title)) return "medium";
   return "low";
