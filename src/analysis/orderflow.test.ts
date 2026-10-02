@@ -27,7 +27,7 @@ function confirmedFootprints(direction:"BUY"|"SELL", latestOverrides:Partial<Foo
 
 function fullLongCandles():Candle[]{
   return [
-    ...Array.from({length:8},(_,i)=>i===6?candle(i,100,112,99,101,100,60):candle(i,100,102,99,101,100,60)),
+    ...Array.from({length:8},(_,i)=>i===6?candle(i,100,116,99,101,100,60):candle(i,100,102,99,101,100,60)),
     candle(8,101,101.5,95,100.5,100,55),
     candle(9,100.5,101,95,100.5,100,30),
     candle(10,100.5,103,99.5,102,100,65),
@@ -354,7 +354,7 @@ describe("order flow strategy",()=>{
   it("uses a real structural target before fallback R-multiple targets",()=>{
     const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
     expect(r.direction).toBe("BUY");
-    expect(r.targets[0]).toBe(112);
+    expect(r.targets[0]).toBe(116);
     expect(r.targets[1]).toBeGreaterThan(r.targets[0]);
     expect(r.targets[2]).toBeGreaterThan(r.targets[1]);
     expect(r.diagnostics.find(d=>d.key==="target_quality")?.passed).toBe(true);
