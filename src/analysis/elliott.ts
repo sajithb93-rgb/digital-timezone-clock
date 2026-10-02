@@ -423,7 +423,7 @@ function correctionCandidates(c:Candle[]){
     const upward=q[0].type==="L"&&q[1].type==="H"&&q[2].type==="L"&&q[3].type==="H"&&q[4].type==="L"&&q[5].type==="H"&&q[6].type==="L"&&q[7].type==="H";
     const downward=q[0].type==="H"&&q[1].type==="L"&&q[2].type==="H"&&q[3].type==="L"&&q[4].type==="H"&&q[5].type==="L"&&q[6].type==="H"&&q[7].type==="L";
     if(!upward&&!downward)continue;
-    const p=q.map(x=>x.price),bullishCorrection=upward,dz=validateDoubleZigzag(p,bullishCorrection);
+    const p=q.map(pt=>pt.price),bullishCorrection=upward,dz=validateDoubleZigzag(p,bullishCorrection);
     if(!dz.valid)continue;
     out.push({
       points:sequencePoints(q).map((x,j)=>({...x,label:["W-A","W-B","W-C","W-C/X","X","Y-A","Y-B","Y-C"][j]})),
