@@ -323,7 +323,11 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
             : direction + " reversal watch: liquidity sweep detected; structure shift not confirmed",
     };
 
-    if (!best || result.score > best.score || (result.score === best.score && result.state === "CONFIRMED" && best.state !== "CONFIRMED")) best = result;
+    const stateRank=(value:ReversalState)=>value==="CONFIRMED"?3:value==="SETUP"?2:value==="WATCH"?1:0;
+    if (!best
+      || stateRank(result.state)>stateRank(best.state)
+      || (stateRank(result.state)===stateRank(best.state)&&result.score>best.score)
+    ) best=result;
   }
 
   return best ?? { ...EMPTY, asOf };
