@@ -38,6 +38,37 @@ function safe(n:number){return Number.isFinite(n)?n:0}
 function barRange(c:Candle){return Math.max(c.high-c.low,1e-12)}
 function avg(v:number[]){return v.length?v.reduce((a,b)=>a+b,0)/v.length:0}
 
+function buildOrderFlowTargets(direction:"BUY"|"SELL",entry:number,risk:number,candles:Candle[]):number[]{
+  if(!Number.isFinite(entry)||!Number.isFinite(risk)||risk<=0)return [];
+  const minRR=1.5,maxRR=8;
+  const window=candles.slice(-12,-1);
+  const levels:number[]=[];
+  for(let i=1;i<window.length-1;i++){
+    const p=window[i];
+    if(direction==="BUY" && p.high>=window[i-1].high && p.high>=window[i+1].high && p.high>entry)levels.push(p.high);
+    if(direction==="SELL" && p.low<=window[i-1].low && p.low<=window[i+1].low && p.low<entry)levels.push(p.low);
+  }
+  const fallback=direction==="BUY"
+    ?[entry+risk*1.5,entry+risk*2,entry+risk*3]
+    :[entry-risk*1.5,entry-risk*2,entry-risk*3];
+  const candidates=[...levels,...fallback]
+    .filter(Number.isFinite)
+    .filter(p=>{
+      const rr=Math.abs(p-entry)/risk;
+      return rr>=minRR&&rr<=maxRR;
+    })
+    .sort((a,b)=>direction==="BUY"?a-b:b-a);
+  const out:number[]=[];
+  const minSpacing=Math.max(risk*0.25,1e-12);
+  for(const p of candidates){
+    if(out.every(x=>Math.abs(p-x)>=minSpacing)){
+      out.push(p);
+      if(out.length===3)break;
+    }
+  }
+  return out;
+}
+
 function volumeSplit(c:Candle){
   if(Number.isFinite(c.takerBuyVolume)){
     const buy=Math.max(0,Math.min(c.volume,c.takerBuyVolume!));
@@ -277,13 +308,11 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     );
     if(validStopSide){
       const risk=Math.abs(entry!-stop!);
-      const candidateTargets=direction==="BUY"?[
-        entry!+risk*1.5,entry!+risk*2,entry!+risk*3
-      ]:[
-        entry!-risk*1.5,entry!-risk*2,entry!-risk*3
-      ];
-      const validTargets=candidateTargets.every((target)=>(
-        direction==="BUY" ? target>entry! : target<entry!
+      const candidateTargets=buildOrderFlowTargets(direction,entry!,risk,closed);
+      const validTargets=candidateTargets.length===3&&candidateTargets.every((target)=>(
+        Number.isFinite(target)
+        &&(direction==="BUY" ? target>entry! : target<entry!)
+        &&Math.abs(target-entry!)/risk>=1.5
       ));
       if(validTargets){
         targets=candidateTargets;
@@ -303,6 +332,14 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
       rejectionReason="Confirmed order-flow candidate · blocked by invalid entry/SL/TP geometry";
     }
   }
+  diagnostics.push({
+    key:"target_quality",
+    label:"Target quality / spacing",
+    passed:targets.length===3,
+    detail:targets.length===3
+      ?"3 ordered targets with minimum 1.5R and controlled spacing"
+      :"Fewer than 3 valid risk-adjusted targets"
+  });
   diagnostics.push({
     key:"trade_geometry",
     label:"Entry / SL / TP geometry",
