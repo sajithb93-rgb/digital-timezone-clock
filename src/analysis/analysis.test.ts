@@ -489,6 +489,24 @@ describe("analysis regression",()=>{
     const invalidC=[...pre,...invalidValues].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
     expect(buildLiveContinuationSetup(invalidC,primary)).toBeNull();
   });
+  it("invalidates an Elliott live continuation after price reaches its target",()=>{
+    const primary={
+      points:[0,2,4,6,8,10].map((index,i)=>({index,price:[100,120,110,150,135,165][i],label:String(i)})),
+      kind:"Impulse" as const,
+      direction:"bullish" as const,
+      invalidation:100,
+      entry:110,
+      targets:[150,165],
+      quality:80,
+      rules:[],
+      strict:true
+    };
+    const values=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,145,146,147,148,200];
+    const pre=[100,105,110,120,130,140,150,155,160,164,165];
+    const c=[...pre,...values].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    expect(buildLiveContinuationSetup(c,primary)).toBeNull();
+  });
+
   it("keeps corrective structures separate from the primary impulse count",()=>{
     expect(validateZigzag([200,150,170,130],false).valid).toBe(true);
     expect(validateFlat([200,150,195,145],false).valid).toBe(true);
