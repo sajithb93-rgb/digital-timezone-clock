@@ -29,6 +29,7 @@ describe("entry scanners",()=>{
    expect(r.state).not.toBe("CONFIRMED");
  });
  it("does not confirm SMC when active entry is missing",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT",entry:null,stop:null,targets:[],rr:null}});expect(r.state).not.toBe("CONFIRMED")});
+ it("rejects Elliott setup with invalid target geometry",()=>{const r=classifyElliottEntry("BTCUSDT","5m",{...baseEW,liveSetup:{...baseEW.liveSetup,targets:[99]}},102);expect(r.state).toBe("WAIT")});
  it("requires live price to remain between entry and target",()=>{
   expect(classifyElliottEntry("BTCUSDT","5m",baseEW,102).state).toBe("CONFIRMED");
   expect(classifyElliottEntry("BTCUSDT","5m",baseEW,110).state).not.toBe("CONFIRMED");
