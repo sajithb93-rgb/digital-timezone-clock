@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
-import { analyzeElliottAdvanced, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
+import { analyzeElliottAdvanced, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
   return Array.from({length:count},(_,i)=>{
@@ -161,6 +161,25 @@ describe("analysis regression",()=>{
     expect(validateNestedImpulse([100,120,110,150,135,165],true).valid).toBe(true);
     expect(validateNestedImpulse([100,120,110,125,115,150],true).valid).toBe(false);
     expect(validateNestedImpulse([200,180,190,150,165,130],false).valid).toBe(true);
+  });
+
+  it("distinguishes regular, expanded and running flats",()=>{
+    const regular=validateFlat([100,80,99,90],false);
+    expect(regular.valid).toBe(true);
+    expect(regular.subtype).toBe("Regular Flat");
+
+    const expanded=validateFlat([100,80,105,70],false);
+    expect(expanded.valid).toBe(true);
+    expect(expanded.subtype).toBe("Expanded Flat");
+
+    const running=validateFlat([100,80,105,90],false);
+    expect(running.valid).toBe(true);
+    expect(running.subtype).toBe("Running Flat");
+  });
+
+  it("rejects malformed double zigzags and accepts a valid W-X-Y structure",()=>{
+    expect(validateDoubleZigzag([100,80,92,70,75,65,72,58],false).valid).toBe(true);
+    expect(validateDoubleZigzag([100,80,92,70,95,65,72,58],false).valid).toBe(false);
   });
 
   it("validates live Elliott continuation with the required X-A-B-C geometry",()=>{
