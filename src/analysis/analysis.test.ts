@@ -270,7 +270,7 @@ describe("analysis regression",()=>{
   it("stops SMC analysis at a middle forming candle",()=>{
     const base=candles(100);
     const live={...base[60],closed:false,high:base[60].high+50};
-    const later={...base.slice(61,90)};
+    const later=[...base.slice(61,90)];
     const prefix=analyzeSMC(base.slice(0,60));
     const withGap=analyzeSMC([...base.slice(0,60),live,...later]);
     expect(withGap.asOf).toBe(prefix.asOf);
