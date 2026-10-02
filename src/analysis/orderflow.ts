@@ -51,12 +51,23 @@ function isUsableFootprint(f:FootprintSnapshot):boolean{
   const numeric=[f.buyVolume,f.sellVolume,f.delta,f.deltaRatio,f.stackedBuyImbalances,f.stackedSellImbalances,
     f.maxBuyImbalanceRatio,f.maxSellImbalanceRatio,f.maxPositiveDelta,f.maxNegativeDelta,f.absorptionStrength];
   if(numeric.some(x=>!Number.isFinite(x)))return false;
+  if(!Array.isArray(f.levels)||f.levels.length===0)return false;
+  if(f.levels.some(level=>{
+    const numbers=[level.price,level.buyVolume,level.sellVolume,level.delta,level.totalVolume,level.buyTrades,level.sellTrades];
+    return numbers.some(x=>!Number.isFinite(x))
+      ||level.price<=0||level.buyVolume<0||level.sellVolume<0||level.totalVolume<0
+      ||level.buyTrades<0||level.sellTrades<0||!Number.isInteger(level.buyTrades)||!Number.isInteger(level.sellTrades)
+      ||Math.abs(level.delta-(level.buyVolume-level.sellVolume))>Math.max(1e-9,level.totalVolume*1e-6)
+      ||Math.abs(level.totalVolume-(level.buyVolume+level.sellVolume))>Math.max(1e-9,level.totalVolume*1e-6);
+  }))return false;
   if(f.buyVolume<0||f.sellVolume<0||f.stackedBuyImbalances<0||f.stackedSellImbalances<0
+    ||!Number.isInteger(f.stackedBuyImbalances)||!Number.isInteger(f.stackedSellImbalances)
     ||f.maxBuyImbalanceRatio<0||f.maxSellImbalanceRatio<0||f.absorptionStrength<0||f.absorptionStrength>100)return false;
   const total=f.buyVolume+f.sellVolume;
   if(total<=0)return false;
   if(Math.abs(f.delta-(f.buyVolume-f.sellVolume))>Math.max(1e-9,total*1e-6))return false;
   if(f.deltaRatio< -1.000001||f.deltaRatio>1.000001)return false;
+  if(f.poc!==null&&(!Number.isFinite(f.poc)||f.poc<=0))return false;
   return true;
 }
 
@@ -346,7 +357,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"sweep_buy",label:"Sell-side liquidity sweep",passed:!!sweepLow,detail:sweepLow?`Sweep at index ${sweepLow.index} · ${sweepLow.sweepPrice??"—"}`:"No low sweep in recent window"},
     {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:sweepRecentBuyValid,detail:sweepLow?`${last.index-sweepLow.index} bars ago`:"No low sweep"},
     {key:"sweep_integrity_buy",label:"Sell-side sweep still valid",passed:sweepIntegrityBuyValid,detail:sweepIntegrityBuyValid?"No later close invalidated the sweep level":"A later closed candle closed below the sweep level"},
-    {key:"abs_buy",label:"Buyer absorption after sweep",passed:longContext,detail:buyerAbsorption?`Latest buyer absorption at index ${buyerAbsorption.index}`:"No buyer absorption after a low sweep"},
+    {key:"abs_buy",label:"Buyer absorption after sweep",passed:longContext,detail:buyerAbsorptionIndex>=0?`Latest confirmed buyer absorption at index ${buyerAbsorptionIndex}`:"No confirmed buyer absorption after a low sweep"},
     {key:"recent_flow_buy",label:"3-bar buyer flow alignment",passed:recentFlowAlignedBuy,detail:`3-bar average delta ratio ${(recent3FlowAverage*100).toFixed(2)}% · latest ${((recent3Flow.at(-1)??0)*100).toFixed(2)}%`},
     {key:"entry_chase_buy",label:"BUY entry not overextended",passed:entryChaseBuyValid,detail:entryChaseBuy==null?"Not enough structure bars":`Break extension ${entryChaseBuy.toFixed(2)}× avg range`},
     {key:"pressure_buy",label:"12-bar buyer pressure",passed:pressure==="BUYERS",detail:`${buyerPressure.toFixed(1)}% buyers · delta ratio ${(deltaRatio*100).toFixed(2)}%`},
@@ -356,7 +367,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"sweep_sell",label:"Buy-side liquidity sweep",passed:!!sweepHigh,detail:sweepHigh?`Sweep at index ${sweepHigh.index} · ${sweepHigh.sweepPrice??"—"}`:"No high sweep in recent window"},
     {key:"sweep_recent_sell",label:"Recent buy-side sweep",passed:sweepRecentSellValid,detail:sweepHigh?`${last.index-sweepHigh.index} bars ago`:"No high sweep"},
     {key:"sweep_integrity_sell",label:"Buy-side sweep still valid",passed:sweepIntegritySellValid,detail:sweepIntegritySellValid?"No later close invalidated the sweep level":"A later closed candle closed above the sweep level"},
-    {key:"abs_sell",label:"Seller absorption after sweep",passed:shortContext,detail:sellerAbsorption?`Latest seller absorption at index ${sellerAbsorption.index}`:"No seller absorption after a high sweep"},
+    {key:"abs_sell",label:"Seller absorption after sweep",passed:shortContext,detail:sellerAbsorptionIndex>=0?`Latest confirmed seller absorption at index ${sellerAbsorptionIndex}`:"No confirmed seller absorption after a high sweep"},
     {key:"recent_flow_sell",label:"3-bar seller flow alignment",passed:recentFlowAlignedSell,detail:`3-bar average delta ratio ${(recent3FlowAverage*100).toFixed(2)}% · latest ${((recent3.at(-1)??0)*100).toFixed(2)}%`},
     {key:"entry_chase_sell",label:"SELL entry not overextended",passed:entryChaseSellValid,detail:entryChaseSell==null?"Not enough structure bars":`Break extension ${entryChaseSell.toFixed(2)}× avg range`},
     {key:"pressure_sell",label:"12-bar seller pressure",passed:pressure==="SELLERS",detail:`${sellerPressure.toFixed(1)}% sellers · delta ratio ${(deltaRatio*100).toFixed(2)}%`},
