@@ -67,7 +67,7 @@ async function fetchKlines(symbol:string,interval:string,limit=300,marketType:Ma
    if(!Array.isArray(x)||x.length<10)continue;
    const time=Number(x[0]),open=Number(x[1]),high=Number(x[2]),low=Number(x[3]),close=Number(x[4]),volume=Number(x[5]),takerBuyVolume=Number(x[9]),closeTime=Number(x[6]);
    if(![time,open,high,low,close,volume,closeTime].every(Number.isFinite))continue;
-   if(time<=0||volume<0||high<low||high<Math.max(open,close)||low>Math.min(open,close)||closeTime<time)continue;
+   if(time<0||volume<0||high<low||high<Math.max(open,close)||low>Math.min(open,close)||closeTime<time)continue;
    parsed.push({time,open,high,low,close,volume,takerBuyVolume:Number.isFinite(takerBuyVolume)?takerBuyVolume:undefined,closed:closeTime<=Date.now()});
  }
  parsed.sort((a,b)=>a.time-b.time);
