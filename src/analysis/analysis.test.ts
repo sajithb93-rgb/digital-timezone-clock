@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
-import { analyzeElliottAdvanced, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
+import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
   return Array.from({length:count},(_,i)=>{
@@ -193,6 +193,23 @@ describe("analysis regression",()=>{
     expect(validateZigzag([165,150,158,145],false).valid).toBe(true);
     expect(validateFlat([165,150,164,146],false).valid).toBe(true);
     expect(validateZigzag([100,115,107,121],true).valid).toBe(true);
+  });
+
+  it("anchors live Elliott correction X to the completed Wave 5 endpoint",()=>{
+    const primary={
+      points:[0,2,4,6,8,10].map((index,i)=>({index,price:[100,120,110,150,135,165][i],label:String(i)})),
+      kind:"Impulse" as const,direction:"bullish" as const,invalidation:100,entry:110,targets:[150,165],quality:80,rules:[],strict:true
+    };
+    const values=[149,149,149,150,152,154,156,157,158,156,153,149,146,145,146,147,148,149,150];
+    const c=[...Array.from({length:11},(_,i)=>100+i),...values].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    const live=buildLiveContinuationSetup(c,primary);
+    expect(live?.points[0].index).toBe(10);
+    expect(live?.points[0].price).toBe(165);
+    expect(live?.points.map(p=>p.label)).toEqual(["X","A","B","C"]);
+
+    const invalidValues=[149,149,149,150,152,154,156,157,158,156,153,149,146,95,96,97,98,99,100];
+    const invalidC=[...Array.from({length:11},(_,i)=>100+i),...invalidValues].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    expect(buildLiveContinuationSetup(invalidC,primary)).toBeNull();
   });
 
   it("keeps corrective structures separate from the primary impulse count",()=>{
