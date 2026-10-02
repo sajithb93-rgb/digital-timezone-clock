@@ -343,7 +343,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     confirmations.push("Closed-candle confirmation","Binance footprint flow","Buy-side liquidity sweep → seller absorption","12-bar seller pressure","Negative delta ≤ -0.08","2+ stacked sell imbalances","Max sell imbalance ≥ 3×","Current-bar bearish structure break");
   }
 
-  let entry:number|null=null,stop:number|null,targets:number[]=[];
+  let entry:number|null=null,stop:number|null=null,targets:number[]=[];
   let tradeGeometryValid=true;
   let targetQualityValid=true;
   if(direction!=="WAIT"){
