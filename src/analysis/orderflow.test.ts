@@ -327,6 +327,28 @@ describe("order flow strategy",()=>{
     expect(r.diagnostics.find(d=>d.key==="sweep_recent_sell")?.passed).toBe(false);
   });
 
+  it("enforces the recent sweep age in the BUY confirmation gate",()=>{
+    const candles=fullLongCandles().map((c,i)=>{
+      if(i===5)return {...c,low:95,close:100.2,takerBuyVolume:55};
+      if(i===8)return {...c,low:98};
+      return c;
+    });
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="sweep_recent_buy")?.passed).toBe(false);
+  });
+
+  it("enforces the recent sweep age in the SELL confirmation gate",()=>{
+    const candles=fullShortCandles().map((c,i)=>{
+      if(i===5)return {...c,high:105,close:100.2,takerBuyVolume:45};
+      if(i===8)return {...c,high:101};
+      return c;
+    });
+    const r=analyzeOrderFlow(candles,confirmedFootprints("SELL"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="sweep_recent_sell")?.passed).toBe(false);
+  });
+
   it("blocks a SELL when the latest three footprint bars lose directional flow",()=>{
     const candles=fullShortCandles();
     const footprint=confirmedFootprints("SELL");
