@@ -330,7 +330,8 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
     costR+=tradeCostR;
     totalR+=netResult;
     trades++;
-    if(netResult>0){wins++;grossWinR+=netResult;}else{losses++;grossLossR+=Math.abs(netResult);}
+    if(netResult>0)wins++;else losses++;
+    if(result>0)grossWinR+=result;else if(result<0)grossLossR+=Math.abs(result);
     equity+=netResult;
     maxEquity=Math.max(maxEquity,equity);
     maxDD=Math.max(maxDD,maxEquity-equity);
