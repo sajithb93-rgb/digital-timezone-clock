@@ -557,6 +557,7 @@ describe("analysis regression",()=>{
 
   it("requires real contraction or expansion for a triangle candidate",()=>{
     expect(validateTriangle([100,110,104,108,106,107],true).contracting).toBe(true);
+    expect(validateTriangle([100,110,104,110.3,106,109.8],true).barrier).toBe(true);
     expect(validateTriangle([100,110,95,125,80,130],true).expanding).toBe(true);
   });
 
