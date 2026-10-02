@@ -28,26 +28,33 @@ const marketConfig:Record<MarketKind,{label:string;rest:string;ws:string;aggRest
 };
 
 const binanceRestState={nextAllowedAt:0,lastRequestAt:0};
+let binanceRequestQueue:Promise<void>=Promise.resolve();
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 
 async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<any>{
- for(let attempt=0;attempt<=retries;attempt+=1){
-  const now=Date.now();
-  const wait=Math.max(binanceRestState.nextAllowedAt-now,binanceRestState.lastRequestAt+220-now,0);
-  if(wait>0)await sleep(wait);
-  binanceRestState.lastRequestAt=Date.now();
-  const r=await fetch(url,init);
-  if(r.ok)return r.json();
-  if(r.status===429||r.status===418){
-   const retryAfter=Number(r.headers.get("Retry-After")||0);
-   const backoff=Math.max(1000,retryAfter*1000||Math.min(15000,1500*Math.pow(2,attempt)));
-   binanceRestState.nextAllowedAt=Date.now()+backoff;
-   if(attempt<retries){await sleep(backoff);continue;}
-   throw new Error(`Binance rate limit ${r.status}. Retried safely; REST temporarily throttled.`);
+ const run=binanceRequestQueue.then(async()=>{
+  // Serialize all REST callers. A shared timestamp alone is racy when the
+  // scanners fire concurrent requests.
+  for(let attempt=0;attempt<=retries;attempt+=1){
+   const now=Date.now();
+   const wait=Math.max(binanceRestState.nextAllowedAt-now,binanceRestState.lastRequestAt+220-now,0);
+   if(wait>0)await sleep(wait);
+   binanceRestState.lastRequestAt=Date.now();
+   const r=await fetch(url,init);
+   if(r.ok)return r.json();
+   if(r.status===429||r.status===418){
+    const retryAfter=Number(r.headers.get("Retry-After")||0);
+    const backoff=Math.max(1000,retryAfter*1000||Math.min(15000,1500*Math.pow(2,attempt)));
+    binanceRestState.nextAllowedAt=Date.now()+backoff;
+    if(attempt<retries){await sleep(backoff);continue;}
+    throw new Error(`Binance rate limit ${r.status}. Retried safely; REST temporarily throttled.`);
+   }
+   throw new Error(`Binance request failed ${r.status}`);
   }
-  throw new Error(`Binance request failed ${r.status}`);
- }
- throw new Error("Binance request failed");
+  throw new Error("Binance request failed");
+ });
+ binanceRequestQueue=run.then(()=>undefined,()=>undefined);
+ return run;
 }
 
 async function fetchKlines(symbol:string,interval:string,limit=300,marketType:MarketKind="spot",signal?:AbortSignal):Promise<Candle[]>{
