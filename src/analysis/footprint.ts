@@ -222,10 +222,12 @@ export class FootprintBook {
     if(!Number.isInteger(trade.id)||trade.id<=0||!Number.isFinite(trade.price)||trade.price<=0
       ||!Number.isFinite(trade.quantity)||trade.quantity<=0||!Number.isInteger(trade.time)||trade.time<=0
       ||typeof trade.isBuyerMaker!=="boolean")return false;
+    const time = bucketStart(trade.time, this.intervalMs);
+    // Check frozen state before recording the id. Late trades for a finalized
+    // candle must not leak their ids into the long-lived deduplication set.
+    if(this.frozen.has(time))return false;
     if (this.seen.has(trade.id)) return false;
     this.seen.add(trade.id);
-    const time = bucketStart(trade.time, this.intervalMs);
-    if(this.frozen.has(time)) return false;
     let bar = this.bars.get(time);
     if (!bar) {
       bar = { candleTime: time, levels: new Map(), buyVolume: 0, sellVolume: 0, ids: new Set() };
