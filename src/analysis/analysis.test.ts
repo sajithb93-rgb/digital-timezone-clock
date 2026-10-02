@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isSetupActive, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
-import { analyzeElliottAdvanced, validateFlat, validateTriangle, validateZigzag } from "./elliott";
+import { analyzeElliottAdvanced, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
   return Array.from({length:count},(_,i)=>{
@@ -155,6 +155,12 @@ describe("analysis regression",()=>{
     expect(e.engine).toBe("ADVANCED_ELLIOTT_V2");
     expect(e.primary?.kind).toBe("Impulse");
     expect(e.primary?.strict).toBe(true);
+  });
+
+  it("requires a real five-wave nested impulse instead of a raw pivot count",()=>{
+    expect(validateNestedImpulse([100,120,110,150,135,165],true).valid).toBe(true);
+    expect(validateNestedImpulse([100,120,110,125,115,150],true).valid).toBe(false);
+    expect(validateNestedImpulse([200,180,190,150,165,130],false).valid).toBe(true);
   });
 
   it("validates live Elliott continuation with the required X-A-B-C geometry",()=>{
