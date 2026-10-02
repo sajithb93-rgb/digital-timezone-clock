@@ -611,6 +611,14 @@ describe("analysis regression",()=>{
     expect(running.subtype).toBe("Running Flat");
   });
 
+  it("requires the second zigzag Y to exceed the first W endpoint",()=>{
+    const incomplete=[100,115,108,120,110,118,113,117];
+    const v=validateDoubleZigzag(incomplete,true);
+    expect(v.secondValid).toBe(true);
+    expect(v.yBeyondW).toBe(false);
+    expect(v.valid).toBe(false);
+  });
+
   it("rejects malformed double zigzags and accepts a valid W-X-Y structure",()=>{
     expect(validateDoubleZigzag([100,80,92,70,75,65,72,58],false).valid).toBe(true);
     expect(validateDoubleZigzag([100,80,92,70,95,65,72,58],false).valid).toBe(false);
