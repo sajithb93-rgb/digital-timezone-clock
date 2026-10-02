@@ -60,10 +60,17 @@ export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes
     };
   }
 
-  const medium = events
-    .filter(e => e.impact === "medium")
-    .sort((a,b) => Math.abs(a.date-now) - Math.abs(b.date-now))[0];
-  if (medium && Math.abs(medium.date - now) <= buffer) {
+  const mediumEvents = events.filter(e => e.impact === "medium");
+  // Prefer an upcoming medium-impact release when several events share the
+  // caution window; otherwise fall back to the most recent completed release.
+  const upcomingMedium = mediumEvents
+    .filter(e => e.date >= now && e.date - now <= buffer)
+    .sort((a,b) => a.date-b.date)[0];
+  const recentMedium = mediumEvents
+    .filter(e => e.date < now && now-e.date <= buffer)
+    .sort((a,b) => b.date-a.date)[0];
+  const medium = upcomingMedium ?? recentMedium;
+  if (medium && Math.abs(medium.date-now) <= buffer) {
     const delta=medium.date-now;
     return {
       level: "MEDIUM", blocked: false,
