@@ -322,7 +322,12 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const latestDirectionalEvent=rawDirection
   ?events.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
   :undefined;
- const causalSequence=!!rawDirection&&!!latestDirectionalEvent&&!!sweep&&latestDirectionalEvent.direction===rawDirection&&sweep.index<latestDirectionalEvent.index;
+ const causalSequence=!!rawDirection
+  &&!!latestDirectionalEvent
+  &&!!sweep
+  &&latestDirectionalEvent.direction===rawDirection
+  &&sweep.index<latestDirectionalEvent.index
+  &&latestDirectionalEvent.index-sweep.index<=12;
  const latestInternalDirectionalEvent=rawDirection
   ?internalEvents.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
   :undefined;
