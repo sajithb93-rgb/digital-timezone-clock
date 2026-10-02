@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -87,6 +87,14 @@ describe("analysis regression",()=>{
     expect(isSMCCausalSequence(10,15,14)).toBe(false);
     expect(isSMCCausalSequence(10,15,28)).toBe(false);
     expect(isSMCCausalSequence(10,22,null)).toBe(false);
+  });
+
+  it("classifies BOS and CHOCH only from the prior structure direction",()=>{
+    expect(classifyStructureBreak(null,"bullish")).toBe("BOS");
+    expect(classifyStructureBreak("bullish","bullish")).toBe("BOS");
+    expect(classifyStructureBreak("bearish","bullish")).toBe("CHOCH");
+    expect(classifyStructureBreak("bearish","bearish")).toBe("BOS");
+    expect(classifyStructureBreak("bullish","bearish")).toBe("CHOCH");
   });
 
   it("never emits two opposing structure events on the same candle",()=>{
