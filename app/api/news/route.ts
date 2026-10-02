@@ -19,6 +19,15 @@ export async function GET() {
       );
     }
     const data = await response.json();
+    const validShape = Array.isArray(data)
+      || (!!data && typeof data === "object"
+        && (Array.isArray(data.events) || Array.isArray(data.data)));
+    if (!validShape) {
+      return NextResponse.json(
+        { error: "News calendar returned an unexpected data shape" },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json(
