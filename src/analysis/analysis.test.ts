@@ -490,15 +490,24 @@ describe("analysis regression",()=>{
   });
 
   it("invalidates live Elliott continuation when the signal candle wick reaches the target",()=>{
-    const history=Array.from({length:21},(_,i)=>({time:i,open:100,high:101,low:99,close:100,volume:100,closed:true}));
-    const correction=[
-      {time:21,open:130,high:130,low:119,close:120,volume:100,closed:true},
-      {time:22,open:120,high:126,low:119,close:125,volume:100,closed:true},
-      {time:23,open:125,high:126,low:114,close:115,volume:100,closed:true},
-      {time:24,open:115,high:142,low:114,close:130,volume:100,closed:true},
+    const history=Array.from({length:21},(_,i)=>({time:i,open:120,high:122,low:120,close:121,volume:100,closed:true}));
+    history[20]={time:20,open:125,high:130,low:124,close:125,volume:100,closed:true};
+    const continuation=[
+      {time:21,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:22,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:23,open:121,high:123,low:119,close:121,volume:100,closed:true},
+      {time:24,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:25,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:26,open:124,high:125,low:120,close:124,volume:100,closed:true},
+      {time:27,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:28,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:29,open:116,high:122,low:115,close:116,volume:100,closed:true},
+      {time:30,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:31,open:120,high:122,low:120,close:121,volume:100,closed:true},
+      {time:32,open:121,high:142,low:116,close:130,volume:100,closed:true},
     ];
     const primary:any={kind:"Impulse",direction:"bullish",points:[{index:20,price:130}]};
-    const live=buildLiveContinuationSetup([...history,...correction],primary);
+    const live=buildLiveContinuationSetup([...history,...continuation],primary);
     expect(live).toBeNull();
   });
 
