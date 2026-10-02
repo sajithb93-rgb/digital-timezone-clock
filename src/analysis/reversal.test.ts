@@ -38,7 +38,7 @@ describe("reversal engine",()=>{
     candles[31]=candle(31,100,101,95,99);
     candles[32]=candle(32,99,100,96,98);
     candles[33]=candle(33,98,106,97,105);
-    candles[34]=candle(34,105,108,103,107);
+    candles[34]=candle(34,105,118,103,116);
     const r=analyzeReversal(candles,smc({
       sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],
       events:[
@@ -103,7 +103,7 @@ describe("reversal engine",()=>{
     candles[31]=candle(31,100,101,95,99);
     candles[32]=candle(32,99,100,96,98);
     candles[33]=candle(33,98,106,97,105);
-    candles[34]=candle(34,105,108,103,107);
+    candles[34]=candle(34,105,118,103,116);
     const r=analyzeReversal(candles,smc({
       sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],
       events:[
@@ -153,7 +153,7 @@ describe("reversal engine",()=>{
       fvgs:[{from:32,to:33,low:101,high:103,type:"bullish",filled:false,size:1}],
       orderBlocks:[{index:32,low:98,high:100,type:"bullish",mitigated:false,strength:1}],
     }),flow());
-    expect(r.targets.every(t=>t<130)).toBe(true);
+    expect(r.targets.every(t=>t>candles[34].high)).toBe(true);
   });
 
   it("ignores the forming candle",()=>{
