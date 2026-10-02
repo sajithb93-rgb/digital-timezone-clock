@@ -1,4 +1,5 @@
 import { analyzeSMC, Candle } from "./engine";
+import { normalizeCandleSeries } from "./candles";
 
 export type FlowSnapshot = {
   buyVolume:number;
@@ -39,15 +40,7 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
   // Realtime feeds can arrive out of order or contain duplicate/malformed bars.
   // Normalize them before cumulative/order-flow calculations so the result is
   // causal and independent of transport ordering.
-  const byTime=new Map<number,Candle>();
-  for(const x of c){
-    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
-    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    byTime.set(x.time,x);
-  }
-  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
-  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
-  const closed=(firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized);
+  const closed=normalizeCandleSeries(c,true);
   if(!closed.length)return{buyVolume:0,sellVolume:0,delta:0,deltaRatio:0,cumulativeDelta:0,volumeRatio:0,pressure:"BALANCED"};
   let buy=0,sell=0,cum=0;
   const recent=closed.slice(-20);
