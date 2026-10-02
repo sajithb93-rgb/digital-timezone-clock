@@ -440,7 +440,7 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const flat=best.flat;
   const prices=q.map(p=>p.price);
 
-  const [x,a,b,cPoint]=prices;
+  const [,a,b,cPoint]=prices;
   // The completed ABC correction must not break the parent impulse origin.
   // Once C crosses that boundary, the parent 1–5 count is no longer a valid
   // continuation context even if price later reclaims the level.
