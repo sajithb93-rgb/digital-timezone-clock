@@ -253,20 +253,34 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const sweepExtreme = sweepCandle ? (direction === "BUY" ? sweepCandle.low : sweepCandle.high) : sweep.price;
     const invalidation = direction === "BUY" ? sweepExtreme - buffer : sweepExtreme + buffer;
     const targets = calculateTargets(closed, entry, invalidation, direction);
+    const risk=Math.abs(entry-invalidation);
+    const validEntryGeometry=!!zone&&Number.isFinite(invalidation)&&invalidation>0&&risk>0&&(
+      direction==="BUY"?invalidation<entry:invalidation>entry
+    );
+    const validTargets=targets.length===3&&targets.every(t=>Number.isFinite(t)&&(
+      direction==="BUY"?t>entry:t<entry
+    )&&Math.abs(t-entry)/risk>=1.5);
+    const confirmationReady=validEntryGeometry&&validTargets;
+
+    const gatedState:ReversalState = state==="CONFIRMED"&&!confirmationReady
+      ?"SETUP"
+      :state;
 
     const result: ReversalEngineResult = {
-      direction, state, score, asOf,
+      direction, state:gatedState, score, asOf,
       triggerIndex, triggerPrice: closed[triggerIndex]?.close ?? null,
       sweepIndex: sweep.index, sweepPrice: sweep.price,
       structureIndex: choch?.index ?? null,
       displacementRatio: Number(bestDisplacement.toFixed(4)),
       fvg, orderBlock, orderflowConfirmed, deltaDivergence,
       entryZone: zone, invalidation, targets, evidence,
-      reason: state === "CONFIRMED"
+      reason: gatedState === "CONFIRMED"
         ? direction + " reversal confirmed by sweep → opposite CHOCH → displacement" + (requireOrderFlow ? " → order flow" : " · structural MTF mode")
-        : choch
-          ? direction + " reversal setup forming; wait for remaining confluence"
-          : direction + " reversal watch: liquidity sweep detected; structure shift not confirmed",
+        : state === "CONFIRMED"&&!confirmationReady
+          ? direction + " reversal confluence confirmed, but entry zone/target geometry is not ready"
+          : choch
+            ? direction + " reversal setup forming; wait for remaining confluence"
+            : direction + " reversal watch: liquidity sweep detected; structure shift not confirmed",
     };
 
     if (!best || result.score > best.score || (result.score === best.score && result.state === "CONFIRMED" && best.state !== "CONFIRMED")) best = result;
