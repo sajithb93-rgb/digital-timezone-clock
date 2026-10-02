@@ -8,5 +8,9 @@ const baseEW:any={primary:{direction:"bullish",entry:100,invalidation:98,targets
 describe("entry scanners",()=>{
  it("confirms an active SMC setup",()=>{const r=classifySMCEntry("BTCUSDT","5m",baseSMC);expect(r.state).toBe("CONFIRMED");expect(r.direction).toBe("BUY");expect(r.entry).toBe(100)});
  it("does not confirm SMC when active entry is missing",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT",entry:null,stop:null,targets:[],rr:null}});expect(r.state).not.toBe("CONFIRMED")});
- it("requires live price proximity for Elliott confirmation",()=>{expect(classifyElliottEntry("BTCUSDT","5m",baseEW,100).state).toBe("CONFIRMED");expect(classifyElliottEntry("BTCUSDT","5m",baseEW,110).state).not.toBe("CONFIRMED")});
+ it("requires live price to remain between entry and target",()=>{
+  expect(classifyElliottEntry("BTCUSDT","5m",baseEW,102).state).toBe("CONFIRMED");
+  expect(classifyElliottEntry("BTCUSDT","5m",baseEW,110).state).not.toBe("CONFIRMED");
+  expect(classifyElliottEntry("BTCUSDT","5m",baseEW,97).state).not.toBe("CONFIRMED");
+ });
 });
