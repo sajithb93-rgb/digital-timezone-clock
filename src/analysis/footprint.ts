@@ -153,8 +153,12 @@ export function analyzeFootprintSnapshot(
   let absorptionStrength = 0;
   if (candle && levels.length) {
     const range = Math.max(candle.high - candle.low, tickSize > 0 ? tickSize : 1e-12);
-    const lowBand = candle.low + Math.max(tickSize * 2, range * 0.18);
-    const highBand = candle.high - Math.max(tickSize * 2, range * 0.18);
+    // Keep the edge bands disjoint even on very small one-tick candles.
+    // Overlapping bands would let the same footprint level contribute to both
+    // buyer and seller absorption and make a directional classification arbitrary.
+    const edgeBand = Math.min(Math.max(tickSize * 2, range * 0.18), range * 0.45);
+    const lowBand = candle.low + edgeBand;
+    const highBand = candle.high - edgeBand;
     const low = levels.filter(x => x.price <= lowBand);
     const high = levels.filter(x => x.price >= highBand);
     const lowSell = low.reduce((s, x) => s + x.sellVolume, 0);
