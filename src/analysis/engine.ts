@@ -537,11 +537,12 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   &&isValidTradeGeometry(direction as "BUY"|"SELL",entry,stop,targets,MIN_SETUP_RR);
  const usable=geometryValid&&risk>0&&rr!==null&&rr>=MIN_SETUP_RR;
  const hasSwing=confirmations.includes("Swing structure aligned");
+ const hasConfirmedBOS=latestDirectionalEvent?.type==="BOS"&&latestDirectionalEvent.direction===rawDirection;
  const hasInternal=confirmations.includes("Internal structure aligned"); const hasSweep=confirmations.includes("Liquidity sweep + displacement");
  const hasPD=confirmations.includes("Premium/discount aligned");
  const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap")||confirmations.includes("Qualified active breaker"); // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
  // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
- const confirmedGate=hasSwing&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&internalCausal&&selectedZone?.linked===true&&zoneCausal;
+ const confirmedGate=hasSwing&&hasConfirmedBOS&&hasInternal&&hasSweep&&hasPD&&hasQualifiedZone&&causalSequence&&internalCausal&&selectedZone?.linked===true&&zoneCausal;
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
