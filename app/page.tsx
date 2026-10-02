@@ -129,7 +129,17 @@ async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTi
    const bucket=Math.floor(t.time/intervalMsValue)*intervalMsValue;
    if(bucket<currentBucket&&bucket>=startTime)coveredClosedBuckets.add(bucket);
   }
-  if(coveredClosedBuckets.size>=targetBars)break;
+  // Seeing one trade in the oldest required bucket is not enough: the bucket
+  // may still be partially paged because /aggTrades caps each response at 1000.
+  // Continue until pagination has crossed below that bucket's start, so the
+  // subsequent volume-coverage gate receives a complete oldest required bar.
+  const oldestCovered=coveredClosedBuckets.size
+    ?Math.min(...coveredClosedBuckets)
+    :null;
+  const targetBucketsComplete=coveredClosedBuckets.size>=targetBars
+    &&oldestCovered!==null
+    &&cursorEnd<oldestCovered;
+  if(targetBucketsComplete)break;
   if(earliestTime>=cursorEnd)break;
   cursorEnd=earliestTime-1;
  }
