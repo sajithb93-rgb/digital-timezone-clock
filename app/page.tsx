@@ -50,9 +50,10 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
  throw new Error("Binance request failed");
 }
 
-async function fetchKlines(symbol:string,interval:string,limit=300,marketType:MarketKind="spot"):Promise<Candle[]>{
+async function fetchKlines(symbol:string,interval:string,limit=300,marketType:MarketKind="spot",signal?:AbortSignal):Promise<Candle[]>{
  const cfg=marketConfig[marketType];
- const rows=await binanceFetchJson(`${cfg.rest}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`);
+ const init=signal?{signal}:undefined;
+ const rows=await binanceFetchJson(`${cfg.rest}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`,init);
  return rows.map((x:any)=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5],takerBuyVolume:+x[9],closed:+x[6] <= Date.now()}));
 }
 
@@ -234,7 +235,36 @@ export default function Home(){
   return()=>{stop=true;controller.abort();clearInterval(id);if(orderFlowScanRunRef.current===runId)orderFlowScanRunRef.current+=1};
  },[marketType,quoteFilter,orderFlowScanTf,orderFlowScannerEnabled,pairs.length,symbol,scanner.length]);
 
- useEffect(()=>{const controller=new AbortController();Promise.all(mtfIntervals.map(async tf=>{try{return{interval:tf,candles:(await fetchKlines(symbol,tf,180,marketType)).filter(x=>x.closed!==false)}}catch{return{interval:tf,candles:[]}}})).then(rows=>{if(!controller.signal.aborted)setMtfCandles(rows)});return()=>controller.abort()},[symbol,marketType]);
+ useEffect(()=>{
+  let active=true;
+  let inFlight=false;
+  const controller=new AbortController();
+  const refresh=async()=>{
+   if(!active||inFlight)return;
+   inFlight=true;
+   try{
+    const rows=await Promise.all(mtfIntervals.map(async tf=>{
+     try{
+      const candles=(await fetchKlines(symbol,tf,180,marketType,controller.signal)).filter(x=>x.closed!==false);
+      return{interval:tf,candles};
+     }catch{
+      return null;
+     }
+    }));
+    if(!active||controller.signal.aborted)return;
+    setMtfCandles(prev=>mtfIntervals.map(tf=>{
+     const next=rows.find(x=>x?.interval===tf);
+     if(next)return next;
+     return prev.find(x=>x.interval===tf)??{interval:tf,candles:[]};
+    }));
+   }finally{
+    inFlight=false;
+   }
+  };
+  void refresh();
+  const id=window.setInterval(()=>{void refresh()},30_000);
+  return()=>{active=false;controller.abort();clearInterval(id)};
+ },[symbol,marketType]);
 
  useEffect(()=>{
   let ws:WebSocket|undefined;
