@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -133,6 +133,54 @@ describe("analysis regression",()=>{
     expect(gap?.filled).toBe(false);
     expect(gap?.partial).toBe(false);
     expect(gap?.fillIndex).toBeUndefined();
+  });
+
+  it("creates a breaker only after a mitigated order block is broken",()=>{
+    const ob={index:1,low:99,high:105,type:"bullish" as const,mitigated:true,mitigationIndex:3,strength:1};
+    const candles=[
+      {...candles(1)[0],time:0,closed:true},
+      {...candles(1)[0],time:1,open:105,high:106,low:99,close:100,closed:true},
+      {...candles(1)[0],time:2,open:100,high:106,low:100,close:104,closed:true},
+      {...candles(1)[0],time:3,open:104,high:106,low:103,close:104.5,closed:true},
+      {...candles(1)[0],time:4,open:104,high:104.5,low:98,close:98.5,closed:true},
+      {...candles(1)[0],time:5,open:98.5,high:101,low:97.5,close:100,closed:true}
+    ];
+    const breakers=makeBreakers([ob],candles,5);
+    expect(breakers).toHaveLength(1);
+    expect(breakers[0]).toMatchObject({index:4,type:"bearish",low:99,high:105,active:true});
+  });
+
+  it("does not call simple mitigation a breaker",()=>{
+    const ob={index:1,low:99,high:105,type:"bullish" as const,mitigated:true,mitigationIndex:3,strength:1};
+    const data=[
+      {...candles(1)[0],time:0,closed:true},
+      {...candles(1)[0],time:1,open:105,high:106,low:99,close:100,closed:true},
+      {...candles(1)[0],time:2,open:100,high:106,low:100,close:104,closed:true},
+      {...candles(1)[0],time:3,open:104,high:106,low:103,close:104.5,closed:true}
+    ];
+    expect(makeBreakers([ob],data,3)).toEqual([]);
+  });
+
+  it("invalidates a breaker when price closes back through the flipped zone",()=>{
+    const ob={index:1,low:99,high:105,type:"bullish" as const,mitigated:true,mitigationIndex:3,strength:1};
+    const data=[
+      {...candles(1)[0],time:0,closed:true},
+      {...candles(1)[0],time:1,open:105,high:106,low:99,close:100,closed:true},
+      {...candles(1)[0],time:2,open:100,high:106,low:100,close:104,closed:true},
+      {...candles(1)[0],time:3,open:104,high:106,low:103,close:104.5,closed:true},
+      {...candles(1)[0],time:4,open:104,high:104.5,low:98,close:98.5,closed:true},
+      {...candles(1)[0],time:5,open:98.5,high:106,low:98,close:105.5,closed:true}
+    ];
+    expect(makeBreakers([ob],data,5)).toEqual([]);
+  });
+
+  it("keeps breaker causality distinct from pre-break zone causality",()=>{
+    expect(isEntryZoneCausal(26,25,30,"OB")).toBe(true);
+    expect(isEntryZoneCausal(26,25,30,"FVG")).toBe(true);
+    expect(isEntryZoneCausal(31,25,30,"OB")).toBe(false);
+    expect(isEntryZoneCausal(34,25,30,"BREAKER")).toBe(true);
+    expect(isEntryZoneCausal(44,25,30,"BREAKER")).toBe(false);
+    expect(isEntryZoneCausal(28,25,30,"BREAKER")).toBe(false);
   });
 
   it("requires an order block to link to a structure break at or after displacement",()=>{
