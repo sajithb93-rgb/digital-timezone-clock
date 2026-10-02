@@ -4,9 +4,12 @@ const DEFAULT_CALENDAR_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek
 
 export async function GET() {
   const url = process.env.NEWS_CALENDAR_URL || DEFAULT_CALENDAR_URL;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
     const response = await fetch(url, {
       cache: "no-store",
+      signal: controller.signal,
       headers: { "User-Agent": "QuantStructure/1.0 news-calendar" },
     });
     if (!response.ok) {
@@ -22,5 +25,7 @@ export async function GET() {
       { error: "News calendar unavailable" },
       { status: 502, headers: { "Cache-Control": "no-store" } },
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
