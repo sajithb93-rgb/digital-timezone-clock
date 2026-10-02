@@ -145,6 +145,12 @@ function equalLevels(ps:Pivot[],tol:number){
  }
  return reps.sort((a,b)=>a.index-b.index);
 }
+export function classifyStructureBreak(
+ previousDirection:"bullish"|"bearish"|null,
+ breakDirection:"bullish"|"bearish"
+):"BOS"|"CHOCH"{
+ return previousDirection!==null&&previousDirection!==breakDirection?"CHOCH":"BOS";
+}
 function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
  const events:StructureEvent[]=[];
  let structure:"bullish"|"bearish"|null=null;
@@ -163,10 +169,10 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
    continue;
   }
   if(brokeBull){
-   events.push({index:i,price:activeH!.price,type:structure&&structure!=="bullish"?"CHOCH":"BOS",direction:"bullish",strength:disp?"displacement":"normal"});
+   events.push({index:i,price:activeH!.price,type:classifyStructureBreak(structure,"bullish"),direction:"bullish",strength:disp?"displacement":"normal"});
    structure="bullish";activeH=null;
   }else if(brokeBear){
-   events.push({index:i,price:activeL!.price,type:structure&&structure!=="bearish"?"CHOCH":"BOS",direction:"bearish",strength:disp?"displacement":"normal"});
+   events.push({index:i,price:activeL!.price,type:classifyStructureBreak(structure,"bearish"),direction:"bearish",strength:disp?"displacement":"normal"});
    structure="bearish";activeL=null;
   }
  }
