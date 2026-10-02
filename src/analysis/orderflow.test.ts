@@ -513,6 +513,15 @@ describe("order flow strategy",()=>{
     expect(analyzeOrderFlow(noBreak,fp).direction).toBe("WAIT");
   });
 
+  it("stops Order Flow analysis before a middle forming candle",()=>{
+    const base=fullLongCandles().concat(Array.from({length:25},(_,i)=>candle(i+12,105,106,104,105,100,60)));
+    const prefix=base.slice(0,8);
+    const withGap=[...prefix,{time:8,open:105,high:108,low:90,close:106,volume:100,takerBuyVolume:60,closed:false},...base.slice(9)];
+    const expected=analyzeOrderFlow(prefix);
+    const actual=analyzeOrderFlow(withGap,[]);
+    expect(actual.recentBars.at(-1)?.time).toBe(expected.recentBars.at(-1)?.time);
+  });
+
   it("returns WAIT when a valid BUY setup is still on an open latest candle",()=>{
     const candles=fullLongCandles().map((c,i)=>i===11?{...c,closed:false}:c);
     const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
