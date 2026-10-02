@@ -493,6 +493,14 @@ describe("order flow strategy",()=>{
     expect(r.rejectionReason).toContain("3-bar seller flow alignment");
   });
 
+  it("rejects malformed confirmed footprint summaries",()=>{
+    const footprint=confirmedFootprints("BUY");
+    footprint[11]={...footprint[11],buyVolume:-10,sellVolume:110,delta:100,deltaRatio:1};
+    const r=analyzeOrderFlow(fullLongCandles(),footprint);
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="footprint_history")?.passed).toBe(false);
+  });
+
   it("returns WAIT when any critical BUY footprint confirmation is missing",()=>{
     const base=fullLongCandles();
     const cases:Partial<FootprintSnapshot>[]=[
