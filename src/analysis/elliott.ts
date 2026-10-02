@@ -617,14 +617,19 @@ function buildFib(prices:number[],bull:boolean){
 }
 
 export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
-  // Elliott pivots require future bars for confirmation. If an unclosed candle
-  // appears anywhere in the supplied sequence, do not consume candles after
-  // that point; otherwise a later closed candle can leak future information
-  // into a pivot/wave count that should only exist before the gap.
-  const firstUnclosed=c.findIndex(x=>x.closed===false);
-  const closedEnd=firstUnclosed>=0?firstUnclosed-1:c.length-1;
+  // Normalize the exchange feed before assigning pivot indices. Then stop at
+  // the first forming candle so later bars cannot leak into an earlier count.
+  const byTime=new Map<number,Candle>();
+  for(const x of c){
+    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
+    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+    byTime.set(x.time,x);
+  }
+  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
+  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
+  const closedEnd=firstUnclosed>=0?firstUnclosed-1:normalized.length-1;
   if(closedEnd<29)return EMPTY("Insufficient closed-candle history");
-  const data=c.slice(0,closedEnd+1);
+  const data=normalized.slice(0,closedEnd+1);
   const ps=alternatePivots(swingPivots(data,2));
   const corrections=correctionCandidates(data);
   const action:WaveCount[]=[
