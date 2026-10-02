@@ -188,15 +188,20 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
     return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Below exchange minimum quantity"};
   }
 
-  const notional=entry*positionSize;
+  // Linear contracts are sized by quote notional (price × quantity).
+  // COIN-M inverse contracts have a fixed quote face value per contract,
+  // so their notional constraint is contractSize × contracts.
+  const notionalAt=(qty:number)=>inverse?contractSize*qty:entry*qty;
+  const notional=notionalAt(positionSize);
   if(Number.isFinite(minNotional)&&minNotional>0&&notional<minNotional){
     return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Below exchange minimum notional"};
   }
   if(Number.isFinite(maxNotional)&&maxNotional>0&&notional>maxNotional){
-    positionSize=Math.min(positionSize,maxNotional/entry);
+    const maxQty=inverse?maxNotional/contractSize:maxNotional/entry;
+    positionSize=Math.min(positionSize,maxQty);
     if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize);
   }
-  const finalNotional=entry*positionSize;
+  const finalNotional=notionalAt(positionSize);
   if(positionSize<Math.max(0,minQty)){
     return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Maximum notional cap leaves quantity below exchange minimum"};
   }
