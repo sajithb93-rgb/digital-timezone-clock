@@ -200,15 +200,16 @@ describe("analysis regression",()=>{
       points:[0,2,4,6,8,10].map((index,i)=>({index,price:[100,120,110,150,135,165][i],label:String(i)})),
       kind:"Impulse" as const,direction:"bullish" as const,invalidation:100,entry:110,targets:[150,165],quality:80,rules:[],strict:true
     };
-    const values=[149,149,149,150,152,154,156,157,158,156,153,149,146,145,146,147,148,149,150];
-    const c=[...Array.from({length:11},(_,i)=>100+i),...values].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    const values=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,145,146,147,148,149];
+    const pre=[100,105,110,120,130,140,150,155,160,164,165];
+    const c=[...pre,...values].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
     const live=buildLiveContinuationSetup(c,primary);
     expect(live?.points[0].index).toBe(10);
     expect(live?.points[0].price).toBe(165);
     expect(live?.points.map(p=>p.label)).toEqual(["X","A","B","C"]);
 
-    const invalidValues=[149,149,149,150,152,154,156,157,158,156,153,149,146,95,96,97,98,99,100];
-    const invalidC=[...Array.from({length:11},(_,i)=>100+i),...invalidValues].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    const invalidValues=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,95,96,97,98,99];
+    const invalidC=[...pre,...invalidValues].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
     expect(buildLiveContinuationSetup(invalidC,primary)).toBeNull();
   });
 
