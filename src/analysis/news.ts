@@ -33,18 +33,33 @@ export function normalizeNews(raw: any): NewsEvent[] {
 export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes = 30): NewsRisk {
   const buffer = bufferMinutes * 60_000;
   const relevant = events.filter(e => e.impact === "high").sort((a,b) => a.date - b.date);
-  let nextEvent: NewsEvent | undefined, minutesToEvent: number | undefined, minutesSinceEvent: number | undefined;
-  for (const event of relevant) {
-    const delta = event.date - now;
-    if (delta >= 0 && delta <= buffer) { nextEvent = event; minutesToEvent = Math.ceil(delta / 60_000); break; }
-    if (delta < 0 && Math.abs(delta) <= buffer) { nextEvent = event; minutesSinceEvent = Math.ceil(Math.abs(delta) / 60_000); break; }
+  // If an upcoming high-impact event and a recently completed one are both
+  // inside the window, the upcoming event must take precedence. Otherwise an
+  // older event can incorrectly mask the next release.
+  const upcomingHigh = relevant.find(e => e.date >= now && e.date - now <= buffer);
+  if (upcomingHigh) {
+    const minutesToEvent = Math.ceil((upcomingHigh.date - now) / 60_000);
+    return {
+      level: "HIGH", blocked: true,
+      message: upcomingHigh.title + " in " + minutesToEvent + "m — high-impact news window",
+      nextEvent: upcomingHigh, minutesToEvent
+    };
   }
-  if (nextEvent) return {
-    level: "HIGH", blocked: true,
-    message: minutesToEvent != null ? nextEvent.title + " in " + minutesToEvent + "m — high-impact news window" : nextEvent.title + " was " + minutesSinceEvent + "m ago — post-news volatility window",
-    nextEvent, minutesToEvent, minutesSinceEvent
-  };
-  const medium = events.filter(e => e.impact === "medium").sort((a,b) => Math.abs(a.date-now) - Math.abs(b.date-now))[0];
+  const recentHigh = relevant
+    .filter(e => e.date < now && now - e.date <= buffer)
+    .sort((a,b) => b.date - a.date)[0];
+  if (recentHigh) {
+    const minutesSinceEvent = Math.ceil((now - recentHigh.date) / 60_000);
+    return {
+      level: "HIGH", blocked: true,
+      message: recentHigh.title + " was " + minutesSinceEvent + "m ago — post-news volatility window",
+      nextEvent: recentHigh, minutesSinceEvent
+    };
+  }
+
+  const medium = events
+    .filter(e => e.impact === "medium")
+    .sort((a,b) => Math.abs(a.date-now) - Math.abs(b.date-now))[0];
   if (medium && Math.abs(medium.date - now) <= buffer) {
     const delta=medium.date-now;
     return {
