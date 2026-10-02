@@ -527,7 +527,21 @@ export default function Home(){
 
  const lastClosed=candles.at(-1)?.closed!==false?candles.at(-1):candles.at(-2);
  const lastClosedTime=lastClosed?.time??0;
- useEffect(()=>{if(!lastClosedTime)return;const normalized=normalizeCandleSeries(candles,true);setAnalysisCandles(prev=>prev.at(-1)?.time===lastClosedTime?prev:normalized)},[candles,lastClosedTime]);
+ const closedTailSignature=(rows:Candle[])=>rows.slice(-3).map(c=>[
+   c.time,c.open,c.high,c.low,c.close,c.volume,c.takerBuyVolume??""
+ ].join(":")).join("|");
+ useEffect(()=>{
+   if(!lastClosedTime)return;
+   const normalized=normalizeCandleSeries(candles,true);
+   const nextSig=closedTailSignature(normalized);
+   setAnalysisCandles(prev=>{
+     // Realtime open-candle updates should not re-run all analysis when the
+     // latest closed data is unchanged. Compare recent closed OHLCV/taker-flow,
+     // not only the terminal timestamp, so REST resync corrections are applied.
+     if(prev.length===normalized.length&&closedTailSignature(prev)===nextSig)return prev;
+     return normalized;
+   });
+ },[candles,lastClosedTime]);
 
  useEffect(()=>{
   let stop=false;
