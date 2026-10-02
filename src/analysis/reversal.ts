@@ -172,7 +172,9 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     if(candle.high<candle.low||candle.high<Math.max(candle.open,candle.close)||candle.low>Math.min(candle.open,candle.close))continue;
     byTime.set(candle.time,candle);
   }
-  const closed=[...byTime.values()].filter(c => c.closed !== false).sort((a,b)=>a.time-b.time);
+  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
+  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
+  const closed=(firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized);
   if (closed.length < 30) return { ...EMPTY, asOf: closed.length - 1 };
 
   const asOf = closed.length - 1;
