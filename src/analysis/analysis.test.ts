@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -193,6 +193,20 @@ describe("analysis regression",()=>{
     expect(isEntryZoneCausal(34,25,30,"BREAKER")).toBe(true);
     expect(isEntryZoneCausal(44,25,30,"BREAKER")).toBe(false);
     expect(isEntryZoneCausal(28,25,30,"BREAKER")).toBe(false);
+  });
+
+  it("rejects SMC trade geometry when the stop is on the wrong side",()=>{
+    expect(isValidTradeGeometry("BUY",100,100.5,[103],1.5)).toBe(false);
+    expect(isValidTradeGeometry("SELL",100,99.5,[97],1.5)).toBe(false);
+    expect(isValidTradeGeometry("BUY",100,98,[103],1.5)).toBe(true);
+    expect(isValidTradeGeometry("SELL",100,102,[97],1.5)).toBe(true);
+  });
+
+  it("rejects targets that are on the wrong side or below the minimum RR",()=>{
+    expect(isValidTradeGeometry("BUY",100,98,[101],1.5)).toBe(false);
+    expect(isValidTradeGeometry("SELL",100,102,[99],1.5)).toBe(false);
+    expect(isValidTradeGeometry("BUY",100,98,[103],1.5)).toBe(true);
+    expect(isValidTradeGeometry("SELL",100,102,[97],1.5)).toBe(true);
   });
 
   it("requires an order block to link to a structure break at or after displacement",()=>{
