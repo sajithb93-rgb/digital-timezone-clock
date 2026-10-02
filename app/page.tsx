@@ -62,13 +62,15 @@ async function fetchKlines(symbol:string,interval:string,limit=300,marketType:Ma
  const init=signal?{signal}:undefined;
  const rows=await binanceFetchJson(cfg.rest+"/klines?symbol="+encodeURIComponent(symbol)+"&interval="+interval+"&limit="+limit,init);
  if(!Array.isArray(rows))throw new Error("Binance kline response is invalid");
- return rows.map((x:any)=>{
+ const parsed=rows.map((x:any)=>{
    if(!Array.isArray(x)||x.length<10)return null;
    const time=Number(x[0]),open=Number(x[1]),high=Number(x[2]),low=Number(x[3]),close=Number(x[4]),volume=Number(x[5]),takerBuyVolume=Number(x[9]),closeTime=Number(x[6]);
    if(![time,open,high,low,close,volume,closeTime].every(Number.isFinite))return null;
    if(time<=0||volume<0||high<low||high<Math.max(open,close)||low>Math.min(open,close)||closeTime<time)return null;
    return {time,open,high,low,close,volume,takerBuyVolume:Number.isFinite(takerBuyVolume)?takerBuyVolume:undefined,closed:closeTime<=Date.now()};
  }).filter((x:Candle|null):x is Candle=>x!==null).sort((a,b)=>a.time-b.time);
+ if(rows.length>0&&parsed.length===0)throw new Error("Binance kline response contained no valid candles");
+ return parsed;
 }
 
 async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:number,endTime:number,signal?:AbortSignal,maxTrades=3000):Promise<AggTrade[]>{
