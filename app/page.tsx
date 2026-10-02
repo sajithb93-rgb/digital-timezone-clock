@@ -372,7 +372,9 @@ export default function Home(){
     try{
      const k=JSON.parse(e.data).k;
      if(!k)return;
-     const c={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v,takerBuyVolume:+k.V,closed:!!k.x};
+     const c={time:Number(k.t),open:Number(k.o),high:Number(k.h),low:Number(k.l),close:Number(k.c),volume:Number(k.v),takerBuyVolume:Number(k.V),closed:!!k.x};
+     if(![c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite)
+       ||c.time<=0||c.volume<0||c.high<c.low||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))return;
      setCandles(prev=>mergeCandles([c],prev,true));
      if(c.closed){
       setAnalysisCandles(prev=>{
