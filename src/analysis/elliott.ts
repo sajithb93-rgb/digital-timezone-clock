@@ -254,7 +254,7 @@ export function validateFlat(prices:number[],bullishCorrection:boolean):FlatVali
   const bRetracement=ab/xa;
   const cProjection=bc/ab;
   const direction=aUp?"bullish":"bearish";
-  const bInXA=aUp?b<x&&b>a:b>x&&b<a;
+  const bInXA=aUp?b>x&&b<a:b<x&&b>a;
   const cReversesA=aUp?c>b:c<b;
   const bExceedsX=aUp?b<=x:b>=x;
   const cBeyondA=aUp?c>a:c<a;
