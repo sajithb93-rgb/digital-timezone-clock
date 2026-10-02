@@ -13,6 +13,7 @@ import { classifySMCEntry, classifyElliottEntry, type EntryScanRow } from "../sr
 import { classifyOrderFlowSetup, type OrderFlowScanRow } from "../src/analysis/orderflowScanner";
 import { FootprintBook, normalizeAggTrade, type AggTrade, type FootprintSnapshot } from "../src/analysis/footprint";
 import { analyzeReversal, analyzeReversalMTF, type ReversalEngineResult } from "../src/analysis/reversal";
+import { normalizeCandleSeries } from "../src/analysis/candles";
 
 type Mode="smc"|"elliott"|"combined"|"orderflow";
 type MarketKind="spot"|"usdm"|"coinm";
