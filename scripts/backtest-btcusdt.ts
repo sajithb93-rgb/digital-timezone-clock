@@ -66,7 +66,10 @@ function parseCsv(content: string, source: string): ArchiveRow[] {
     const close = Number(cols[4]);
     const volume = Number(cols[5]);
     const takerBuyVolume = Number(cols[9]);
-    if (![open, high, low, close, volume, takerBuyVolume].every(Number.isFinite)) {
+    if (![open, high, low, close, volume, takerBuyVolume].every(Number.isFinite)
+      || open <= 0 || high <= 0 || low <= 0 || close <= 0
+      || volume < 0 || takerBuyVolume < 0 || takerBuyVolume > volume
+      || high < Math.max(open, close) || low > Math.min(open, close)) {
       throw new Error(`Invalid kline row in ${source}`);
     }
     rows.push({ openTime, open, high, low, close, volume, takerBuyVolume });
@@ -198,9 +201,14 @@ function isFavorableTarget(side: "LONG" | "SHORT", entry: number, target: number
 
 async function main() {
   if (
-    !(DAYS > 0 && INITIAL_EQUITY > 0 && RISK_FRACTION > 0 && RISK_FRACTION <= 0.1) ||
-    !(MIN_TARGET_RR > 0 && MIN_TARGET_RR <= 10) ||
-    !(MAX_ENTRY_DEVIATION_ATR >= 0 && MAX_ENTRY_DEVIATION_ATR <= 5) ||
+    !(Number.isFinite(DAYS) && Number.isInteger(DAYS) && DAYS > 0) ||
+    !(Number.isFinite(INITIAL_EQUITY) && INITIAL_EQUITY > 0) ||
+    !(Number.isFinite(RISK_FRACTION) && RISK_FRACTION > 0 && RISK_FRACTION <= 0.1) ||
+    !(Number.isFinite(FEE_RATE) && FEE_RATE >= 0 && FEE_RATE <= 0.1) ||
+    !(Number.isFinite(SLIPPAGE) && SLIPPAGE >= 0 && SLIPPAGE <= 0.1) ||
+    !(Number.isFinite(MIN_TARGET_RR) && MIN_TARGET_RR > 0 && MIN_TARGET_RR <= 10) ||
+    !(Number.isFinite(MAX_ENTRY_DEVIATION_ATR) && MAX_ENTRY_DEVIATION_ATR >= 0 && MAX_ENTRY_DEVIATION_ATR <= 5) ||
+    !(Number.isInteger(ARCHIVE_LAG_DAYS) && ARCHIVE_LAG_DAYS >= 1 && ARCHIVE_LAG_DAYS <= 7) ||
     !(Number.isInteger(ELLIOTT_MAX_AGE_BARS) && ELLIOTT_MAX_AGE_BARS >= 1 && ELLIOTT_MAX_AGE_BARS <= 1000)
   ) {
     throw new Error("Invalid backtest configuration");
