@@ -184,16 +184,26 @@ function uniquePivots(ps:Pivot[],tol:number){
  return out.sort((a,b)=>a.index-b.index);
 }
 function equalLevels(ps:Pivot[],tol:number){
- const unused=[...ps].sort((a,b)=>a.price-b.price);
+ const ordered=[...ps].sort((a,b)=>a.price-b.price);
+ const used=new Set<number>();
  const reps:Pivot[]=[];
- while(unused.length){
-  const seed=unused.shift()!;
-  const cluster=[seed];
-  for(let i=unused.length-1;i>=0;i--){
-   if(Math.abs(unused[i].price-seed.price)<=tol)cluster.push(unused.splice(i,1)[0]);
+ for(let i=0;i<ordered.length;i++){
+  if(used.has(i))continue;
+  const seed=ordered[i];
+  const cluster:number[]=[i];
+  for(let j=i+1;j<ordered.length;j++){
+   if(used.has(j))continue;
+   const p=ordered[j];
+   if(Math.abs(p.price-seed.price)>tol)break;
+   // Two equal highs/lows should represent separate tests, not adjacent
+   // pivot noise. Require a minimum bar separation.
+   if(Math.abs(p.index-seed.index)>=3)cluster.push(j);
   }
   if(cluster.length>=2){
-   reps.push(cluster.reduce((best,p)=>p.index>best.index?p:best));
+   cluster.forEach(j=>used.add(j));
+   // Keep the most recent confirmed level as the actionable liquidity pool.
+   const repIndex=cluster.reduce((best,j)=>ordered[j].index>ordered[best].index?j:best,cluster[0]);
+   reps.push(ordered[repIndex]);
   }
  }
  return reps.sort((a,b)=>a.index-b.index);
@@ -454,7 +464,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const events=detectStructureEvents(data,ps);
  const internalEvents=detectStructureEvents(data,internal);
  const asOf=data.length-1;
- const fvgs=findFvgs(data,a,asOf),obs=findOrderBlocks(data,a,asOf,events),breakers=makeBreakers(obs,data,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.18,.0000001);
+ const fvgs=findFvgs(data,a,asOf),obs=findOrderBlocks(data,a,asOf,events),breakers=makeBreakers(obs,data,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.15,.0000001);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
  const liquidityHighs=uniquePivots([...equalHighs,...highs.slice(-6)],tol).slice(-8);
  const liquidityLows=uniquePivots([...equalLows,...lows.slice(-6)],tol).slice(-8);
