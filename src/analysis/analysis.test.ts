@@ -382,6 +382,7 @@ describe("analysis regression",()=>{
     expect(v.w4OverlapsW1).toBe(true);
     expect(v.valid).toBe(true);
     expect(validateDiagonalWave([100,120,110,125,118,150],true).valid).toBe(false);
+    expect(validateDiagonalWave([100,140,120,150,130,160],true).valid).toBe(false);
   });
 
   it("applies the same strict impulse rules to bearish counts",()=>{
