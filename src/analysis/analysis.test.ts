@@ -331,15 +331,15 @@ describe("analysis regression",()=>{
 
   it("keeps zone state bounded to the supplied analysis window",()=>{
     const base=[
-      {time:30,open:100,high:101,low:99,close:100,volume:100,closed:true},
-      {time:31,open:100,high:100.5,low:99.5,close:100,volume:100,closed:true},
-      {time:32,open:100,high:105,low:100.2,close:104,volume:100,closed:true}
+      {time:31,open:100,high:101,low:99,close:100,volume:100,closed:true},
+      {time:32,open:100,high:100.5,low:99.5,close:100,volume:100,closed:true},
+      {time:33,open:100,high:105,low:100.2,close:104,volume:100,closed:true}
     ];
     const future={time:33,open:101,high:102,low:99,close:100,volume:100,closed:true};
     const earlier=analyzeSMC([...candles(30),...base]);
     const later=analyzeSMC([...candles(30),...base,future]);
-    expect(earlier.asOf).toBe(32);
-    expect(later.asOf).toBe(33);
+    expect(earlier.asOf).toBe(33);
+    expect(later.asOf).toBe(34);
   });
 
   it("does not emit a trade setup without a valid entry zone",()=>{
