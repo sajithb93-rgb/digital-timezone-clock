@@ -749,10 +749,18 @@ export function analyzeElliott(c:Candle[]):AdvancedElliottResult{
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
  const rows:MTFFrame[]=frames.map(f=>{
-  const valid=f.candles.filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)&&Number.isFinite(x.volume)&&x.volume>=0&&x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close));
-  const available=valid.length>=25;
+  const byTime=new Map<number,Candle>();
+  for(const x of f.candles){
+   if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
+   if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+   byTime.set(x.time,x);
+  }
+  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
+  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
+  const closed=firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized;
+  const available=closed.length>=25;
   if(!available)return{interval:f.interval,trend:"Neutral" as const,score:0,structure:"UNAVAILABLE",available:false,elliottTrend:"Neutral" as const,elliottScore:0,elliottPhase:"UNAVAILABLE"};
-  const smc=analyzeSMC(valid),ew=analyzeElliott(valid);
+  const smc=analyzeSMC(closed),ew=analyzeElliott(closed);
   // An Elliott count that has already crossed its Wave-1 origin is historical
   // evidence of invalidation, not current directional bias.
   const elliottUsable=ew.setupState!=="INVALIDATED"&&!!ew.primary;
