@@ -549,7 +549,8 @@ export default function Home(){
   const controller=new AbortController();
   const load=async()=>{
    try{
-    const cfg=marketConfig[marketType==="spot"?"usdm":marketType];
+    if(marketType==="spot"){if(!stop)setDerivatives(null);return;}
+    const cfg=marketConfig[marketType];
     const [o,p,tt]=await Promise.all([
       binanceFetchJson(cfg.rest+"/openInterest?symbol="+encodeURIComponent(symbol),{signal:controller.signal}),
       binanceFetchJson(cfg.rest+"/premiumIndex?symbol="+encodeURIComponent(symbol),{signal:controller.signal}),
@@ -700,7 +701,7 @@ export default function Home(){
    </div>}
 
 <details className="more-tools side-tools"><summary>More market data <span>MTF · Derivatives · Scanner · Status</span></summary><div className="panel-card mtf-card"><div className="section-title">MULTI-TIMEFRAME</div>{mtf.frames.map(f=><div className="mtf-row" key={f.interval}><span>{f.interval}</span><b className={f.trend==="Bullish"?"positive":f.trend==="Bearish"?"negative":""}>{f.available?f.trend:"UNAVAILABLE"}</b><small>{f.structure} · SMC/COMBINED {f.score}/100 · EW {f.elliottTrend} {f.elliottScore}/100</small></div>)}</div>
-   <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(): "—"}</b><small>{marketType==="coinm"?"COIN-M":"USDⓈ-M"}</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&+derivatives.change24h>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
+   <div className="panel-card mtf-card"><div className="section-title">DERIVATIVES</div><div className="mtf-row"><span>Open Interest</span><b>{derivatives?Number(derivatives.openInterest).toLocaleString(): "—"}</b><small>{marketType==="spot"?"N/A · Spot":marketType==="coinm"?"COIN-M":"USDⓈ-M"}</small></div><div className="mtf-row"><span>Funding</span><b>{derivatives?Number(derivatives.fundingRate).toFixed(5):"—"}</b><small>8h</small></div><div className="mtf-row"><span>24h</span><b className={derivatives&&+derivatives.change24h>=0?"positive":"negative"}>{derivatives?Number(derivatives.change24h).toFixed(2)+"%":"—"}</b><small>Futures</small></div></div>
 
    <div className="panel-card mtf-card"><div className="section-title">MARKET SCANNER</div>{scanner.slice(0,8).map(x=><div className="scanner-row" key={x.symbol}><span>{x.symbol}</span><b className={x.priceChangePercent>=0?"positive":"negative"}>{x.priceChangePercent>=0?"+":""}{x.priceChangePercent.toFixed(2)}%</b><small>{(x.quoteVolume/1e6).toFixed(1)}M</small></div>)}</div>
    <div className="panel-card feed-card"><div className="section-title">SYSTEM STATUS</div><div className="status-line"><span>{marketConfig[marketType].label} REST</span><b className={restConnected?"positive":"negative"}>{restConnected?"CONNECTED":loading?"CONNECTING":"OFFLINE"}</b></div><div className="status-line"><span>WebSocket</span><b className={connected?"positive":"negative"}>{connected?"LIVE":"RECONNECTING"}</b></div><div className="status-line"><span>SMC / Elliott</span><b className={analysisCandles.length>=30?"positive":analysisCandles.length>=25?"":"negative"}>{analysisCandles.length>=30?"READY":analysisCandles.length>=25?"SMC ONLY":"WAITING"}</b></div><div className="status-line"><span>Derivatives</span><b>{derivatives?"LIVE":"N/A"}</b></div><div className="status-line"><span>Execution</span><b>DISABLED</b></div></div></details>
