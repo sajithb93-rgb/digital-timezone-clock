@@ -269,7 +269,7 @@ export default function Home(){
   scan();
   const id=window.setInterval(scan,180000);
   return()=>{stop=true;controller.abort();clearInterval(id);if(orderFlowScanRunRef.current===runId)orderFlowScanRunRef.current+=1;orderFlowScanInFlightRef.current=false};
- },[marketType,quoteFilter,orderFlowScanTf,orderFlowScannerEnabled,pairs.length,symbol]);
+ },[marketType,quoteFilter,orderFlowScanTf,orderFlowScannerEnabled,pairs,symbol]);
 
  useEffect(()=>{
   let active=true;
