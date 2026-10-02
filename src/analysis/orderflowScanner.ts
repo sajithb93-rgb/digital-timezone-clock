@@ -63,9 +63,10 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
     : direction==="SELL"
       ? recentSweepSellValid && sweepIntegritySellValid
       : false;
+  const resultDirectionAligned=direction!=="NONE"&&result.direction===direction;
   let state: OrderFlowScanState = "WAIT";
-  if (result.direction !== "WAIT" && geometryValid && targetQualityValid && coreDataValid && directionGateValid) state = "CONFIRMED";
-  else if (!geometryValid || !targetQualityValid || !coreDataValid || !directionGateValid) state = "WAIT";
+  if (resultDirectionAligned && geometryValid && targetQualityValid && coreDataValid && directionGateValid) state = "CONFIRMED";
+  else if (!geometryValid || !targetQualityValid || !coreDataValid || !directionGateValid || !resultDirectionAligned) state = "WAIT";
   else if (direction !== "NONE" && score >= 75) state = "SETUP";
   else if (direction !== "NONE" && score >= 50) state = "WATCH";
   
