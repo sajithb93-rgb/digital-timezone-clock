@@ -35,6 +35,14 @@ describe("advanced flow/regime input normalization",()=>{
     expect(flowSnapshot([...bars].reverse())).toEqual(flowSnapshot([...bars,duplicate]));
   });
 
+  it("uses the recent 20-bar window for pressure while preserving full-history cumulative delta",()=>{
+    const old=Array.from({length:30},(_,i)=>({...candle(i),volume:100,takerBuyVolume:i<20?20:90}));
+    const r=flowSnapshot(old);
+    expect(r.pressure).toBe("BUYERS");
+    expect(r.deltaRatio).toBeGreaterThan(0);
+    expect(r.cumulativeDelta).toBeLessThan(r.delta);
+  });
+
   it("does not treat an impossible taker-buy volume as exact data",()=>{
     const bars=[
       {...candle(1),volume:100,takerBuyVolume:200},
