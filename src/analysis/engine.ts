@@ -684,7 +684,7 @@ export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValid
  const w1=Math.abs(p1-p0),w2=Math.abs(p2-p1),w3=Math.abs(p3-p2),w4=Math.abs(p4-p3),w5=Math.abs(p5-p4);
  const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
  const w3BeyondW1=bull?p3>p1:p3<p1;
- const w3NotShortest=w3>=w5;
+ const w3NotShortest=w3>=w1&&w3>=w5;
  const w4OverlapsW1=bull?p4<=p1&&p4>p2:p4>=p1&&p4<p2;
  const w4DoesNotPassW2=bull?p4>p2:p4<p2;
  const w5DirectionValid=bull?p5>p4:p5<p4;
