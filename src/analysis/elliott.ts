@@ -361,7 +361,7 @@ export function validateDoubleZigzag(prices:number[],bullishCorrection:boolean){
   const w=validateZigzag(first,bullishCorrection);
   const y=validateZigzag(second,bullishCorrection);
 
-  const [p0,p3,p4]=connector;
+  const p0=prices[0],p3=prices[3],p4=prices[4];
   const wSize=Math.abs(p3-p0);
   const xSize=Math.abs(p4-p3);
   const ySize=Math.abs(second[3]-second[0]);
@@ -372,7 +372,7 @@ export function validateDoubleZigzag(prices:number[],bullishCorrection:boolean){
   const xCounterTrend=(p4-p3)*dir<0;
   const xInsideW=bullishCorrection?p4>p0&&p4<p3:p4<p0&&p4>p3;
   const xRetracement=wSize>0?xSize/wSize:Infinity;
-  const connectorValid=xSize>0&&wSize>0&&ySize>0&&xCounterTrend&&xInsideW&&xRetracement<1;
+  const connectorValid=xSize>0&&wSize>0&&ySize>0&&xCounterTrend&&xInsideW&&xRetracement<=.786;
 
   return{
     valid:w.valid&&y.valid&&connectorValid,
