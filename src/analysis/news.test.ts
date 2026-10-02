@@ -34,6 +34,12 @@ describe("news filter",()=>{
     expect(getNewsRisk([event],now,Number.NaN).blocked).toBe(true);
   });
 
+  it("parses numeric-string epoch timestamps",()=>{
+    const rows=normalizeNews([{title:"Epoch CPI",country:"USD",impact:"high",date:"1790938800000"}]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.date).toBe(1790938800000);
+  });
+
   it("does not misclassify arbitrary numeric strings containing 3 as high impact",()=>{
     const rows=normalizeNews([
       {title:"Routine release",country:"USD",impact:"13",date:"2026-10-02T10:00:00Z"},
