@@ -84,7 +84,10 @@ function atrAt(candles: Candle[], end: number, period = 14): number {
 
 function displacementRatio(candles: Candle[], index: number): number {
   if (index < 0 || index >= candles.length) return 0;
-  return body(candles[index]) / Math.max(atrAt(candles, index), 1e-12);
+  // Measure the candidate candle against volatility that existed before it.
+  // Including the candidate in its own ATR denominator suppresses genuine
+  // displacement exactly when the candle is unusually large.
+  return body(candles[index]) / Math.max(atrAt(candles, index - 1), 1e-12);
 }
 
 function findDeltaDivergence(candles: Candle[], flow: OrderFlowResult, direction: ReversalDirection): boolean {
@@ -370,7 +373,7 @@ export function analyzeReversalMTF(mtfFrames: { interval: string; candles: Candl
     (aligned ? 10 : 0) +
     (neutralContext ? 2 : 0)
   )));
-  const confirmed = aligned && primary.state === "CONFIRMED" && trigger.state !== "WATCH";
+  const confirmed = aligned && primary.state === "CONFIRMED" && trigger.state === "CONFIRMED";
   const state: ReversalState = confirmed ? "CONFIRMED" : score >= 65 && aligned ? "SETUP" : score >= 40 ? "WATCH" : "NONE";
 
   const makeFrame = (interval: string, r: ReversalEngineResult, structure: MTFReversalFrame["structure"]): MTFReversalFrame => ({
