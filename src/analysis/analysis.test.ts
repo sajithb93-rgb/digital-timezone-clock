@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak, isCurrentRetestEligible } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { normalizeCandleSeries } from "./candles";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
@@ -78,6 +78,14 @@ describe("analysis regression",()=>{
     expect(riskPlan(1000,1,100,105,{}, "BUY").valid).toBe(false);
     expect(riskPlan(1000,1,100,95,{}, "SELL").valid).toBe(false);
     expect(riskPlan(1000,1,100,95,{}, "BUY").valid).toBe(true);
+  });
+
+  it("allows only the current first retest of an OB/FVG to become an entry zone",()=>{
+    expect(isCurrentRetestEligible("OB",10,{mitigated:true,mitigationIndex:10})).toBe(true);
+    expect(isCurrentRetestEligible("OB",10,{mitigated:true,mitigationIndex:9})).toBe(false);
+    expect(isCurrentRetestEligible("FVG",10,{partial:true,partialFillIndex:10,filled:false})).toBe(true);
+    expect(isCurrentRetestEligible("FVG",10,{partial:true,partialFillIndex:9,filled:false})).toBe(false);
+    expect(isCurrentRetestEligible("FVG",10,{partial:true,partialFillIndex:10,filled:true})).toBe(false);
   });
 
   it("marks an entry zone active only when the latest closed candle overlaps the zone",()=>{
