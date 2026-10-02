@@ -416,8 +416,8 @@ describe("analysis regression",()=>{
   });
 
   it("allows an impulse where Wave 3 is not the shortest but is not the longest",()=>{
-    expect(validateImpulseWave([100,140,120,150,130,145],true).valid).toBe(true);
-    expect(validateImpulseWave([200,160,180,150,170,155],false).valid).toBe(true);
+    expect(validateImpulseWave([100,140,120,150,142,160],true).valid).toBe(true);
+    expect(validateImpulseWave([200,160,180,150,158,140],false).valid).toBe(true);
   });
 
   it("allows a contracting diagonal when Wave 3 is shorter than Wave 1 but longer than Wave 5",()=>{
