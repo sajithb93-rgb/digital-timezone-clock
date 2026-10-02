@@ -199,6 +199,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const latestBuyFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio>=0.08&&latestFootprint.maxBuyImbalanceRatio>=3&&latestFootprint.stackedBuyImbalances>=2&&latestFootprint.absorption==="BUYER";
   const latestSellFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio<=-0.08&&latestFootprint.maxSellImbalanceRatio>=3&&latestFootprint.stackedSellImbalances>=2&&latestFootprint.absorption==="SELLER";
   const confirmedFlowData=useFootprint||allExact;
+  const sweepRecentBuyValid=!!sweepLow&&last.index-sweepLow.index<=maxSweepAge;
+  const sweepRecentSellValid=!!sweepHigh&&last.index-sweepHigh.index<=maxSweepAge;
   const longConfirmed=sufficientHistory&&useFootprint&&longContext&&pressure==="BUYERS"&&recentFlowAlignedBuy&&latestBuyFootprint&&last.microStructure==="BULLISH"&&entryChaseBuyValid;
   const shortConfirmed=sufficientHistory&&useFootprint&&shortContext&&pressure==="SELLERS"&&recentFlowAlignedSell&&latestSellFootprint&&last.microStructure==="BEARISH"&&entryChaseSellValid;
 
@@ -210,7 +212,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"footprint_coverage",label:"Footprint volume coverage ≥ 95%",passed:footprintCoverage>=0.95,detail:`Minimum per-bar coverage ${(footprintCoverage*100).toFixed(1)}%`},
     {key:"latest_fp",label:"Latest closed footprint",passed:!!latestFootprint,detail:latestFootprint?"Latest candle has a confirmed footprint":"Latest closed candle has no confirmed footprint snapshot"},
     {key:"sweep_buy",label:"Sell-side liquidity sweep",passed:!!sweepLow,detail:sweepLow?`Sweep at index ${sweepLow.index} · ${sweepLow.sweepPrice??"—"}`:"No low sweep in recent window"},
-    {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:!!sweepLow&&last.index-sweepLow.index<=maxSweepAge,detail:sweepLow?`${last.index-sweepLow.index} bars ago`:"No low sweep"},
+    {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:sweepRecentBuyValid,detail:sweepLow?`${last.index-sweepLow.index} bars ago`:"No low sweep"},
     {key:"abs_buy",label:"Buyer absorption after sweep",passed:longContext,detail:buyerAbsorption?`Latest buyer absorption at index ${buyerAbsorption.index}`:"No buyer absorption after a low sweep"},
     {key:"recent_flow_buy",label:"3-bar buyer flow alignment",passed:recentFlowAlignedBuy,detail:`3-bar average delta ratio ${(recentFlowAverage*100).toFixed(2)}% · latest ${((recent3.at(-1)??0)*100).toFixed(2)}%`},
     {key:"entry_chase_buy",label:"BUY entry not overextended",passed:entryChaseBuyValid,detail:entryChaseBuy==null?"Not enough structure bars":`Break extension ${entryChaseBuy.toFixed(2)}× avg range`},
@@ -219,7 +221,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"imb_buy",label:"2+ stacked buy / 3× imbalance",passed:latestBuyFootprint,detail:latestFootprint?`stacked ${latestFootprint.stackedBuyImbalances}, max ${latestFootprint.maxBuyImbalanceRatio.toFixed(2)}×`:"No latest footprint"},
     {key:"structure_buy",label:"Bullish structure break",passed:last.microStructure==="BULLISH",detail:last.microStructure},
     {key:"sweep_sell",label:"Buy-side liquidity sweep",passed:!!sweepHigh,detail:sweepHigh?`Sweep at index ${sweepHigh.index} · ${sweepHigh.sweepPrice??"—"}`:"No high sweep in recent window"},
-    {key:"sweep_recent_sell",label:"Recent buy-side sweep",passed:!!sweepHigh&&last.index-sweepHigh.index<=maxSweepAge,detail:sweepHigh?`${last.index-sweepHigh.index} bars ago`:"No high sweep"},
+    {key:"sweep_recent_sell",label:"Recent buy-side sweep",passed:sweepRecentSellValid,detail:sweepHigh?`${last.index-sweepHigh.index} bars ago`:"No high sweep"},
     {key:"abs_sell",label:"Seller absorption after sweep",passed:shortContext,detail:sellerAbsorption?`Latest seller absorption at index ${sellerAbsorption.index}`:"No seller absorption after a high sweep"},
     {key:"recent_flow_sell",label:"3-bar seller flow alignment",passed:recentFlowAlignedSell,detail:`3-bar average delta ratio ${(recentFlowAverage*100).toFixed(2)}% · latest ${((recent3.at(-1)??0)*100).toFixed(2)}%`},
     {key:"entry_chase_sell",label:"SELL entry not overextended",passed:entryChaseSellValid,detail:entryChaseSell==null?"Not enough structure bars":`Break extension ${entryChaseSell.toFixed(2)}× avg range`},
