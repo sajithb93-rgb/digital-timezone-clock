@@ -716,7 +716,7 @@ export function validateImpulseWave(prices:number[],bull:boolean):ImpulseValidat
  const w1=Math.abs(p1-p0),w3=Math.abs(p3-p2),w5=Math.abs(p5-p4);
  const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
  const w3BeyondW1=bull?p3>p1:p3<p1;
- const w3NotShortest=w3>=w1&&w3>=w5;
+ const w3NotShortest=w3>=Math.min(w1,w5);
  const w4Valid=bull?p4>p1&&p4<p3:p4<p1&&p4>p3;
  const w5DirectionValid=bull?p5>p4:p5<p4;
  const w5BeyondW3=bull?p5>p3:p5<p3;
