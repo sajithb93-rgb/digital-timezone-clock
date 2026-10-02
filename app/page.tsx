@@ -140,7 +140,7 @@ async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTi
     :null;
   const targetBucketsComplete=coveredClosedBuckets.size>=targetBars
     &&oldestCovered!==null
-    &&cursorEnd<oldestCovered;
+    &&earliestTime<oldestCovered;
   if(targetBucketsComplete)break;
   if(earliestTime>=cursorEnd)break;
   cursorEnd=earliestTime-1;
