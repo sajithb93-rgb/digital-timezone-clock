@@ -161,7 +161,15 @@ function calculateTargets(candles: Candle[], entry: number, invalidation: number
 
 export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: OrderFlowResult, options: { requireOrderFlow?: boolean } = {}): ReversalEngineResult {
   const requireOrderFlow = options.requireOrderFlow !== false;
-  const closed = candles.filter(c => c.closed !== false);
+  // Reversal indices must remain stable even when the upstream exchange feed
+  // arrives out of order or contains duplicate/malformed candles.
+  const byTime=new Map<number,Candle>();
+  for(const candle of candles){
+    if(!Number.isFinite(candle.time)||!Number.isFinite(candle.open)||!Number.isFinite(candle.high)||!Number.isFinite(candle.low)||!Number.isFinite(candle.close))continue;
+    if(candle.high<candle.low||candle.high<Math.max(candle.open,candle.close)||candle.low>Math.min(candle.open,candle.close))continue;
+    byTime.set(candle.time,candle);
+  }
+  const closed=[...byTime.values()].filter(c => c.closed !== false).sort((a,b)=>a.time-b.time);
   if (closed.length < 30) return { ...EMPTY, asOf: closed.length - 1 };
 
   const asOf = closed.length - 1;
@@ -196,9 +204,13 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const orderBlock = findRelevantOb(smc, direction, sweep.index, triggerIndex);
     const zone = chooseZone(smc, direction, sweep.index, triggerIndex, last.close);
 
+    // When Order Flow is required, only the Order Flow engine's own
+    // confirmed directional state may satisfy the gate. Pressure + absorption
+    // alone are descriptive context and must not bypass footprint/sweep/
+    // structure/geometry confirmation performed by analyzeOrderFlow.
     const orderflowConfirmed = direction === "BUY"
-      ? orderFlow.direction === "BUY" || (orderFlow.pressure === "BUYERS" && orderFlow.absorption === "BUYER")
-      : orderFlow.direction === "SELL" || (orderFlow.pressure === "SELLERS" && orderFlow.absorption === "SELLER");
+      ? orderFlow.direction === "BUY"
+      : orderFlow.direction === "SELL";
     const deltaDivergence = findDeltaDivergence(closed, orderFlow, direction);
 
     const orderFlowGate = !requireOrderFlow || orderflowConfirmed;
