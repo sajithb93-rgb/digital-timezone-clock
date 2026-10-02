@@ -602,8 +602,10 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
  const mtfSignalMarker = layers.reversal && mtfReversal.confirmed && mtfReversal.direction !== "NONE" ? (() => {
   const dirCls = mtfReversal.direction === "BUY" ? "reversal-buy" : "reversal-sell";
-  let idx = candles.length - 1;
-  while(idx >= 0 && candles[idx].closed === false) idx -= 1;
+  // Annotation coordinates use the same closed-candle series as the SMC/
+  // Elliott indices. Never index into the raw realtime series here because it
+  // may contain the currently forming candle.
+  const idx = candles.length - 1;
   const px = idx >= 0 ? xOf(idx) : null;
   const py = idx >= 0 ? yOf(candles[idx]?.close ?? 0) : null;
   const label = mtfReversal.direction + " REVERSAL · MTF 15m + 5m CONFIRMED · " + mtfReversal.score + "/100";
@@ -685,7 +687,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
    {fp.poc!=null&&(()=>{const y=yOf(fp.poc);return y==null?null:<g><line x1={Math.max(0,xBase-38)} x2={Math.min(width,xBase+62)} y1={y} y2={y} className="footprint-poc"/>{text(xBase+3,y,"POC","footprint-poc-label")}</g>})()}
   </g>;
  })() : null;
- const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={f.label==="161.8%"||f.label==="261.8%"?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
+ const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);const isExtension=/161\.8%|261\.8%/.test(String(f.label??""));return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={isExtension?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
  const wave=showElliott?[
   elliott.primary?drawWave(elliott.primary.points,"impulse-"):null,
   liveElite?drawWave(liveElite.points,"live-","wave-abc-label"):elliott.correction?drawWave(elliott.correction.points,"abc-","wave-abc-label"):null
