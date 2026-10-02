@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -73,6 +73,13 @@ describe("analysis regression",()=>{
     expect(isPostSweepZoneCausal(26,25,30)).toBe(true);
     expect(isPostSweepZoneCausal(20,19,30)).toBe(true);
     expect(isPostSweepZoneCausal(10,1,30,12)).toBe(false);
+  });
+
+  it("requires an order block to link to a structure break at or after displacement",()=>{
+    expect(isOrderBlockCausal(10,12,12)).toBe(true);
+    expect(isOrderBlockCausal(10,12,11)).toBe(false);
+    expect(isOrderBlockCausal(10,12,25)).toBe(false);
+    expect(isOrderBlockCausal(10,12,22,12)).toBe(true);
   });
 
   it("requires internal structure confirmation to follow the swing break",()=>{
