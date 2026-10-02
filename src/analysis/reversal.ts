@@ -82,6 +82,15 @@ function atrAt(candles: Candle[], end: number, period = 14): number {
   return sum / Math.max(1, e - start + 1);
 }
 
+function sweepStillValid(candles:Candle[],sweepIndex:number,sweepPrice:number,type:"high"|"low"):boolean{
+  if(sweepIndex<0||sweepIndex>=candles.length||!Number.isFinite(sweepPrice))return false;
+  for(let i=sweepIndex+1;i<candles.length;i++){
+    if(type==="low"&&candles[i].close<sweepPrice)return false;
+    if(type==="high"&&candles[i].close>sweepPrice)return false;
+  }
+  return true;
+}
+
 function displacementRatio(candles: Candle[], index: number): number {
   if (index < 0 || index >= candles.length) return 0;
   // Measure the candidate candle against volatility that existed before it.
@@ -199,7 +208,10 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
   for (const direction of ["BUY", "SELL"] as const) {
     const sweepType = direction === "BUY" ? "low" : "high";
     const structureDirection = direction === "BUY" ? "bullish" : "bearish";
-    const sweep = smc.sweeps.filter(s => s.confirmed && s.type === sweepType && s.index >= lookbackStart && s.index <= asOf).sort((a, b) => b.index - a.index)[0] ?? null;
+    const sweep = smc.sweeps
+      .filter(s => s.confirmed && s.type === sweepType && s.index >= lookbackStart && s.index <= asOf)
+      .filter(s => sweepStillValid(closed,s.index,s.price,s.type))
+      .sort((a, b) => b.index - a.index)[0] ?? null;
     if (!sweep) continue;
 
     // Reversal causality uses a strict three-stage sequence:
