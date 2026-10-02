@@ -351,6 +351,14 @@ describe("order flow strategy",()=>{
     expect(r.rejectionReason).toContain("target quality");
   });
 
+  it("blocks targets already traded by the confirmation candle",()=>{
+    const candles=fullLongCandles().map((c,i)=>i===11?{...c,high:117}:c);
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.targets).toEqual([]);
+    expect(r.diagnostics.find(d=>d.key==="target_quality")?.passed).toBe(false);
+  });
+
   it("uses a real structural target before fallback R-multiple targets",()=>{
     const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
     expect(r.direction).toBe("BUY");
