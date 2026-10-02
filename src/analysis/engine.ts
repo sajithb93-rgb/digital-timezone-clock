@@ -1,6 +1,7 @@
 import { analyzeElliottAdvanced, type AdvancedElliottResult } from "./elliott";
+import { normalizeCandleSeries } from "./candles";
 export type Candle={time:number;open:number;high:number;low:number;close:number;volume:number;takerBuyVolume?:number;closed?:boolean};
-export { normalizeCandleSeries } from "./candles";
+export { normalizeCandleSeries };
 
 export type Pivot={index:number;price:number;type:"H"|"L";label?:string;strength?:number;confirmedAt?:number};
 export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"bearish";filled:boolean;fillIndex?:number;partial?:boolean;partialFillIndex?:number;size?:number};
