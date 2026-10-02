@@ -46,6 +46,19 @@ describe("risk sizing precision",()=>{
     expect(Number.isFinite(r.positionSize)).toBe(true);
   });
 
+  it("uses contract face value for inverse COIN-M notional limits",()=>{
+    const r=riskPlan(1000,1,1000,900,{
+      inverseContract:true,
+      contractSize:100,
+      minQty:1,
+      stepSize:1,
+      minNotional:500,
+      maxNotional:1500
+    },"BUY");
+    expect(r.valid).toBe(true);
+    expect(r.positionSize).toBe(10);
+  });
+
   it("returns exchange-step quantities without floating-point residue",()=>{
     const r=riskPlan(1000,1,100,98,{minQty:0.001,maxQty:10,stepSize:0.1,minNotional:0}, "BUY");
     expect(r.valid).toBe(true);
