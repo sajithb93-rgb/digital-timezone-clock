@@ -636,7 +636,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
    {level(orderFlow.entry,"orderflow-entry-line","OF ENTRY "+(orderFlow.entry!=null?orderFlow.entry.toFixed(4):"—"))}
    {level(orderFlow.stop,"orderflow-sl-line","OF SL "+(orderFlow.stop!=null?orderFlow.stop.toFixed(4):"—"))}
    {(orderFlow.targets||[]).slice(0,3).map((p:number,i:number)=>level(p,"orderflow-tp-line","OF TP"+(i+1)+" "+p.toFixed(4)))}
-   {latest&&orderFlow.direction!=="WAIT"&&<g>{(()=>{const x=xOf(latest.index),y=yOf(candles[latest.index]?.close??0);if(x==null||y==null)return null;const label=orderFlow.direction==="BUY"?"OF BUY CONFIRMED":"OF SELL CONFIRMED";return <><circle cx={x} cy={y} r="8" className={orderFlow.direction==="BUY"?"of-buy-marker":"of-sell-marker"}/>{text(Math.min(x+10,width-125),y,label,"orderflow-signal-label")}</>})()}</g>}
+   {latest&&orderFlow.direction!=="WAIT"&&<g>{(()=>{const latestIndex=candles.findIndex(c=>c.time===latest.time);const x=xOf(latestIndex),y=yOf(latestIndex>=0?candles[latestIndex].close:latest.index>=0?candles[latest.index]?.close??0:0);if(x==null||y==null)return null;const label=orderFlow.direction==="BUY"?"OF BUY CONFIRMED":"OF SELL CONFIRMED";return <><circle cx={x} cy={y} r="8" className={orderFlow.direction==="BUY"?"of-buy-marker":"of-sell-marker"}/>{text(Math.min(x+10,width-125),y,label,"orderflow-signal-label")}</>})()}</g>}
   </g>;
  })() : null;
  const footprintOverlay = showOrderFlow && orderFlow.footprint ? (() => {
