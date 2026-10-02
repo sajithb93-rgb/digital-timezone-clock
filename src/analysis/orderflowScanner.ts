@@ -30,7 +30,7 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
   const recentSweepSellValid=diagnosticPassed("sweep_recent_sell");
   const sweepIntegrityBuyValid=diagnosticPassed("sweep_integrity_buy");
   const sweepIntegritySellValid=diagnosticPassed("sweep_integrity_sell");
-  const coreDataValid=["closed","history","exact","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp"].every(diagnosticPassed);
+  const coreDataValid=["closed","history","exact","footprint_unique","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp"].every(diagnosticPassed);
   const buyChecks = [
     result.pressure === "BUYERS",
     result.deltaRatio >= 0.08,
