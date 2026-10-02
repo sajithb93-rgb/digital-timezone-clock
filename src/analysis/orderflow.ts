@@ -289,12 +289,31 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const sweepHigh=recentBars.filter(b=>b.liquiditySweep==="HIGH").at(-1);
   const buyerAbsorption=recentBars.filter(b=>b.absorption==="BUYER").at(-1);
   const sellerAbsorption=recentBars.filter(b=>b.absorption==="SELLER").at(-1);
+  // In exact-footprint mode, causal absorption must come from the confirmed
+  // footprint snapshot itself. Candle-estimated absorption is only a fallback
+  // for non-footprint diagnostics and can never strengthen exact confirmation.
+  const footprintBuyerAbsorptionIndex=useFootprint
+    ? fpRecent.reduce((latest,f)=>{
+        if(f.absorption!=="BUYER")return latest;
+        const idx=closed.findIndex(c=>c.time===f.candleTime);
+        return idx>latest?idx:latest;
+      },-1)
+    :-1;
+  const footprintSellerAbsorptionIndex=useFootprint
+    ? fpRecent.reduce((latest,f)=>{
+        if(f.absorption!=="SELLER")return latest;
+        const idx=closed.findIndex(c=>c.time===f.candleTime);
+        return idx>latest?idx:latest;
+      },-1)
+    :-1;
+  const buyerAbsorptionIndex=useFootprint?footprintBuyerAbsorptionIndex:(buyerAbsorption?.index??-1);
+  const sellerAbsorptionIndex=useFootprint?footprintSellerAbsorptionIndex:(sellerAbsorption?.index??-1);
 
   // A confirmation must form in causal order: liquidity event -> absorption -> current closed-bar break.
   // Strict causal sequence: sweep -> candle absorption -> latest footprint absorption/imbalance -> pressure/delta -> current-bar structure break.
   // The sweep must be recent and the candle absorption cannot precede it.
-  const longContext=!!sweepLow&&!!buyerAbsorption&&buyerAbsorption.index>sweepLow.index&&buyerAbsorption.index<=last.index&&last.index-buyerAbsorption.index<=5;
-  const shortContext=!!sweepHigh&&!!sellerAbsorption&&sellerAbsorption.index>sweepHigh.index&&sellerAbsorption.index<=last.index&&last.index-sellerAbsorption.index<=5;
+  const longContext=!!sweepLow&&buyerAbsorptionIndex>=0&&buyerAbsorptionIndex>sweepLow.index&&buyerAbsorptionIndex<=last.index&&last.index-buyerAbsorptionIndex<=5;
+  const shortContext=!!sweepHigh&&sellerAbsorptionIndex>=0&&sellerAbsorptionIndex>sweepHigh.index&&sellerAbsorptionIndex<=last.index&&last.index-sellerAbsorptionIndex<=5;
 
   // The 12-bar pressure filter must actually have 12 closed bars behind it.
   // Otherwise a short initial dataset could be mislabeled as a "12-bar" setup.
@@ -316,7 +335,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"footprint_unique",label:"Unique footprint candle times",passed:!duplicateFootprintTime,detail:duplicateFootprintTime?"Duplicate footprint snapshots detected":"No duplicate candle times"},
     {key:"footprint_history",label:"12 confirmed footprint bars",passed:expectedFootprintTimes.length===12&&fpRecent.length===12,detail:`${fpRecent.length}/12 confirmed footprint bars`},
     {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:footprintCoverageValid,detail:`Minimum per-bar coverage ${(footprintCoverage*100).toFixed(1)}% · bars above 105% are rejected`},
-    {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:latestFootprintCoverage>=0.99,detail:`Latest candle coverage ${(latestFootprintCoverage*100).toFixed(1)}%`},
+    {key:"latest_fp_coverage",label:"Latest footprint coverage 99–105%",passed:latestFootprintCoverage>=0.99&&latestFootprintCoverage<=1.05,detail:`Latest candle coverage ${(latestFootprintCoverage*100).toFixed(1)}% · above 105% is rejected`},
     {key:"latest_fp",label:"Latest closed footprint",passed:!!latestFootprint,detail:latestFootprint?"Latest candle has a confirmed footprint":"Latest closed candle has no confirmed footprint snapshot"},
     {key:"sweep_buy",label:"Sell-side liquidity sweep",passed:!!sweepLow,detail:sweepLow?`Sweep at index ${sweepLow.index} · ${sweepLow.sweepPrice??"—"}`:"No low sweep in recent window"},
     {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:sweepRecentBuyValid,detail:sweepLow?`${last.index-sweepLow.index} bars ago`:"No low sweep"},
@@ -340,9 +359,9 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"structure_sell",label:"Bearish structure break",passed:last.microStructure==="BEARISH",detail:last.microStructure},
   ];
   const failed = (directionHint:OrderFlowDirection)=>diagnostics.filter(d=>{
-    if(directionHint==="BUY") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp","sweep_buy","sweep_recent_buy","sweep_integrity_buy","abs_buy","recent_flow_buy","entry_chase_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
-    if(directionHint==="SELL") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp","sweep_sell","sweep_recent_sell","sweep_integrity_sell","abs_sell","recent_flow_sell","entry_chase_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
-    return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp"].includes(d.key);
+    if(directionHint==="BUY") return ["closed","history","exact","footprint_unique","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp","sweep_buy","sweep_recent_buy","sweep_integrity_buy","abs_buy","recent_flow_buy","entry_chase_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
+    if(directionHint==="SELL") return ["closed","history","exact","footprint_unique","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp","sweep_sell","sweep_recent_sell","sweep_integrity_sell","abs_sell","recent_flow_sell","entry_chase_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
+    return ["closed","history","exact","footprint_unique","footprint_history","footprint_coverage","latest_fp_coverage","latest_fp"].includes(d.key);
   }).filter(d=>!d.passed);
   const maxSide = [
     {side:"BUY" as const,checks:["sweep_buy","sweep_recent_buy","sweep_integrity_buy","abs_buy","recent_flow_buy","entry_chase_buy","pressure_buy","delta_buy","imb_buy","structure_buy"]},
