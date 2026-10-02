@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { flowSnapshot, detectRegime, runSMCBacktest } from "./advanced";
+import { flowSnapshot, detectRegime, riskPlan, runSMCBacktest } from "./advanced";
 import type { Candle } from "./engine";
 
 function candle(i:number):Candle {
   return {time:i,open:100,high:101,low:99,close:100,volume:100,takerBuyVolume:50,closed:true};
 }
+
+describe("risk sizing precision",()=>{
+  it("returns exchange-step quantities without floating-point residue",()=>{
+    const r=riskPlan(1000,1,100,98,{minQty:0.001,maxQty:10,stepSize:0.1,minNotional:0}, "BUY");
+    expect(r.valid).toBe(true);
+    expect(r.positionSize).toBe(0.5);
+  });
+});
 
 describe("advanced backtest input normalization",()=>{
   it("produces the same result for chronological and out-of-order closed candles",()=>{
