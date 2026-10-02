@@ -418,11 +418,11 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   // three confirmed pivots A-B-C; never substitute a later pivot for X.
   if(ps.length<3)return null;
 
-  const x:Pivot={index:endIndex,price:xPoint.price,type:bull?"H":"L",confirmedAt:endIndex};
+  const originPivot:Pivot={index:endIndex,price:xPoint.price,type:bull?"H":"L",confirmedAt:endIndex};
   let best:{q:Pivot[];correction:ReturnType<typeof validateZigzag>;flat:ReturnType<typeof validateFlat>}|null=null;
   const expected=bull?["L","H","L"]:["H","L","H"];
   for(let i=0;i<=ps.length-3;i++){
-    const q=[x,...ps.slice(i,i+3)];
+    const q=[originPivot,...ps.slice(i,i+3)];
     if(q.slice(1).some((p,j)=>p.type!==expected[j]))continue;
     const prices=q.map(p=>p.price);
     const correction=bull
