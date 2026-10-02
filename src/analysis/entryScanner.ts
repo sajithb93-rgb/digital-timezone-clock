@@ -14,7 +14,7 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  const sweepRecent=!!latestSweep && latestSweep.index>=Math.max(0,asOf-20);
  const sweepAligned=direction==="BUY" ? latestSweep?.type==="low" : direction==="SELL" ? latestSweep?.type==="high" : false;
  const causalSequence=!!latestEvent&&!!latestSweep&&latestSweep.index<latestEvent.index&&sweepRecent&&sweepAligned;
- const activeCausal=causalSequence&&latestEvent?.type==="BOS"&&s.confirmations.some(x=>x.includes("sweep")&&x.includes("structure"))&&s.confirmations.includes("Internal structure aligned");
+ const activeCausal=causalSequence&&latestEvent?.type==="BOS";
  if(s.status==="ACTIVE"&&s.direction!=="WAIT"&&s.entry!=null&&s.stop!=null&&s.targets[0]!=null&&s.rr!=null&&activeCausal) return make(symbol,timeframe,"CONFIRMED",s.direction,s.confidence,null,s.entry,s.stop,s.targets[0],s.rr,"SMC ACTIVE · "+(s.confirmations.slice(0,3).join(" · ")||"all entry conditions passed"));
  const checks=[direction==="BUY"?r.trend==="Bullish":direction==="SELL"?r.trend==="Bearish":false,!!latestEvent&&((direction==="BUY"&&latestEvent.direction==="bullish")||(direction==="SELL"&&latestEvent.direction==="bearish")),!!r.entryZone,causalSequence,direction==="BUY"?r.premiumDiscount==="Discount":direction==="SELL"?r.premiumDiscount==="Premium":false,r.targets.length>0];
  const passed=checks.filter(Boolean).length; const score=Math.round(passed/checks.length*100);
