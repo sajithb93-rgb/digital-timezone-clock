@@ -1,4 +1,4 @@
-import type { Candle } from "./engine";
+import { isValidTradeGeometry, type Candle } from "./engine";
 import type { FootprintSnapshot } from "./footprint";
 
 export type OrderFlowPressure = "BUYERS" | "SELLERS" | "BALANCED";
@@ -314,7 +314,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
         &&(direction==="BUY" ? target>entry! : target<entry!)
         &&Math.abs(target-entry!)/risk>=1.5
       ));
-      if(validTargets){
+      const sharedGeometryValid=validTargets&&isValidTradeGeometry(direction,entry!,stop!,candidateTargets,1.5);
+      if(sharedGeometryValid){
         targets=candidateTargets;
       }else{
         tradeGeometryValid=false;
