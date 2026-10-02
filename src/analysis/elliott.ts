@@ -169,6 +169,18 @@ function inferDegree(spanBars:number,totalBars:number):ElliottDegree{
 
 const MAX_PRIMARY_AGE_BARS = 144;
 
+export function isCompletedWaveCountInvalidated(c:Candle[],primary:WaveCount):boolean{
+  const origin=primary.points[0]?.price;
+  const endIndex=primary.points.at(-1)?.index??-1;
+  if(origin===undefined||endIndex<0)return true;
+  for(let i=endIndex+1;i<c.length;i++){
+    const bar=c[i];
+    if(bar.closed===false)break;
+    if(primary.direction==="bullish" ? bar.close<=origin : bar.close>=origin)return true;
+  }
+  return false;
+}
+
 function extensionProfile(w1:number,w3:number,w5:number){
   const base=Math.min(w1,w3,w5);
   if(base<=0)return{count:3,plausible:false};
@@ -530,9 +542,23 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     })
     .filter((x,i,a)=>i===a.findIndex(y=>y.points.map(p=>p.index).join(",")===x.points.map(p=>p.index).join(",")));
   const recentRanked=ranked.filter(x=>((data.length-1)-(x.points.at(-1)?.index??-1))<=MAX_PRIMARY_AGE_BARS);
-  const primary=recentRanked.find(x=>x.quality>=60)??null;
+  // Prefer a recent candidate that has a valid post-completion ABC continuation.
+  // A stronger but stale historical count must not hide a currently actionable count.
+  const liveCandidates=recentRanked
+    .map(candidate=>({candidate,live:buildLiveContinuationSetup(data,candidate)}))
+    .filter(x=>x.live!==null)
+    .sort((a,b)=>{
+      const as=(a.live?.quality??0)+(a.candidate.quality*0.25);
+      const bs=(b.live?.quality??0)+(b.candidate.quality*0.25);
+      return bs-as
+        ||((b.candidate.points.at(-1)?.index??-1)-(a.candidate.points.at(-1)?.index??-1));
+    });
+  const primary=liveCandidates[0]?.candidate??recentRanked.find(x=>x.quality>=60)??null;
   const alternative=ranked.find(x=>x!==primary&&x.quality>=55)??null;
-  const correction=corrections[0]??null;
+  const correction=corrections.find(x=>{
+    const end=x.points.at(-1)?.index??-1;
+    return end>=0&&((data.length-1)-end)<=MAX_PRIMARY_AGE_BARS;
+  })??corrections[0]??null;
 
   if(!primary){
     const r=EMPTY(correction?"No recent complete 1–5 count; correction candidate is the strongest completed structure":"No recent qualified Elliott count");
@@ -555,8 +581,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   nested3.wave="3"; nested5.wave="5";
   const nested=[nested3,nested5];
   const degree=inferDegree((primary.points.at(-1)?.index??0)-(primary.points[0]?.index??0),data.length);
-  const lastClose=data.at(-1)?.close??prices[5];
-  const invalidated=primary.direction==="bullish"?lastClose<=prices[0]:lastClose>=prices[0];
+  const invalidated=isCompletedWaveCountInvalidated(data,primary);
   const setupState:ElliottCountState=invalidated?"INVALIDATED":"HISTORICAL";
   const pattern:AdvancedElliottResult["pattern"]=primary.kind==="Impulse" ? "Impulse" : "Diagonal";
   const confidence=clamp(primary.quality-(nested3.score<45?8:0)+(nested5.score>=60?4:0));
