@@ -76,11 +76,14 @@ export function classifyPremiumDiscount(price:number,high:number,low:number):"Pr
 }
 export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}
 export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{
+ // Treat the swing break and internal confirmation as two distinct events.
+ // An internal event printed on the exact same candle as the swing break is
+ // not independent confirmation and can double-count one price move.
  return sweepIndex>=0
   &&swingBreakIndex>sweepIndex
   &&swingBreakIndex-sweepIndex<=maxGap
   &&internalBreakIndex!==null
-  &&internalBreakIndex>=swingBreakIndex
+  &&internalBreakIndex>swingBreakIndex
   &&internalBreakIndex-swingBreakIndex<=maxGap;
 }
 export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
