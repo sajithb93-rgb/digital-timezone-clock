@@ -358,7 +358,7 @@ export default function Home(){
     if(stop)return;
     setRestConnected(true);
     setError("");
-    setCandles(prev=>mergeCandles(data,prev));
+    setCandles(prev=>mergeCandles(data,prev,true));
     setAnalysisCandles(data.filter(x=>x.closed!==false));
     setChartDataRevision(v=>v+1);
    }catch(e){
