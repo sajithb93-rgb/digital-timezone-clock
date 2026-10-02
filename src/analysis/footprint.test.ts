@@ -27,6 +27,12 @@ describe("price-level footprint engine",()=>{
     expect(book.add({id:2,price:100,quantity:1,time:61_000,isBuyerMaker:"no" as any})).toBe(false);
   });
 
+  it("rejects trades with missing or invalid maker-side metadata",()=>{
+    expect(normalizeAggTrade({a:1,p:"100",q:"1",T:61_000})).toBeNull();
+    expect(normalizeAggTrade({a:2,p:"100",q:"1",T:61_000,m:"unknown"})).toBeNull();
+    expect(normalizeAggTrade({a:3,p:"100",q:"1",T:61_000,m:"false"})?.isBuyerMaker).toBe(false);
+  });
+
   it("deduplicates aggregate trade ids",()=>{
     const book=new FootprintBook(60_000,0.1,12);
     const t=normalizeAggTrade({a:7,p:"100.05",q:"1",T:61_000,m:false})!;
