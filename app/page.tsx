@@ -400,7 +400,7 @@ export default function Home(){
     setRestConnected(true);
     setError("");
     setCandles(prev=>mergeCandles(data,prev,true));
-    setAnalysisCandles(data.filter(x=>x.closed!==false));
+    setAnalysisCandles(prev=>mergeCandles(data,prev,true).filter(x=>x.closed!==false));
     setChartDataRevision(v=>v+1);
    }catch(e){
     if(stop)return;
