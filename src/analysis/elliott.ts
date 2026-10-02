@@ -1,3 +1,4 @@
+// Build verification: duplicate-x declaration removed; live continuation uses the existing X pivot.
 import type { Candle, ElliottResult, Pivot, WaveCount, WavePoint } from "./engine";
 
 export type ElliottPattern =
