@@ -206,6 +206,28 @@ describe("order flow strategy",()=>{
     expect(r.confirmations).toContain("2+ stacked sell imbalances");
   });
 
+  it("invalidates a BUY when price later closes below the swept level",()=>{
+    const candles=fullLongCandles().map((c,i)=>{
+      if(i===10)return {...c,low:94,close:94.5,takerBuyVolume:65};
+      if(i===11)return {...c,open:94.5,high:106,low:94.2,close:105,takerBuyVolume:70};
+      return c;
+    });
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="sweep_integrity_buy")?.passed).toBe(false);
+  });
+
+  it("invalidates a SELL when price later closes above the swept level",()=>{
+    const candles=fullShortCandles().map((c,i)=>{
+      if(i===10)return {...c,high:101,close:101.5,takerBuyVolume:35};
+      if(i===11)return {...c,open:101.5,high:101.8,low:94,close:95,takerBuyVolume:30};
+      return c;
+    });
+    const r=analyzeOrderFlow(candles,confirmedFootprints("SELL"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="sweep_integrity_sell")?.passed).toBe(false);
+  });
+
   it("blocks a BUY when the liquidity sweep is stale",()=>{
     const candles=[
       candle(0,100,102,99,101,100,50),
