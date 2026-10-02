@@ -43,7 +43,7 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
   for(const x of c){
     if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
     if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    if(x.closed!==false)byTime.set(x.time,x);
+    byTime.set(x.time,x);
   }
   const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
   const firstUnclosed=normalized.findIndex(x=>x.closed===false);
@@ -85,7 +85,7 @@ export function detectRegime(c:Candle[]):Regime{
   for(const x of c){
     if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
     if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    if(x.closed!==false)byTime.set(x.time,x);
+    byTime.set(x.time,x);
   }
   const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
   const firstUnclosed=normalized.findIndex(x=>x.closed===false);
@@ -206,7 +206,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
   for(const x of c){
     if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
     if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    if(x.closed!==false)byTime.set(x.time,x);
+    byTime.set(x.time,x);
   }
   const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
   const firstUnclosed=normalized.findIndex(x=>x.closed===false);
