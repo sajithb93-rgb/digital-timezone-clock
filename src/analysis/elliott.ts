@@ -382,7 +382,7 @@ export function validateDoubleZigzag(prices:number[],bullishCorrection:boolean){
   const xCounterTrend=(p4-p3)*dir<0;
   const xInsideW=bullishCorrection?p4>p0&&p4<p3:p4<p0&&p4>p3;
   const xRetracement=wSize>0?xSize/wSize:Infinity;
-  const connectorValid=xSize>0&&wSize>0&&ySize>0&&xCounterTrend&&xInsideW&&xRetracement<=.786;
+  const connectorValid=xSize>0&&wSize>0&&ySize>0&&xCounterTrend&&xInsideW&&xRetracement<1;
   // The second corrective unit must complete beyond W's endpoint; otherwise
   // the W-X-Y correction is incomplete and should remain an alternate count.
   const yBeyondW=bullishCorrection?p7>p3:p7<p3;
