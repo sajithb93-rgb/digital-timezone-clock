@@ -254,7 +254,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const structureLow=structureWindow.length>=2?Math.min(...structureWindow.map(c=>c.low)):null;
   const structureRange=avg(structureWindow.map(c=>barRange(c)));
   const maxEntryChase=Math.max(structureRange,1e-12);
-  const latestClose=closed.at(-1)!.close;
+  // `last` is an OrderFlowBar; OHLC comes from the latest closed Candle.
+  const latestClose: number = closed.at(-1)!.close;
   const entryChaseBuy=structureHigh!=null?(latestClose-structureHigh)/maxEntryChase:null;
   const entryChaseSell=structureLow!=null?(structureLow-latestClose)/maxEntryChase:null;
   const entryChaseBuyValid=entryChaseBuy==null||entryChaseBuy<=1;
