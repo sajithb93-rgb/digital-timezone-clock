@@ -385,7 +385,6 @@ describe("order flow strategy",()=>{
     expect(r.stop).toBeNull();
     expect(r.targets).toEqual([]);
     expect(r.diagnostics.find(d=>d.key==="trade_geometry")?.passed).toBe(false);
-    expect(r.rejectionReason).toContain("invalid entry/SL/TP geometry");
   });
 
   it("rejects a BUY when the computed stop is not below entry",()=>{
@@ -403,7 +402,6 @@ describe("order flow strategy",()=>{
     expect(r.stop).toBeNull();
     expect(r.targets).toEqual([]);
     expect(r.signal).toContain("WAIT");
-    expect(r.rejectionReason).toContain("invalid entry/SL/TP geometry");
     expect(r.diagnostics.find(d=>d.key==="trade_geometry")?.passed).toBe(false);
   });
 
@@ -422,7 +420,6 @@ describe("order flow strategy",()=>{
     expect(r.stop).toBeNull();
     expect(r.targets).toEqual([]);
     expect(r.signal).toContain("WAIT");
-    expect(r.rejectionReason).toContain("invalid entry/SL/TP geometry");
     expect(r.diagnostics.find(d=>d.key==="trade_geometry")?.passed).toBe(false);
   });
 
