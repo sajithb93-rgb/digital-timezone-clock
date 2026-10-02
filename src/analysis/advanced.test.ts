@@ -6,6 +6,16 @@ function candle(i:number):Candle {
   return {time:i,open:100,high:101,low:99,close:100,volume:100,takerBuyVolume:50,closed:true};
 }
 
+describe("confluence zone integrity",()=>{
+  it("does not score a partially mitigated FVG as a fresh zone",()=>{
+    const base:any={asOf:20,events:[],sweeps:[],fvgs:[{to:19,filled:false,partial:true}],orderBlocks:[],premiumDiscount:"Premium",displacement:0};
+    const flow={volumeRatio:0} as any;
+    const regime={regime:"RANGING"} as any;
+    const result=confluence(base,flow,regime);
+    expect(result.zones).toBe(0);
+  });
+});
+
 describe("risk sizing precision",()=>{
   it("rejects risk percentages above the hard safety limit",()=>{
     const r=riskPlan(1000,12,100,98,{},"BUY");
