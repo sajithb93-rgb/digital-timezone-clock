@@ -749,9 +749,10 @@ export function analyzeElliott(c:Candle[]):AdvancedElliottResult{
 }
 export function analyzeMTF(frames:{interval:string;candles:Candle[]}[]):MTFResult{
  const rows:MTFFrame[]=frames.map(f=>{
-  const available=f.candles.length>=25;
+  const valid=f.candles.filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.open)&&Number.isFinite(x.high)&&Number.isFinite(x.low)&&Number.isFinite(x.close)&&Number.isFinite(x.volume)&&x.volume>=0&&x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close));
+  const available=valid.length>=25;
   if(!available)return{interval:f.interval,trend:"Neutral" as const,score:0,structure:"UNAVAILABLE",available:false,elliottTrend:"Neutral" as const,elliottScore:0,elliottPhase:"UNAVAILABLE"};
-  const smc=analyzeSMC(f.candles),ew=analyzeElliott(f.candles);
+  const smc=analyzeSMC(valid),ew=analyzeElliott(valid);
   // An Elliott count that has already crossed its Wave-1 origin is historical
   // evidence of invalidation, not current directional bias.
   const elliottUsable=ew.setupState!=="INVALIDATED"&&!!ew.primary;
