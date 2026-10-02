@@ -43,7 +43,10 @@ export function normalizeAggTrade(raw: any): AggTrade | null {
   const price = Number(raw?.p);
   const quantity = Number(raw?.q);
   const time = Number(raw?.T);
-  const isBuyerMaker = Boolean(raw?.m);
+  const rawMaker = raw?.m;
+  const isBuyerMaker = typeof rawMaker === "string"
+    ? rawMaker.toLowerCase() === "true" || rawMaker === "1"
+    : Boolean(rawMaker);
   if (!Number.isFinite(id) || !Number.isFinite(price) || !Number.isFinite(quantity) || !Number.isFinite(time)) return null;
   if (price <= 0 || quantity <= 0 || time <= 0) return null;
   return { id, price, quantity, time, isBuyerMaker };
@@ -91,7 +94,10 @@ export function analyzeFootprintSnapshot(
   const levels = [...snapshot.levels].sort((a, b) => a.price - b.price);
   const ratio = (a: number, b: number) => a > 0 && b > 0 ? a / b : 0;
   const isAdjacent=(a:number,b:number)=>{
-    if(!Number.isFinite(tickSize)||tickSize<=0)return true;
+    // Without a valid exchange tick size we cannot establish true
+    // price-level adjacency; never manufacture a stacked imbalance from
+    // arbitrary neighboring prices.
+    if(!Number.isFinite(tickSize)||tickSize<=0)return false;
     return Math.abs(Math.abs(a-b)/tickSize-1)<=1e-6;
   };
   let stackedBuyImbalances = 0;
@@ -233,7 +239,8 @@ export class FootprintBook {
   }
 
   load(trades: AggTrade[]): void {
-    for (const trade of trades.sort((a, b) => a.time - b.time || a.id - b.id)) this.add(trade);
+    // Do not mutate the caller's trade array while normalizing stream order.
+    for (const trade of [...trades].sort((a, b) => a.time - b.time || a.id - b.id)) this.add(trade);
   }
 
   private prune(): void {
