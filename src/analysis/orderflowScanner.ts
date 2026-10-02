@@ -58,13 +58,15 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
     : direction === "SELL"
       ? ["sellers pressure", "negative delta", "high sweep", "seller absorption", "footprint delta", "3x sell imbalance", "2 stacked sells", "bearish break"].filter((_, i) => !sellChecks[i])
       : [];
-  const reason = state === "CONFIRMED"
-    ? result.signal
-    : state === "SETUP"
-      ? `${direction} setup forming · waiting for ${missing.slice(0, 2).join(" + ") || "final close confirmation"}`
-      : state === "WATCH"
-        ? `${direction} watch · ${Math.max(buyScore, sellScore)}/8 confluences active`
-        : "No qualifying Order Flow setup";
+  const reason = !geometryValid
+    ? "Order Flow confluence present · blocked by invalid entry/SL/TP geometry"
+    : state === "CONFIRMED"
+      ? result.signal
+      : state === "SETUP"
+        ? `${direction} setup forming · waiting for ${missing.slice(0, 2).join(" + ") || "final close confirmation"}`
+        : state === "WATCH"
+          ? `${direction} watch · ${Math.max(buyScore, sellScore)}/8 confluences active`
+          : "No qualifying Order Flow setup";
 
   return {
     symbol,
