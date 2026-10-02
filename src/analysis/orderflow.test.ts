@@ -373,6 +373,12 @@ describe("order flow strategy",()=>{
     expect(r.entry).toBeNull();
   });
 
+  it("does not duplicate directional flow diagnostics",()=>{
+    const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
+    expect(r.diagnostics.filter(d=>d.key==="recent_flow_buy")).toHaveLength(1);
+    expect(r.diagnostics.filter(d=>d.key==="recent_flow_sell")).toHaveLength(1);
+  });
+
   it("does not mix BUY and SELL footprint confirmations",()=>{
     const mixed=confirmedFootprints("BUY",{stackedSellImbalances:2,maxSellImbalanceRatio:4,absorption:"SELLER",deltaRatio:-0.2});
     const r=analyzeOrderFlow(fullLongCandles(),mixed);
