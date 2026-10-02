@@ -201,7 +201,7 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   if(Number.isFinite(maxNotional)&&maxNotional>0&&notional>maxNotional){
     const maxQty=inverse?maxNotional/contractSize:maxNotional/entry;
     positionSize=Math.min(positionSize,maxQty);
-    if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize);
+    if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize,minQty);
   }
   const finalNotional=notionalAt(positionSize);
   if(positionSize<Math.max(0,minQty)){
