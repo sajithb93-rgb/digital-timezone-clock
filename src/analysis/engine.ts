@@ -14,9 +14,10 @@ export function isValidTradeGeometry(direction:"BUY"|"SELL",entry:number,stop:nu
  if(risk<=0)return false;
  if(direction==="BUY"&&stop>=entry)return false;
  if(direction==="SELL"&&stop<=entry)return false;
- const validTargets=targets.filter(Number.isFinite).filter(t=>direction==="BUY"?t>entry:t<entry);
- if(!validTargets.length)return false;
- return validTargets.every(t=>Math.abs(t-entry)/risk>=minRR);
+ if(!Array.isArray(targets)||targets.length===0)return false;
+ if(!targets.every(t=>Number.isFinite(t)))return false;
+ if(!targets.every(t=>direction==="BUY"?t>entry:t<entry))return false;
+ return targets.every(t=>Math.abs(t-entry)/risk>=minRR);
 }
 const MIN_SETUP_RR=1.5;
 export type SMCResult={
@@ -533,10 +534,20 @@ function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:C
 
 export function analyzeSMC(c:Candle[]):SMCResult{
  const empty:SMCResult={trend:"Neutral",asOf:-1,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",status:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
- let closedEnd=c.length-1;
+ // Core SMC indices are causal positions, so normalize the exchange feed before
+ // any pivot/event calculation. Keep only valid OHLC candles, dedupe timestamps,
+ // sort chronologically, and stop at the first open candle.
+ const byTime=new Map<number,Candle>();
+ for(const x of c){
+  if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
+  if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
+  byTime.set(x.time,x);
+ }
+ const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
+ let closedEnd=normalized.length-1;
  while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
  if(closedEnd<24)return empty;
- const data=c.slice(0,closedEnd+1);
+ const data=normalized.slice(0,closedEnd+1);
  const a=atr(data),ps=labelPivots(pivots(data,3)),internal=labelPivots(pivots(data,1));
  const events=detectStructureEvents(data,ps);
  const internalEvents=detectStructureEvents(data,internal);
