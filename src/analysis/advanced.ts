@@ -110,11 +110,15 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
   return{structure,liquidity,zones,location,momentum,volume,total};
 }
 
+function decimalPlaces(value:number):number{
+  let decimals=0,scaled=Math.abs(value);
+  while(decimals<12&&Math.abs(Math.round(scaled)-scaled)>1e-10){scaled*=10;decimals+=1;}
+  return decimals;
+}
 function floorToStep(value:number,step:number,base=0){
   if(!Number.isFinite(value)||!Number.isFinite(step)||step<=0||!Number.isFinite(base)||base<0)return 0;
   if(value<base)return 0;
-  let decimals=0,scaled=Math.max(step,base);
-  while(decimals<12&&Math.abs(Math.round(scaled)-scaled)>1e-10){scaled*=10;decimals+=1;}
+  const decimals=Math.max(decimalPlaces(step),decimalPlaces(base));
   const steps=Math.floor((value-base)/step+1e-12);
   const floored=base+Math.max(0,steps)*step;
   return Number(floored.toFixed(decimals));
