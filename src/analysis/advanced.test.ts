@@ -10,7 +10,7 @@ describe("risk sizing precision",()=>{
   it("returns exchange-step quantities without floating-point residue",()=>{
     const r=riskPlan(1000,1,100,98,{minQty:0.001,maxQty:10,stepSize:0.1,minNotional:0}, "BUY");
     expect(r.valid).toBe(true);
-    expect(r.positionSize).toBe(0.5);
+    expect(r.positionSize).toBe(5);
   });
 });
 
