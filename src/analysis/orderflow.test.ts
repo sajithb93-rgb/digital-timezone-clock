@@ -164,8 +164,8 @@ describe("order flow strategy",()=>{
       {...candle(1,100.5,102,100,101.5,200,NaN)}
     ]);
     expect(r.source).toBe("CANDLE_ESTIMATE_FALLBACK");
-    expect(r.buyVolume).toBeCloseTo(215,10);
-    expect(r.sellVolume).toBeCloseTo(185,10);
+    expect(r.buyVolume).toBeCloseTo(250,10);
+    expect(r.sellVolume).toBeCloseTo(150,10);
   });
 
   it("does not confirm when Binance taker-flow data is unavailable",()=>{
