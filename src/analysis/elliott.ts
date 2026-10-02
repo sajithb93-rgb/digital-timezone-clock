@@ -531,12 +531,39 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
 
 function buildFib(prices:number[],bull:boolean){
   if(prices.length<6)return[];
-  const p=prices,dir=bull?1:-1,range=abs(p[5]-p[0]);
-  return[
-    ["0%",p[5]],["23.6%",p[5]+(p[0]-p[5])*.236],["38.2%",p[5]+(p[0]-p[5])*.382],
-    ["50%",p[5]+(p[0]-p[5])*.5],["61.8%",p[5]+(p[0]-p[5])*.618],["78.6%",p[5]+(p[0]-p[5])*.786],
-    ["100%",p[0]],["127.2%",p[5]+dir*range*.272],["161.8%",p[5]+dir*range*.618],["261.8%",p[5]+dir*range*1.618]
-  ].map(([label,price])=>({label:String(label),price:Number(price)}));
+  const [p0,p1,p2,p3,p4,p5]=prices;
+  const dir=bull?1:-1;
+  const w1=Math.abs(p1-p0),w3=Math.abs(p3-p2);
+  if(w1<=0||w3<=0)return[];
+
+  // Fibonacci levels must be anchored to the Elliott wave they describe.
+  // The previous implementation measured every retracement from Wave-5 to
+  // Wave-1, which mixed unrelated anchors and could make a visually neat
+  // level appear to validate the wrong wave.
+  const w2Levels=[
+    ["W2 23.6%",p1+(p0-p1)*.236],
+    ["W2 38.2%",p1+(p0-p1)*.382],
+    ["W2 50%",p1+(p0-p1)*.5],
+    ["W2 61.8%",p1+(p0-p1)*.618],
+    ["W2 78.6%",p1+(p0-p1)*.786]
+  ];
+  const w4Levels=[
+    ["W4 38.2%",p3+(p2-p3)*.382],
+    ["W4 50%",p3+(p2-p3)*.5],
+    ["W4 61.8%",p3+(p2-p3)*.618]
+  ];
+  // Wave-5 projection is measured from the Wave-4 endpoint using Wave-1
+  // and Wave-3 reference lengths, rather than the full 1->5 span.
+  const w5Levels=[
+    ["W5 61.8% W1",p4+dir*w1*.618],
+    ["W5 100% W1",p4+dir*w1],
+    ["W5 161.8% W1",p4+dir*w1*1.618],
+    ["W5 61.8% W3",p4+dir*w3*.618],
+    ["W5 100% W3",p4+dir*w3],
+    ["W5 161.8% W3",p4+dir*w3*1.618]
+  ];
+  return [...w2Levels,...w4Levels,...w5Levels]
+    .map(([label,price])=>({label:String(label),price:Number(price)}));
 }
 
 export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
