@@ -191,7 +191,7 @@ describe("order flow strategy",()=>{
   it("blocks confirmation when one footprint bar is only partly covered",()=>{
     const candles=Array.from({length:12},(_,i)=>candle(i,100,101,99,100.2,100,60));
     const footprint=confirmedFootprints("BUY");
-    footprint[5]={...footprint[5],buyVolume:20,sellVolume:10,delta:10,deltaRatio:1/3};
+    footprint[5]={...footprint[5],buyVolume:20,sellVolume:10,delta:10,deltaRatio:1/3,levels:[{...footprint[5].levels[0],buyVolume:20,sellVolume:10,delta:10,totalVolume:30}]};
     const result=analyzeOrderFlow(candles,footprint);
     expect(result.direction).toBe("WAIT");
     expect(result.footprintHistoryCount).toBe(12);
@@ -302,7 +302,6 @@ describe("order flow strategy",()=>{
     const r=analyzeOrderFlow(candles,footprint);
     expect(r.direction).toBe("WAIT");
     expect(r.diagnostics.find(d=>d.key==="recent_flow_buy")?.passed).toBe(false);
-    expect(r.diagnostics.find(d=>d.key==="recent_flow_buy")?.passed).toBe(false);
   });
 
   it("confirms a normal BUY entry without chase extension",()=>{
@@ -385,7 +384,6 @@ describe("order flow strategy",()=>{
     footprint[11]={...footprint[11],buyVolume:58,sellVolume:40,delta:18,deltaRatio:18/98};
     const r=analyzeOrderFlow(fullLongCandles(),footprint);
     expect(r.direction).toBe("WAIT");
-    expect(r.diagnostics.find(d=>d.key==="latest_fp_coverage")?.passed).toBe(false);
     expect(r.diagnostics.find(d=>d.key==="latest_fp_coverage")?.passed).toBe(false);
   });
 
@@ -493,7 +491,6 @@ describe("order flow strategy",()=>{
     footprint[10]={...footprint[10],deltaRatio:0.2,delta:20,buyVolume:60,sellVolume:40};
     const r=analyzeOrderFlow(candles,footprint);
     expect(r.direction).toBe("WAIT");
-    expect(r.diagnostics.find(d=>d.key==="recent_flow_sell")?.passed).toBe(false);
     expect(r.diagnostics.find(d=>d.key==="recent_flow_sell")?.passed).toBe(false);
   });
 
