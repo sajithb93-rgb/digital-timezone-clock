@@ -337,8 +337,9 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     confirmations.push("Closed-candle confirmation","Binance footprint flow","Buy-side liquidity sweep → seller absorption","12-bar seller pressure","Negative delta ≤ -0.08","2+ stacked sell imbalances","Max sell imbalance ≥ 3×","Current-bar bearish structure break");
   }
 
-  let entry:number|null=null,stop:number|null=null,targets:number[]=[];
+  let entry:number|null=null,stop:number|null,targets:number[]=[];
   let tradeGeometryValid=true;
+  let targetQualityValid=true;
   if(direction!=="WAIT"){
     entry=closed.at(-1)!.close;
     const buffer=avg(closed.slice(-5).map(c=>barRange(c)))*0.10;
@@ -360,37 +361,41 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
       const risk=Math.abs(entry!-stop!);
       const targetBuild=buildOrderFlowTargets(direction,entry!,risk,closed);
       const candidateTargets=targetBuild.targets;
-      const validTargets=candidateTargets.length===3
+      targetQualityValid=candidateTargets.length===3
         &&targetBuild.structuralTargetCount>=1
         &&candidateTargets.every((target)=>(
           Number.isFinite(target)
           &&(direction==="BUY" ? target>entry! : target<entry!)
           &&Math.abs(target-entry!)/risk>=1.5
         ));
-      const sharedGeometryValid=validTargets&&isValidTradeGeometry(direction,entry!,stop!,candidateTargets,1.5);
-      if(sharedGeometryValid){
+      tradeGeometryValid=targetQualityValid
+        &&isValidTradeGeometry(direction,entry!,stop!,candidateTargets,1.5);
+      if(targetQualityValid&&tradeGeometryValid){
         targets=candidateTargets;
       }else{
-        tradeGeometryValid=false;
+        targets=[];
       }
     }else{
       tradeGeometryValid=false;
+      targetQualityValid=false;
     }
 
-    if(!tradeGeometryValid){
+    if(!tradeGeometryValid||!targetQualityValid){
       entry=null;
       stop=null;
       targets=[];
       direction="WAIT";
       confirmations.length=0;
-      rejectionReason="Confirmed order-flow candidate · blocked by invalid entry/SL/TP geometry";
+      rejectionReason=!tradeGeometryValid
+        ?"Confirmed order-flow candidate · blocked by invalid entry/SL geometry"
+        :"Confirmed order-flow candidate · blocked by target quality";
     }
   }
   diagnostics.push({
     key:"target_quality",
     label:"Target quality / spacing",
-    passed:targets.length===3,
-    detail:targets.length===3
+    passed:targetQualityValid&&targets.length===3,
+    detail:targetQualityValid&&targets.length===3
       ?"3 ordered targets with ≥1 structural/liquidity level, minimum 1.5R, and controlled spacing"
       :"Need 3 valid risk-adjusted targets including at least 1 structural/liquidity level"
   });
@@ -399,8 +404,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     label:"Entry / SL / TP geometry",
     passed:tradeGeometryValid,
     detail:tradeGeometryValid
-      ?"Stop side and target direction are valid"
-      :"Invalid stop side or target direction"
+      ?"Entry/SL geometry is valid and targets pass shared geometry validation"
+      :"Invalid entry/SL geometry or shared target geometry"
   });
 
   const signal=direction==="BUY"?"BUY CONFIRMED — CLOSED CANDLE":direction==="SELL"?"SELL CONFIRMED — CLOSED CANDLE":"WAIT — no confirmed closed-candle order-flow setup";
