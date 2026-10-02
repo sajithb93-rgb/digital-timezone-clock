@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
-import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
+import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
   return Array.from({length:count},(_,i)=>{
@@ -383,6 +383,46 @@ describe("analysis regression",()=>{
     expect(e.engine).toBe("ADVANCED_ELLIOTT_V2");
     expect(e.primary?.kind).toBe("Impulse");
     expect(e.primary?.strict).toBe(true);
+  });
+
+  it("permanently invalidates a completed Elliott count after an origin close",()=>{
+    const primary={
+      points:[0,2,4,6,8,10].map((index,i)=>({index,price:[100,120,110,150,135,165][i],label:String(i)})),
+      kind:"Impulse" as const,
+      direction:"bullish" as const,
+      invalidation:100,
+      entry:110,
+      targets:[150,165],
+      quality:80,
+      rules:[],
+      strict:true
+    };
+    const data=[
+      ...Array.from({length:11},(_,i)=>({time:i,open:160,high:161,low:159,close:160,volume:100,closed:true})),
+      {time:11,open:120,high:121,low:95,close:99,volume:100,closed:true},
+      {time:12,open:99,high:121,low:98,close:120,volume:100,closed:true}
+    ];
+    expect(isCompletedWaveCountInvalidated(data,primary)).toBe(true);
+  });
+
+  it("stops Elliott invalidation scanning at an unclosed candle gap",()=>{
+    const primary={
+      points:[0,2,4,6,8,10].map((index,i)=>({index,price:[100,120,110,150,135,165][i],label:String(i)})),
+      kind:"Impulse" as const,
+      direction:"bullish" as const,
+      invalidation:100,
+      entry:110,
+      targets:[150,165],
+      quality:80,
+      rules:[],
+      strict:true
+    };
+    const data=[
+      ...Array.from({length:11},(_,i)=>({time:i,open:160,high:161,low:159,close:160,volume:100,closed:true})),
+      {time:11,open:160,high:161,low:159,close:160,volume:100,closed:false},
+      {time:12,open:90,high:91,low:89,close:90,volume:100,closed:true}
+    ];
+    expect(isCompletedWaveCountInvalidated(data,primary)).toBe(false);
   });
 
   it("does not let closed candles after an unclosed gap leak into Elliott counts",()=>{
