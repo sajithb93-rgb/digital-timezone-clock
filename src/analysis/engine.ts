@@ -8,6 +8,16 @@ export type StructureEvent={index:number;price:number;type:"BOS"|"CHOCH";directi
 export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean;displacement?:boolean};
 export type Zone={low:number;high:number;type:"entry"|"stop"|"target"};
 export type Setup={direction:"BUY"|"SELL"|"WAIT";status:"WAIT"|"ACTIVE";entry:number|null;stop:number|null;targets:number[];rr:number|null;confidence:number;confirmations:string[]};
+export function isValidTradeGeometry(direction:"BUY"|"SELL",entry:number,stop:number,targets:number[],minRR=1.5):boolean{
+ if(!Number.isFinite(entry)||!Number.isFinite(stop)||entry<=0||stop<=0||entry===stop)return false;
+ const risk=Math.abs(entry-stop);
+ if(risk<=0)return false;
+ if(direction==="BUY"&&stop>=entry)return false;
+ if(direction==="SELL"&&stop<=entry)return false;
+ const validTargets=targets.filter(Number.isFinite).filter(t=>direction==="BUY"?t>entry:t<entry);
+ if(!validTargets.length)return false;
+ return validTargets.every(t=>Math.abs(t-entry)/risk>=minRR);
+}
 const MIN_SETUP_RR=1.5;
 export type SMCResult={
  trend:"Bullish"|"Bearish"|"Neutral"; asOf:number; pivots:Pivot[]; internalPivots:Pivot[]; events:StructureEvent[];
@@ -472,7 +482,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const priorHigh=zone?[...highs].reverse().find(p=>p.index<zoneOrigin):undefined;
  const structuralLow=zone?(priorLow&&zone.low-priorLow.price<=a*1.8?priorLow.price:zone.low):null;
  const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.8?priorHigh.price:zone.high):null;
- const stop=zone?(direction==="bullish"&&structuralLow!==null?structuralLow-a*.15:direction==="bearish"&&structuralHigh!==null?structuralHigh+a*.15:null):null;
+ const stop=zone
+  ?direction==="bullish"
+   ?Math.min(structuralLow??zone.low,zone.low)-a*.15
+   :direction==="bearish"
+    ?Math.max(structuralHigh??zone.high,zone.high)+a*.15
+    :null
+  :null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
  const structuralTargets=direction==="bullish"
   ?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>Math.max(entry,last.close)).sort((a,b)=>a-b)
@@ -499,7 +515,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
  const score=zone&&direction?clamp(rawScore):0;
  const rr=entry!==null&&stop!==null&&targets[0]!==undefined?Math.abs(targets[0]-entry)/Math.abs(entry-stop):null;
- const usable=direction!==null&&entry!==null&&stop!==null&&risk>0&&targets.length>0&&rr!==null&&rr>=MIN_SETUP_RR;
+ const geometryValid=direction!==null&&entry!==null&&stop!==null&&targets.length>0
+  &&isValidTradeGeometry(direction as "BUY"|"SELL",entry,stop,targets,MIN_SETUP_RR);
+ const usable=geometryValid&&risk>0&&rr!==null&&rr>=MIN_SETUP_RR;
  const hasSwing=confirmations.includes("Swing structure aligned");
  const hasInternal=confirmations.includes("Internal structure aligned"); const hasSweep=confirmations.includes("Liquidity sweep + displacement");
  const hasPD=confirmations.includes("Premium/discount aligned");
