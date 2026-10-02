@@ -78,15 +78,7 @@ export function flowSnapshot(c:Candle[]):FlowSnapshot{
 export function detectRegime(c:Candle[]):Regime{
   // Regime classification must use the same normalized, closed-candle stream
   // as flowSnapshot; otherwise feed ordering can change ATR and slope.
-  const byTime=new Map<number,Candle>();
-  for(const x of c){
-    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
-    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    byTime.set(x.time,x);
-  }
-  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
-  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
-  const closed=(firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized);
+  const closed=normalizeCandleSeries(c,true);
   if(closed.length<20)return{regime:"TRANSITION",strength:0,atr:0,rangePercent:0};
   const n=14;
   const tr=closed.slice(-n).map((x,i,a)=>i===0?x.high-x.low:Math.max(x.high-x.low,Math.abs(x.high-a[i-1].close),Math.abs(x.low-a[i-1].close)));
