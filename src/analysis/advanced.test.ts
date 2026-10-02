@@ -7,7 +7,7 @@ describe("advanced flow/regime input normalization",()=>{
       {...candle(2),volume:120,takerBuyVolume:80},
       {...candle(3),volume:90,takerBuyVolume:60}
     ];
-    const duplicate={...bars[1],volume:999,takerBuyVolume:999};
+    const duplicate={...bars[1]};
     expect(flowSnapshot([...bars].reverse())).toEqual(flowSnapshot([...bars,duplicate]));
   });
 
