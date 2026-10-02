@@ -77,20 +77,22 @@ function buildOrderFlowTargets(direction:"BUY"|"SELL",entry:number,risk:number,c
       if(out.length===3)break;
     }
   }
-  let structuralTargetCount=out.length;
   const fallback=direction==="BUY"
     ?[entry+risk*1.5,entry+risk*2,entry+risk*3]
     :[entry-risk*1.5,entry-risk*2,entry-risk*3];
   for(const p of fallback){
     if(out.length===3||!valid(p))continue;
-    // Do not place a mathematical target before an already-selected structural
-    // level; fallback targets should extend beyond the last structural objective.
-    const beyondStructure=out.length===0
-      ?true
-      :direction==="BUY" ? p>out.at(-1)! : p<out.at(-1)!;
-    if(beyondStructure&&out.every(x=>Math.abs(p-x)>=minSpacing))out.push(p);
+    // Fallback objectives may sit before or after a structural objective.
+    // All candidates are independently validated and the final ladder is
+    // ordered by direction, while at least one selected objective must remain
+    // a real prior structural/liquidity level.
+    if(out.every(x=>Math.abs(p-x)>=minSpacing))out.push(p);
   }
-  structuralTargetCount=Math.min(structuralTargetCount,out.length);
+  out.sort((a,b)=>direction==="BUY"?a-b:b-a);
+  const structuralTargetCount=Math.min(
+    structuralLevels.filter(valid).filter(p=>out.some(x=>Math.abs(p-x)<1e-12)).length,
+    out.length
+  );
   return {targets:out,structuralTargetCount};
 }
 
