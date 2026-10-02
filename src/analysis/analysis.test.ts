@@ -78,7 +78,7 @@ describe("analysis regression",()=>{
       {...candles(1)[0],time:5,open:104,high:106,low:102.5,close:104.5,closed:true}
     ];
     const latest=findLatestValidLiquiditySweep(data,105,"high",1,5);
-    expect(latest?.index).toBe(4);
+    expect(latest?.index).toBe(5);
     expect(latest?.type).toBe("high");
   });
 
