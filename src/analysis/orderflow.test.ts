@@ -221,6 +221,8 @@ describe("order flow strategy",()=>{
     expect(r.stop).toBeNull();
     expect(r.targets).toEqual([]);
     expect(r.signal).toContain("WAIT");
+    expect(r.rejectionReason).toContain("invalid entry/SL/TP geometry");
+    expect(r.diagnostics.find(d=>d.key==="trade_geometry")?.passed).toBe(false);
   });
 
   it("rejects a SELL when the computed stop is not above entry",()=>{
