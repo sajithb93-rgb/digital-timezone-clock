@@ -347,6 +347,15 @@ describe("analysis regression",()=>{
     if(!s.entryZone) expect(s.setup.direction).toBe("WAIT");
   });
 
+  it("marks an MTF frame unavailable when malformed candles hide the usable history",()=>{
+    const valid=candles(30);
+    const malformed={time:999,open:1,high:100,low:0,close:99,volume:-1,closed:true};
+    const open={time:1000,open:1,high:101,low:0,close:100,volume:10,closed:false};
+    const r=analyzeMTF([{interval:"5m",candles:[...valid.slice(0,24),malformed,open]}]);
+    expect(r.frames[0].available).toBe(false);
+    expect(r.frames[0].structure).toBe("UNAVAILABLE");
+  });
+
   it("exposes Elliott evidence separately for available MTF frames",()=>{
     const m=analyzeMTF([{interval:"4h",candles:candles(100)}]);
     expect(m.frames[0].available).toBe(true);
