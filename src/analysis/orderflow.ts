@@ -164,6 +164,21 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const prior3=(useFootprint?fpRecent.slice(-6,-3).map(f=>f.deltaRatio):bars.slice(-6,-3).map(b=>b.deltaRatio));
   const trendDelta=avg(recent3)-avg(prior3);
   const pressureTrend=trendDelta>=0.04?"BUYING PRESSURE INCREASING":trendDelta<=-0.04?"SELLING PRESSURE INCREASING":"PRESSURE STABLE";
+  // Reject chase entries when the confirmation close is more than one
+  // average recent candle range beyond the micro-structure break.
+  const recent3Flow=(useFootprint?fpRecent.slice(-3).map(f=>f.deltaRatio):bars.slice(-3).map(b=>b.deltaRatio));
+  const recent3FlowAverage=avg(recent3Flow);
+  const recentFlowAlignedBuy=recent3Flow.length===3&&recent3FlowAverage>=0.05&&recent3Flow.at(-1)!>=0.08;
+  const recentFlowAlignedSell=recent3Flow.length===3&&recent3FlowAverage<=-0.05&&recent3Flow.at(-1)!<=-0.08;
+  const structureWindow=closed.slice(-4,-1);
+  const structureHigh=structureWindow.length>=2?Math.max(...structureWindow.map(c=>c.high)):null;
+  const structureLow=structureWindow.length>=2?Math.min(...structureWindow.map(c=>c.low)):null;
+  const structureRange=avg(structureWindow.map(c=>barRange(c)));
+  const maxEntryChase=Math.max(structureRange,1e-12);
+  const entryChaseBuy=structureHigh!=null?(last.close-structureHigh)/maxEntryChase:null;
+  const entryChaseSell=structureLow!=null?(structureLow-last.close)/maxEntryChase:null;
+  const entryChaseBuyValid=entryChaseBuy==null||entryChaseBuy<=1;
+  const entryChaseSellValid=entryChaseSell==null||entryChaseSell<=1;
 
   const recentBars=bars.slice(-12);
   // Use the latest qualifying event, not the oldest one in the lookback window.
@@ -184,8 +199,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const latestBuyFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio>=0.08&&latestFootprint.maxBuyImbalanceRatio>=3&&latestFootprint.stackedBuyImbalances>=2&&latestFootprint.absorption==="BUYER";
   const latestSellFootprint=!!latestFootprint&&latestFootprint.confirmed&&latestFootprint.deltaRatio<=-0.08&&latestFootprint.maxSellImbalanceRatio>=3&&latestFootprint.stackedSellImbalances>=2&&latestFootprint.absorption==="SELLER";
   const confirmedFlowData=useFootprint||allExact;
-  const longConfirmed=sufficientHistory&&useFootprint&&longContext&&pressure==="BUYERS"&&latestBuyFootprint&&last.microStructure==="BULLISH";
-  const shortConfirmed=sufficientHistory&&useFootprint&&shortContext&&pressure==="SELLERS"&&latestSellFootprint&&last.microStructure==="BEARISH";
+  const longConfirmed=sufficientHistory&&useFootprint&&longContext&&pressure==="BUYERS"&&recentFlowAlignedBuy&&latestBuyFootprint&&last.microStructure==="BULLISH"&&entryChaseBuyValid;
+  const shortConfirmed=sufficientHistory&&useFootprint&&shortContext&&pressure==="SELLERS"&&recentFlowAlignedSell&&latestSellFootprint&&last.microStructure==="BEARISH"&&entryChaseSellValid;
 
   const diagnostics:OrderFlowDiagnostic[]=[
     {key:"closed",label:"Closed candle",passed:true,detail:"Latest analysis candle is closed"},
@@ -198,6 +213,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"sweep_recent_buy",label:"Recent sell-side sweep",passed:!!sweepLow&&last.index-sweepLow.index<=maxSweepAge,detail:sweepLow?`${last.index-sweepLow.index} bars ago`:"No low sweep"},
     {key:"abs_buy",label:"Buyer absorption after sweep",passed:longContext,detail:buyerAbsorption?`Latest buyer absorption at index ${buyerAbsorption.index}`:"No buyer absorption after a low sweep"},
     {key:"recent_flow_buy",label:"3-bar buyer flow alignment",passed:recentFlowAlignedBuy,detail:`3-bar average delta ratio ${(recentFlowAverage*100).toFixed(2)}% · latest ${((recent3.at(-1)??0)*100).toFixed(2)}%`},
+    {key:"recent_flow_buy",label:"3-bar buyer flow alignment",passed:recentFlowAlignedBuy,detail:`3-bar average delta ratio ${(recent3FlowAverage*100).toFixed(2)}% · latest ${((recent3Flow.at(-1)??0)*100).toFixed(2)}%`},
+    {key:"entry_chase_buy",label:"BUY entry not overextended",passed:entryChaseBuyValid,detail:entryChaseBuy==null?"Not enough structure bars":`Break extension ${entryChaseBuy.toFixed(2)}× avg range`},
     {key:"pressure_buy",label:"12-bar buyer pressure",passed:pressure==="BUYERS",detail:`${buyerPressure.toFixed(1)}% buyers · delta ratio ${(deltaRatio*100).toFixed(2)}%`},
     {key:"delta_buy",label:"Positive delta ≥ 0.08",passed:deltaRatio>=0.08,detail:`Current window delta ratio ${deltaRatio.toFixed(3)}`},
     {key:"imb_buy",label:"2+ stacked buy / 3× imbalance",passed:latestBuyFootprint,detail:latestFootprint?`stacked ${latestFootprint.stackedBuyImbalances}, max ${latestFootprint.maxBuyImbalanceRatio.toFixed(2)}×`:"No latest footprint"},
@@ -206,19 +223,21 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     {key:"sweep_recent_sell",label:"Recent buy-side sweep",passed:!!sweepHigh&&last.index-sweepHigh.index<=maxSweepAge,detail:sweepHigh?`${last.index-sweepHigh.index} bars ago`:"No high sweep"},
     {key:"abs_sell",label:"Seller absorption after sweep",passed:shortContext,detail:sellerAbsorption?`Latest seller absorption at index ${sellerAbsorption.index}`:"No seller absorption after a high sweep"},
     {key:"recent_flow_sell",label:"3-bar seller flow alignment",passed:recentFlowAlignedSell,detail:`3-bar average delta ratio ${(recentFlowAverage*100).toFixed(2)}% · latest ${((recent3.at(-1)??0)*100).toFixed(2)}%`},
+    {key:"recent_flow_sell",label:"3-bar seller flow alignment",passed:recentFlowAlignedSell,detail:`3-bar average delta ratio ${(recent3FlowAverage*100).toFixed(2)}% · latest ${((recent3Flow.at(-1)??0)*100).toFixed(2)}%`},
+    {key:"entry_chase_sell",label:"SELL entry not overextended",passed:entryChaseSellValid,detail:entryChaseSell==null?"Not enough structure bars":`Break extension ${entryChaseSell.toFixed(2)}× avg range`},
     {key:"pressure_sell",label:"12-bar seller pressure",passed:pressure==="SELLERS",detail:`${sellerPressure.toFixed(1)}% sellers · delta ratio ${(deltaRatio*100).toFixed(2)}%`},
     {key:"delta_sell",label:"Negative delta ≤ -0.08",passed:deltaRatio<=-0.08,detail:`Current window delta ratio ${deltaRatio.toFixed(3)}`},
     {key:"imb_sell",label:"2+ stacked sell / 3× imbalance",passed:latestSellFootprint,detail:latestFootprint?`stacked ${latestFootprint.stackedSellImbalances}, max ${latestFootprint.maxSellImbalanceRatio.toFixed(2)}×`:"No latest footprint"},
     {key:"structure_sell",label:"Bearish structure break",passed:last.microStructure==="BEARISH",detail:last.microStructure},
   ];
   const failed = (directionHint:OrderFlowDirection)=>diagnostics.filter(d=>{
-    if(directionHint==="BUY") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_buy","sweep_recent_buy","abs_buy","recent_flow_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
-    if(directionHint==="SELL") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_sell","sweep_recent_sell","abs_sell","recent_flow_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
+    if(directionHint==="BUY") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_buy","sweep_recent_buy","abs_buy","recent_flow_buy","entry_chase_buy","pressure_buy","delta_buy","imb_buy","structure_buy"].includes(d.key);
+    if(directionHint==="SELL") return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp","sweep_sell","sweep_recent_sell","abs_sell","recent_flow_sell","entry_chase_sell","pressure_sell","delta_sell","imb_sell","structure_sell"].includes(d.key);
     return ["closed","history","exact","footprint_history","footprint_coverage","latest_fp"].includes(d.key);
   }).filter(d=>!d.passed);
   const maxSide = [
-    {side:"BUY" as const,checks:["sweep_buy","sweep_recent_buy","abs_buy","recent_flow_buy","pressure_buy","delta_buy","imb_buy","structure_buy"]},
-    {side:"SELL" as const,checks:["sweep_sell","sweep_recent_sell","abs_sell","recent_flow_sell","pressure_sell","delta_sell","imb_sell","structure_sell"]}
+    {side:"BUY" as const,checks:["sweep_buy","sweep_recent_buy","abs_buy","recent_flow_buy","entry_chase_buy","pressure_buy","delta_buy","imb_buy","structure_buy"]},
+    {side:"SELL" as const,checks:["sweep_sell","sweep_recent_sell","abs_sell","recent_flow_sell","entry_chase_sell","pressure_sell","delta_sell","imb_sell","structure_sell"]}
   ].map(x=>({side:x.side,score:x.checks.filter(k=>diagnostics.find(d=>d.key===k)?.passed).length,checks:x.checks.length})).sort((a,b)=>b.score-a.score)[0];
   const diagnosticDirection:OrderFlowDirection = maxSide.score>=3 ? maxSide.side : "WAIT";
   const failedChecks=failed(diagnosticDirection);
