@@ -150,7 +150,8 @@ function calculateTargets(candles: Candle[], entry: number, invalidation: number
   return [...unique, ...fallback].slice(0, 3);
 }
 
-export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: OrderFlowResult): ReversalEngineResult {
+export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: OrderFlowResult, options: { requireOrderFlow?: boolean } = {}): ReversalEngineResult {
+  const requireOrderFlow = options.requireOrderFlow !== false;
   const closed = candles.filter(c => c.closed !== false);
   if (closed.length < 30) return { ...EMPTY, asOf: closed.length - 1 };
 
@@ -191,9 +192,11 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
       : orderFlow.direction === "SELL" || (orderFlow.pressure === "SELLERS" && orderFlow.absorption === "SELLER");
     const deltaDivergence = findDeltaDivergence(closed, orderFlow, direction);
 
-    const rawScore = 15 + (choch ? 25 : 0) + (displacementOk ? 15 : 0) + (fvg ? 10 : 0) + (orderBlock ? 10 : 0) + (orderflowConfirmed ? 15 : 0) + (deltaDivergence ? 5 : 0) + (opposingStructure ? 5 : 0);
+    const orderFlowGate = !requireOrderFlow || orderflowConfirmed;
+    const orderFlowPoints = requireOrderFlow && orderflowConfirmed ? 15 : 0;
+    const rawScore = 15 + (choch ? 25 : 0) + (displacementOk ? 15 : 0) + (fvg ? 10 : 0) + (orderBlock ? 10 : 0) + orderFlowPoints + (deltaDivergence ? 5 : 0) + (opposingStructure ? 5 : 0);
     const score = clamp(rawScore);
-    const state: ReversalState = score >= 75 && !!choch && opposingStructure && displacementOk && orderflowConfirmed ? "CONFIRMED" : score >= 45 ? "SETUP" : "WATCH";
+    const state: ReversalState = score >= 75 && !!choch && opposingStructure && displacementOk && orderFlowGate ? "CONFIRMED" : score >= 45 ? "SETUP" : "WATCH";
 
     const evidence: ReversalEvidence[] = [
       { name: "Liquidity sweep", active: true, points: 15, detail: direction === "BUY" ? "Sell-side liquidity swept and reclaimed" : "Buy-side liquidity swept and reclaimed" },
@@ -201,7 +204,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
       { name: "Displacement", active: displacementOk, points: 15, detail: displacementOk ? "Body/ATR " + bestDisplacement.toFixed(2) + "×" : "Body/ATR " + bestDisplacement.toFixed(2) + "× — below threshold" },
       { name: "Fair value gap", active: !!fvg, points: 10, detail: fvg ? "Fresh directional FVG detected" : "No fresh directional FVG" },
       { name: "Order block", active: !!orderBlock, points: 10, detail: orderBlock ? "Fresh directional order block detected" : "No fresh directional order block" },
-      { name: "Order flow", active: orderflowConfirmed, points: 15, detail: orderflowConfirmed ? "Directional buyer/seller pressure confirmed" : "Order-flow confirmation incomplete" },
+      { name: "Order flow", active: orderflowConfirmed, points: 15, detail: orderflowConfirmed ? "Directional buyer/seller pressure confirmed" : requireOrderFlow ? "Order-flow confirmation incomplete" : "Not required in structural MTF mode" },
       { name: "Delta divergence", active: deltaDivergence, points: 5, detail: deltaDivergence ? "Price and delta show reversal divergence" : "No qualifying delta divergence" },
       { name: "Opposing structure", active: opposingStructure, points: 5, detail: opposingStructure ? "Pre-CHOCH structure was in the opposite direction" : "No confirmed opposite pre-CHOCH structure" },
     ];
@@ -222,7 +225,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
       fvg, orderBlock, orderflowConfirmed, deltaDivergence,
       entryZone: zone, invalidation, targets, evidence,
       reason: state === "CONFIRMED"
-        ? direction + " reversal confirmed by sweep → opposite CHOCH → displacement → order flow"
+        ? direction + " reversal confirmed by sweep → opposite CHOCH → displacement" + (requireOrderFlow ? " → order flow" : " · structural MTF mode")
         : choch
           ? direction + " reversal setup forming; wait for remaining confluence"
           : direction + " reversal watch: liquidity sweep detected; structure shift not confirmed",
@@ -275,7 +278,7 @@ export function analyzeReversalMTF(mtfFrames: { interval: string; candles: Candl
       signal: "WAIT", confidence: 0, confirmations: [], entry: null, stop: null, targets: [],
       recentBars: [], diagnostics: [], rejectionReason: "Fallback flow — order-flow confirmation intentionally unavailable", footprint: null, footprintHistoryCount: 0
     };
-    return analyzeReversal(candles, smc, flow);
+    return analyzeReversal(candles, smc, flow, { requireOrderFlow: false });
   };
 
   const primary = run(primaryCandles);
@@ -327,7 +330,7 @@ export function analyzeReversalMTF(mtfFrames: { interval: string; candles: Candl
     frames,
     confirmed,
     reason: confirmed
-      ? direction + " MTF reversal confirmed: 15m structure + 5m trigger aligned" + (opposedToContext ? " against 1h context" : "")
+      ? direction + " MTF reversal structurally confirmed: 15m structure + 5m trigger aligned" + (opposedToContext ? " against 1h context" : "")
       : aligned
         ? direction + " MTF reversal setup: 15m and 5m aligned, waiting for full confirmation"
         : "Waiting for 5m + 15m directional alignment"
