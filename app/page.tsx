@@ -151,7 +151,7 @@ async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTi
     const t=normalizeAggTrade(raw);if(!t)continue;
     lastId=t.id;
     pageLastTime=Math.max(pageLastTime,t.time);
-    if(t.time>endTime){crossedWindow=true;break;}
+    if(t.time>windowEnd){crossedWindow=true;break;}
     if(t.time>=startTime&&!seen.has(t.id)){seen.add(t.id);out.push(t);}
     if(out.length>=maxTrades)break;
    }
