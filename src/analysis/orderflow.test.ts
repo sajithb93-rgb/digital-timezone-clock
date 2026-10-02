@@ -501,6 +501,20 @@ describe("order flow strategy",()=>{
     expect(r.diagnostics.find(d=>d.key==="footprint_history")?.passed).toBe(false);
   });
 
+  it("rejects a footprint with inconsistent level totals",()=>{
+    const footprint=confirmedFootprints("BUY");
+    footprint[11]={...footprint[11],levels:[{
+      ...footprint[11].levels[0],
+      buyVolume:10,
+      sellVolume:0,
+      delta:5,
+      totalVolume:10
+    }]};
+    const r=analyzeOrderFlow(fullLongCandles(),footprint);
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="footprint_history")?.passed).toBe(false);
+  });
+
   it("returns WAIT when any critical BUY footprint confirmation is missing",()=>{
     const base=fullLongCandles();
     const cases:Partial<FootprintSnapshot>[]=[
