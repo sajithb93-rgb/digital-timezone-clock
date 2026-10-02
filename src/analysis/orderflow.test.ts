@@ -27,7 +27,7 @@ function confirmedFootprints(direction:"BUY"|"SELL", latestOverrides:Partial<Foo
 
 function fullLongCandles():Candle[]{
   return [
-    ...Array.from({length:8},(_,i)=>candle(i,100,102,99,101,100,60)),
+    ...Array.from({length:8},(_,i)=>i===6?candle(i,100,112,99,101,100,60):candle(i,100,102,99,101,100,60)),
     candle(8,101,101.5,95,100.5,100,55),
     candle(9,100.5,101,95,100.5,100,30),
     candle(10,100.5,103,99.5,102,100,65),
@@ -37,7 +37,7 @@ function fullLongCandles():Candle[]{
 
 function fullShortCandles():Candle[]{
   return [
-    ...Array.from({length:8},(_,i)=>candle(i,100,102,99,101,100,40)),
+    ...Array.from({length:8},(_,i)=>i===6?candle(i,100,102,75,101,100,40):candle(i,100,102,99,101,100,40)),
     candle(8,101,105,97,99.5,100,45),
     candle(9,99.5,105,99,100,100,70),
     candle(10,100,103,97,98,100,35),
@@ -339,6 +339,24 @@ describe("order flow strategy",()=>{
     expect(r.targets.every(t=>Number.isFinite(t)&&t>r.entry!)).toBe(true);
     const risk=Math.abs(r.entry!-r.stop!);
     expect(r.targets.every(t=>Math.abs(t-r.entry!)/risk>=1.5)).toBe(true);
+    expect(r.diagnostics.find(d=>d.key==="target_quality")?.passed).toBe(true);
+  });
+
+  it("blocks a confirmed setup when all targets are only mathematical R-multiples",()=>{
+    const candles=fullLongCandles().map((c,i)=>i===6?{...c,high:102}:c);
+    const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
+    expect(r.direction).toBe("WAIT");
+    expect(r.targets).toEqual([]);
+    expect(r.diagnostics.find(d=>d.key==="target_quality")?.passed).toBe(false);
+    expect(r.rejectionReason).toContain("target quality");
+  });
+
+  it("uses a real structural target before fallback R-multiple targets",()=>{
+    const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
+    expect(r.direction).toBe("BUY");
+    expect(r.targets[0]).toBe(112);
+    expect(r.targets[1]).toBeGreaterThan(r.targets[0]);
+    expect(r.targets[2]).toBeGreaterThan(r.targets[1]);
     expect(r.diagnostics.find(d=>d.key==="target_quality")?.passed).toBe(true);
   });
 
