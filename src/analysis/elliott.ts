@@ -53,7 +53,8 @@ const EMPTY = (reason:string):AdvancedElliottResult => ({
   correctionCandidates: 0,
   nested: [],
   correctionPattern: "None",
-  engine: "ADVANCED_ELLIOTT_V2"
+  engine: "ADVANCED_ELLIOTT_V2",
+  liveSetup: null
 });
 
 function clamp(n:number){ return Math.max(0, Math.min(100, Math.round(n))); }
@@ -252,7 +253,7 @@ function diagonalCandidates(c:Candle[],bull:boolean){
     const overlap=bull?p4<=p1&&p4>p2:p4>=p1&&p4<p2;
     const w4NotPassW2=bull?p4>p2:p4<p2;
     const w5Direction=bull?p5>p4:p5<p4;
-    const w3NotShortest=w3>=w5;
+    const w3NotShortest=w3>=Math.min(w1,w5);
     if(!(w1>0&&w2>0&&w2Valid&&w3BeyondW1&&overlap&&w4NotPassW2&&w3NotShortest&&w5Direction))continue;
     const contracting=w3<w1&&w4<w2&&w5<w3,expanding=w3>w1&&w4>w2&&w5>w3;
     const symmetry=1-Math.min(1,abs(w3/w1-w5/w3));
@@ -269,6 +270,57 @@ function diagonalCandidates(c:Candle[],bull:boolean){
     });
   }
   return out;
+}
+
+function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null{
+  if(primary.kind!=="Impulse"&&primary.kind!=="Diagonal")return null;
+  const endIndex=primary.points.at(-1)?.index??-1;
+  const bull=primary.direction==="bullish";
+  const ps=alternatePivots(swingPivots(c,2)).filter(p=>p.index>endIndex);
+  if(ps.length<3)return null;
+
+  const q=ps.slice(-3);
+  const expected=bull?["L","H","L"]:["H","L","H"];
+  if(q.some((p,i)=>p.type!==expected[i]))return null;
+
+  const prices=q.map(p=>p.price);
+  const correction=bull
+    ? validateZigzag(prices,false)
+    : validateZigzag(prices,true);
+  const flat=bull
+    ? validateFlat(prices,false)
+    : validateFlat(prices,true);
+  if(!correction.valid&&!flat.valid)return null;
+
+  const [a,b,cPoint]=prices;
+  const entry=b;
+  const invalidation=cPoint;
+  const risk=abs(entry-invalidation);
+  if(risk<=0)return null;
+
+  const dir=bull?1:-1;
+  const extension=Math.max(abs(b-a),risk)*1.618;
+  const target=entry+dir*extension;
+  const lastClose=c.at(-1)?.close??entry;
+  const triggered=bull?lastClose>=entry:lastClose<=entry;
+  const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0));
+
+  return{
+    points:sequencePoints(q).map((x,i)=>({...x,label:["A","B","C"][i]})),
+    kind:"Correction",
+    direction:bull?"bullish":"bearish",
+    invalidation,
+    entry,
+    targets:[target],
+    quality,
+    rules:[
+      correction.valid?"ABC zigzag correction confirmed":"ABC flat correction confirmed",
+      "Wave C completed after the prior Wave 5",
+      triggered?"Price reclaimed/crossed the Wave B trigger":"Waiting for Wave B trigger break",
+      "Stop invalidates the correction at Wave C"
+    ],
+    strict:true
+  };
 }
 
 function buildFib(prices:number[],bull:boolean){
@@ -346,7 +398,11 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     : pattern + " · " + degree + " · completed historical count";
   const setupReason=invalidated
     ? "Closed price crossed the Wave 1 origin; the completed count is invalidated in hindsight"
-    : "Completed count is historical; the engine does not convert it into a live entry signal";
+    : "Completed count is historical; live entry requires a confirmed ABC correction and Wave B trigger";
+  const liveSetup=invalidated?null:buildLiveContinuationSetup(c,primary);
+  const liveActiveWave=liveSetup
+    ? ((liveSetup.points.at(-1)?.label==="A"?"A":liveSetup.points.at(-1)?.label==="B"?"B":"C") as AdvancedElliottResult["activeWave"])
+    : "Wave 5";
   return{
     primary,alternative,correction,
     fib:{
@@ -356,7 +412,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
       w5:+safeRatio(w5,w1).toFixed(3)
     },
     fibLevels,channel,phase,score:primary.quality,confidence,setupState,
-    setupReason,pattern,degree,countState:setupState,activeWave:"Wave 5",
+    setupReason,pattern,degree,countState:setupState,activeWave:liveActiveWave,liveSetup,
     candidateCount:action.length,correctionCandidates:corrections.length,nested,
     correctionPattern:(correction?.pattern==="Zigzag"||correction?.pattern==="Flat"||correction?.pattern==="Triangle")?correction.pattern:"None",engine:"ADVANCED_ELLIOTT_V2"
   };
