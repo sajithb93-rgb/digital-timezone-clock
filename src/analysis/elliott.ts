@@ -471,11 +471,12 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const extension=Math.max(abs(b-a),risk)*1.618;
   const target=entry+dir*extension;
   const lastClose=c.at(-1)?.close??entry;
-  // A live continuation is only actionable while price is still on the
-  // non-invalidated side of C. Reclaims after invalidation do not revive the
-  // old count.
+  // A live continuation is only actionable while price is still inside the
+  // correction-invalidated-to-target window. Reclaims after invalidation, or
+  // moves that already reached/passed the target, do not revive the old setup.
   const liveNotInvalidated=bull?lastClose>invalidation:lastClose<invalidation;
-  if(!liveNotInvalidated)return null;
+  const liveBeforeTarget=bull?lastClose<target:lastClose>target;
+  if(!liveNotInvalidated||!liveBeforeTarget)return null;
   const triggered=bull?lastClose>=entry:lastClose<=entry;
   const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0)+(flat.valid?0:2));
 
