@@ -333,6 +333,7 @@ export default function Home(){
   let ws:WebSocket|undefined;
   let stop=false;
   let retryTimer:ReturnType<typeof setTimeout>|undefined;
+  let restFallbackTimer:ReturnType<typeof setInterval>|undefined;
   let staleTimer:ReturnType<typeof setTimeout>|undefined;
   let stableTimer:ReturnType<typeof setTimeout>|undefined;
   let uiFlushTimer:ReturnType<typeof setTimeout>|undefined;
