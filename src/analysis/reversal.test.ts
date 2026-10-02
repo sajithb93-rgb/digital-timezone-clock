@@ -151,8 +151,10 @@ describe("reversal engine",()=>{
       fvgs:[{from:32,to:33,low:103,high:105,type:"bullish",filled:false,size:1}],
       orderBlocks:[{index:30,low:96,high:99,type:"bullish",mitigated:false,strength:1}],
     }),flow({direction:"WAIT",pressure:"BALANCED",absorption:"NONE",signal:"WAIT"}),{requireOrderFlow:false});
-    expect(r.state).toBe("CONFIRMED");
+    expect(r.targets).toHaveLength(3);
+    expect(r.targets.some(t=>Math.abs(t-160)<1e-9)).toBe(true);
     expect(r.orderflowConfirmed).toBe(false);
+    expect(r.state).toBe("CONFIRMED");
     expect(r.reason).toContain("structural MTF mode");
   });
 
