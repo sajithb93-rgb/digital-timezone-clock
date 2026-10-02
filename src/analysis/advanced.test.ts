@@ -6,7 +6,15 @@ function candle(i:number):Candle {
   return {time:i,open:100,high:101,low:99,close:100,volume:100,takerBuyVolume:50,closed:true};
 }
 
-describe("confluence zone integrity",()=>{
+describe("confluence zone integrity",()=>{\n  it("preserves a duplicate candle when only the optional taker-buy field is missing",()=>{
+    const base=candles(40);
+    const duplicate={...base[20],takerBuyVolume:undefined};
+    const result=normalizeCandleSeries([...base,duplicate],true);
+    expect(result).toHaveLength(base.length);
+    expect(result.find(x=>x.time===base[20].time)?.takerBuyVolume).toBe(base[20].takerBuyVolume);
+  });
+
+
   it("does not score a partially mitigated FVG as a fresh zone",()=>{
     const base:any={asOf:20,events:[],sweeps:[],fvgs:[{to:19,filled:false,partial:true}],orderBlocks:[],premiumDiscount:"Premium",displacement:0};
     const flow={volumeRatio:0} as any;
