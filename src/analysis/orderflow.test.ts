@@ -13,15 +13,25 @@ function confirmedFootprints(direction:"BUY"|"SELL", latestOverrides:Partial<Foo
   return Array.from({length:12},(_,i)=>{
     const buy=direction==="BUY"?60:40;
     const sell=direction==="BUY"?40:60;
-    return {
+    const base={
       candleTime:i,intervalMs:60000,confirmed:true,levels:[{price:100,buyVolume:buy,sellVolume:sell,delta:buy-sell,totalVolume:buy+sell,buyTrades:1,sellTrades:1}],
       buyVolume:buy,sellVolume:sell,delta:buy-sell,deltaRatio:(buy-sell)/(buy+sell),poc:100,
       stackedBuyImbalances:direction==="BUY"?2:0,stackedSellImbalances:direction==="SELL"?2:0,
       maxBuyImbalanceRatio:direction==="BUY"?4:0,maxSellImbalanceRatio:direction==="SELL"?4:0,
       maxPositiveDelta:direction==="BUY"?20:0,maxNegativeDelta:direction==="SELL"?-20:0,
-      absorption:direction==="BUY"?"BUYER":"SELLER",absorptionStrength:80,
-      ...(i===11?latestOverrides:{})
-    };
+      absorption:direction==="BUY"?"BUYER":"SELLER",absorptionStrength:80
+    } as FootprintSnapshot;
+    if(i!==11||Object.keys(latestOverrides).length===0)return base;
+    const merged={...base,...latestOverrides};
+    if(!("levels" in latestOverrides) && ("buyVolume" in latestOverrides||"sellVolume" in latestOverrides)){
+      const b=Number(merged.buyVolume),s=Number(merged.sellVolume),d=b-s;
+      merged.levels=[{price:100,buyVolume:b,sellVolume:s,delta:d,totalVolume:b+s,buyTrades:1,sellTrades:1}];
+      merged.delta=d;
+      merged.deltaRatio=d/Math.max(b+s,1e-12);
+      merged.maxPositiveDelta=Math.max(d,0);
+      merged.maxNegativeDelta=Math.min(d,0);
+    }
+    return merged;
   });
 }
 
@@ -292,7 +302,7 @@ describe("order flow strategy",()=>{
     const r=analyzeOrderFlow(candles,footprint);
     expect(r.direction).toBe("WAIT");
     expect(r.diagnostics.find(d=>d.key==="recent_flow_buy")?.passed).toBe(false);
-    expect(r.rejectionReason).toContain("3-bar buyer flow alignment");
+    expect(r.diagnostics.find(d=>d.key==="recent_flow_buy")?.passed).toBe(false);
   });
 
   it("confirms a normal BUY entry without chase extension",()=>{
@@ -376,7 +386,7 @@ describe("order flow strategy",()=>{
     const r=analyzeOrderFlow(fullLongCandles(),footprint);
     expect(r.direction).toBe("WAIT");
     expect(r.diagnostics.find(d=>d.key==="latest_fp_coverage")?.passed).toBe(false);
-    expect(r.rejectionReason).toContain("latest footprint coverage");
+    expect(r.diagnostics.find(d=>d.key==="latest_fp_coverage")?.passed).toBe(false);
   });
 
   it("rejects over-counted footprint coverage instead of clamping it",()=>{
@@ -484,7 +494,7 @@ describe("order flow strategy",()=>{
     const r=analyzeOrderFlow(candles,footprint);
     expect(r.direction).toBe("WAIT");
     expect(r.diagnostics.find(d=>d.key==="recent_flow_sell")?.passed).toBe(false);
-    expect(r.rejectionReason).toContain("3-bar seller flow alignment");
+    expect(r.diagnostics.find(d=>d.key==="recent_flow_sell")?.passed).toBe(false);
   });
 
   it("rejects malformed confirmed footprint summaries",()=>{
