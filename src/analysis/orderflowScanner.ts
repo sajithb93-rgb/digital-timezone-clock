@@ -21,6 +21,7 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
   if (result.source !== "BINANCE_FOOTPRINT" || !fp) {
     return {symbol,timeframe,state:"WAIT",direction:"NONE",score:0,price:result.entry,deltaRatio:result.deltaRatio,pressure:result.pressure,liquiditySweep:result.liquiditySweep,absorption:result.absorption,footprintBars:result.footprintHistoryCount,reason:"Waiting for 12 confirmed Binance footprint bars"};
   }
+  const geometryValid=result.diagnostics.find(d=>d.key==="trade_geometry")?.passed!==false;
   const buyChecks = [
     result.pressure === "BUYERS",
     result.deltaRatio >= 0.08,
@@ -49,7 +50,8 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
   const score = Math.round(Math.max(buyScore, sellScore) / buyChecks.length * 100);
 
   let state: OrderFlowScanState = "WAIT";
-  if (result.direction !== "WAIT") state = "CONFIRMED";
+  if (result.direction !== "WAIT" && geometryValid) state = "CONFIRMED";
+  else if (!geometryValid) state = "WAIT";
   else if (direction !== "NONE" && score >= 75) state = "SETUP";
   else if (direction !== "NONE" && score >= 50) state = "WATCH";
   
