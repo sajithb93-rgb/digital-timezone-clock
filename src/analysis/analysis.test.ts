@@ -29,6 +29,14 @@ describe("analysis regression",()=>{
     expect(validateDoubleZigzag([100,110,105,115,120,126,121,130],true).valid).toBe(false);
   });
 
+  it("accepts a non-erasing 90% countertrend X connector in a double zigzag",()=>{
+    const prices=[100,110,105,115,106,116,111,123];
+    expect(validateDoubleZigzag(prices,true).valid).toBe(true);
+    // X = 115 -> 106 is a 90% retracement of W = 100 -> 115.
+    // It remains countertrend and does not fully erase W.
+    expect(validateDoubleZigzag(prices,true).connectorValid).toBe(true);
+  });
+
   it("uses kline taker-buy volume for flow",()=>{
     const c=[
       {...candles(1)[0],volume:100,takerBuyVolume:80},
