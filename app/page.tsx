@@ -593,13 +593,14 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
  const mtfSignalMarker = layers.reversal && mtfReversal.confirmed && mtfReversal.direction !== "NONE" ? (() => {
   const dirCls = mtfReversal.direction === "BUY" ? "reversal-buy" : "reversal-sell";
-  const idx = candles.length - 1;
-  const px = xOf(idx);
-  const py = yOf(candles[idx]?.close ?? 0);
+  let idx = candles.length - 1;
+  while(idx >= 0 && candles[idx].closed === false) idx -= 1;
+  const px = idx >= 0 ? xOf(idx) : null;
+  const py = idx >= 0 ? yOf(candles[idx]?.close ?? 0) : null;
   const label = mtfReversal.direction + " REVERSAL · MTF 15m + 5m CONFIRMED · " + mtfReversal.score + "/100";
   return <g className="reversal-chart-layer">
-    <circle cx={px} cy={py} r="11" className={dirCls+"-mtf-marker"}/>
-    {text(Math.max(8,Math.min(width-260,px+14)),Math.max(20,py-14),label,dirCls+"-mtf-label")}
+    {px!=null&&py!=null&&<circle cx={px} cy={py} r="11" className={dirCls+"-mtf-marker"}/>} 
+    {px!=null&&py!=null&&text(Math.max(8,Math.min(width-260,px+14)),Math.max(20,py-14),label,dirCls+"-mtf-label")}
   </g>;
  })() : null;
  const reversalMarker = layers.reversal && reversal.state !== "NONE" ? (() => {
