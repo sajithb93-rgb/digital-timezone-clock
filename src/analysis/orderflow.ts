@@ -244,10 +244,31 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
       const base=sweepHigh?.sweepPrice??Math.max(...closed.slice(-5).map(c=>c.high));
       stop=base+buffer;
     }
-    if(entry!=null&&stop!=null&&entry!==stop){
-      const risk=Math.abs(entry-stop);
-      targets=direction==="BUY"?[entry+risk*1.5,entry+risk*2,entry+risk*3]:[entry-risk*1.5,entry-risk*2,entry-risk*3];
-    }else{entry=null;stop=null;targets=[];direction="WAIT"}
+
+    // Trade geometry is part of confirmation, not a presentation detail.
+    // BUY must have SL strictly below entry and all TPs strictly above entry.
+    // SELL must have SL strictly above entry and all TPs strictly below entry.
+    const validStopSide=entry!=null&&stop!=null&&(
+      direction==="BUY" ? stop<entry : stop>entry
+    );
+    if(validStopSide){
+      const risk=Math.abs(entry!-stop!);
+      const candidateTargets=direction==="BUY"?[
+        entry!+risk*1.5,entry!+risk*2,entry!+risk*3
+      ]:[
+        entry!-risk*1.5,entry!-risk*2,entry!-risk*3
+      ];
+      const validTargets=candidateTargets.every((target)=>(
+        direction==="BUY" ? target>entry! : target<entry!
+      ));
+      if(validTargets){
+        targets=candidateTargets;
+      }else{
+        entry=null;stop=null;targets=[];direction="WAIT";
+      }
+    }else{
+      entry=null;stop=null;targets=[];direction="WAIT";
+    }
   }
 
   const signal=direction==="BUY"?"BUY CONFIRMED — CLOSED CANDLE":direction==="SELL"?"SELL CONFIRMED — CLOSED CANDLE":"WAIT — no confirmed closed-candle order-flow setup";
