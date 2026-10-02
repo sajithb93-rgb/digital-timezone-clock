@@ -151,13 +151,32 @@ export function classifyStructureBreak(
 ):"BOS"|"CHOCH"{
  return previousDirection!==null&&previousDirection!==breakDirection?"CHOCH":"BOS";
 }
+export function classifyProtectedStructureBreak(
+ previousDirection:"bullish"|"bearish"|null,
+ brokenSide:"high"|"low",
+ protectedSide:"high"|"low"|null
+):"BOS"|"CHOCH"|null{
+ if(previousDirection===null)return "BOS";
+ const continuationSide=previousDirection==="bullish"?"high":"low";
+ if(brokenSide===continuationSide)return "BOS";
+ if(protectedSide===brokenSide)return "CHOCH";
+ return null;
+}
 function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
  const events:StructureEvent[]=[];
  let structure:"bullish"|"bearish"|null=null;
  let activeH:Pivot|null=null,activeL:Pivot|null=null;
+ let protectedHigh:Pivot|null=null,protectedLow:Pivot|null=null;
  const confirmedHighs=ps.filter(p=>p.type==="H").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
  const confirmedLows=ps.filter(p=>p.type==="L").sort((x,y)=>(x.confirmedAt??x.index)-(y.confirmedAt??y.index));
  let hiPtr=0,loPtr=0;
+ const latestBefore=(list:Pivot[],index:number):Pivot|null=>{
+  for(let j=list.length-1;j>=0;j--){
+   const p=list[j];
+   if(p.index<index&&(p.confirmedAt??p.index)<=index)return p;
+  }
+  return null;
+ };
  for(let i=0;i<c.length;i++){
   while(hiPtr<confirmedHighs.length&&(confirmedHighs[hiPtr].confirmedAt??Infinity)<=i)activeH=confirmedHighs[hiPtr++];
   while(loPtr<confirmedLows.length&&(confirmedLows[loPtr].confirmedAt??Infinity)<=i)activeL=confirmedLows[loPtr++];
@@ -165,147 +184,34 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
   const brokeBull=!!activeH&&c[i].close>activeH.price;
   const brokeBear=!!activeL&&c[i].close<activeL.price;
   if(brokeBull&&brokeBear){
-   activeH=null;activeL=null;
+   // A malformed/ambiguous candle cannot establish two opposing structure
+   // events at once; wait for the next closed candle.
    continue;
   }
   if(brokeBull){
-   events.push({index:i,price:activeH!.price,type:classifyStructureBreak(structure,"bullish"),direction:"bullish",strength:disp?"displacement":"normal"});
-   structure="bullish";activeH=null;
+   const type=classifyProtectedStructureBreak(structure,"high",protectedHigh?"high":protectedLow?"low":null);
+   if(type){
+    events.push({index:i,price:activeH!.price,type,direction:"bullish",strength:disp?"displacement":"normal"});
+    structure="bullish";
+    activeH=null;
+    // A bullish BOS establishes the low that produced that break as the
+    // protected low. A CHoCH does not get a protected high until a bearish
+    // BOS confirms the new direction.
+    protectedLow=latestBefore(confirmedLows,i);
+    protectedHigh=null;
+   }
   }else if(brokeBear){
-   events.push({index:i,price:activeL!.price,type:classifyStructureBreak(structure,"bearish"),direction:"bearish",strength:disp?"displacement":"normal"});
-   structure="bearish";activeL=null;
+   const type=classifyProtectedStructureBreak(structure,"low",protectedHigh?"high":protectedLow?"low":null);
+   if(type){
+    events.push({index:i,price:activeL!.price,type,direction:"bearish",strength:disp?"displacement":"normal"});
+    structure="bearish";
+    activeL=null;
+    protectedHigh=latestBefore(confirmedHighs,i);
+    protectedLow=null;
+   }
   }
  }
  return events;
-}
-function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
- const out:FVG[]=[];
- const endIndex=Math.min(asOf,c.length-1);
- for(let i=1;i<endIndex;i++){
-  if(c[i-1].high<c[i+1].low){
-   const low=c[i-1].high,high=c[i+1].low;
-   let fillIndex:number|undefined;
-   for(let j=i+1;j<=endIndex;j++)if(c[j].low<=low){fillIndex=j;break}
-   out.push({from:i-1,to:i+1,low,high,type:"bullish",filled:fillIndex!==undefined,fillIndex,size:(high-low)/Math.max(atrAt(c,i,14),.0000001)})
-  }
-  if(c[i-1].low>c[i+1].high){
-   const low=c[i+1].high,high=c[i-1].low;
-   let fillIndex:number|undefined;
-   for(let j=i+1;j<=endIndex;j++)if(c[j].high>=high){fillIndex=j;break}
-   out.push({from:i-1,to:i+1,low,high,type:"bearish",filled:fillIndex!==undefined,fillIndex,size:(high-low)/Math.max(atrAt(c,i,14),.0000001)})
-  }
- }
- return out;
-}
-function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEvent[]=[]):OB[]{
- const out:OB[]=[];
- const end=Math.min(asOf,c.length-1);
- for(let i=1;i<=end-1;i++){
-  const bullishBase=c[i].close<c[i].open;
-  const bearishBase=c[i].close>c[i].open;
-  let bullBreak=-1,bearBreak=-1,bullStrength=0,bearStrength=0;
-  for(let k=1;k<=3&&i+k<=end;k++){
-   const d=displacementAt(c,i+k,atrAt(c,i+k));
-   if(bullishBase&&c[i+k].close>c[i].high&&d>=.55){bullBreak=i+k;bullStrength=d;break}
-   if(bearishBase&&c[i+k].close<c[i].low&&d>=.55){bearBreak=i+k;bearStrength=d;break}
-  }
-  if(bullBreak>0){
-   const linked=events.some(e=>e.direction==="bullish"&&isOrderBlockCausal(i,bullBreak,e.index,12));
-   if(linked){
-    let m:number|undefined,invalid:number|undefined;
-    for(let j=bullBreak+1;j<=end;j++){
-     if(m===undefined&&c[j].low<=c[i].open)m=j;     if(c[j].close<c[i].low){invalid=j;break}    }
-    // If the block is invalidated before its first mitigation, discard it.
-    // Once mitigated, keep it only as historical/mitigated state.
-    if(invalid===undefined||(m!==undefined&&m<invalid)){
-     out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
-    }
-   }
-  }
-  if(bearBreak>0){
-   const linked=events.some(e=>e.direction==="bearish"&&isOrderBlockCausal(i,bearBreak,e.index,12));
-   if(linked){
-    let m:number|undefined,invalid:number|undefined;
-    for(let j=bearBreak+1;j<=end;j++){
-     if(m===undefined&&c[j].high>=c[i].open)m=j;
-     if(c[j].close>c[i].high){invalid=j;break}
-    }    // If the block is invalidated before its first mitigation, discard it.
-    if(invalid===undefined||(m!==undefined&&m<invalid)){
-     out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
-    }
-   }
-  }
- }
- return out;
-}
-function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
- return obs
-  .filter(o=>o.mitigated&&o.mitigationIndex!==undefined&&o.mitigationIndex!<=asOf)
-  .map((o):Breaker=>({index:o.mitigationIndex!,low:o.low,high:o.high,type:o.type==="bullish"?"bearish":"bullish",active:true}))
-  .filter(b=>{
-   const k=c.slice(b.index+1,Math.min(asOf+1,c.length));
-   return k.length>0&&(b.type==="bullish"?k.every(x=>x.close>b.low):k.every(x=>x.close<b.high));
-  });
-}
-type ZoneCandidate={low:number;high:number;origin:number;kind:"OB"|"FVG";strength:number;linked:boolean;distance:number};
-function chooseEntryZone(
- direction:"bullish"|"bearish"|null,
- obs:OB[],
- fvgs:FVG[],
- events:StructureEvent[],
- last:Candle,
- atrValue:number,
- asOf:number
-):ZoneCandidate|null{
- if(!direction)return null;
- const latestEvent=[...events].reverse().find(e=>e.direction===direction&&e.index<=asOf);
- const candidates:ZoneCandidate[]=[];
- for(const o of obs){
-  if(o.type!==direction||o.mitigated)continue;
-  const age=asOf-o.index;
-  if(age<0||age>50)continue;
-  const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
-  if(distance>atrValue*3.5)continue;
-  const linked=!!latestEvent&&o.index<=latestEvent.index&&latestEvent.index-o.index<=12;
-  candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked,distance});
- }
- for(const f of fvgs){
-  if(f.type!==direction||f.filled)continue;
-  const origin=f.to,age=asOf-origin;
-  if(age<0||age>40)continue;
-  const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
-  if(distance>atrValue*3.5)continue;
-  const linked=!!latestEvent&&origin<=latestEvent.index&&latestEvent.index-origin<=12;
-  candidates.push({low:f.low,high:f.high,origin,kind:"FVG",strength:f.size??0,linked,distance});
- }
- if(!candidates.length)return null;
- candidates.sort((x,y)=>{
-  const score=(z:ZoneCandidate)=>
-   (z.linked?100000:0)
-   +(z.kind==="OB"?20000:10000)
-   +Math.max(0,5000-(asOf-z.origin)*100)
-   +Math.min(2000,z.strength*250)
-   -Math.min(5000,z.distance/Math.max(atrValue,.0000001)*1000);
-  return score(y)-score(x);
- });
- return candidates[0];
-}
-function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:Candle,obs:OB[],fvgs:FVG[],asOf:number,atrValue:number){
- const levels:number[]=[];
- const opposite=direction==="bullish"?"bearish":"bullish";
- for(const o of obs){
-  if(o.type!==opposite||o.mitigated||asOf-o.index>50)continue;
-  const mid=(o.low+o.high)/2;
-  if(direction==="bullish"&&mid>Math.max(entry,last.close)&&mid<=last.close+atrValue*8)levels.push(mid);
-  if(direction==="bearish"&&mid<Math.min(entry,last.close)&&mid>=last.close-atrValue*8)levels.push(mid);
- }
- for(const f of fvgs){
-  if(f.type!==opposite||f.filled||asOf-f.to>40)continue;
-  const mid=(f.low+f.high)/2;
-  if(direction==="bullish"&&mid>Math.max(entry,last.close)&&mid<=last.close+atrValue*8)levels.push(mid);
-  if(direction==="bearish"&&mid<Math.min(entry,last.close)&&mid>=last.close-atrValue*8)levels.push(mid);
- }
- return levels;
 }
 
 export function analyzeSMC(c:Candle[]):SMCResult{
