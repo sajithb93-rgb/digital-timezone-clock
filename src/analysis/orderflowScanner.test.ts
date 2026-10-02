@@ -21,6 +21,7 @@ const base: OrderFlowResult = {
     {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
     {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
     {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
+    {key:"footprint_unique",label:"Unique footprint candle times",passed:true,detail:"No duplicates"},
     {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:true,detail:"100%"},
     {key:"latest_fp_coverage",label:"Latest footprint coverage ≥ 99%",passed:true,detail:"100%"},
     {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"},
@@ -43,7 +44,16 @@ describe("Order Flow pair scanner", () => {
   });
 
   it("detects a forming setup without calling it confirmed", () => {
-    const row = classifyOrderFlowSetup("ETHUSDT", "5m", base);
+    const row = classifyOrderFlowSetup("ETHUSDT", "5m", {
+      ...base,
+      direction:"BUY",
+      microStructure:"NEUTRAL",
+      footprint:{
+        ...base.footprint!,
+        stackedBuyImbalances:1,
+      },
+      diagnostics:base.diagnostics
+    });
     expect(row.state).toBe("SETUP");
     expect(row.direction).toBe("BUY");
   });
