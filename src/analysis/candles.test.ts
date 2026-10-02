@@ -42,6 +42,16 @@ describe("normalizeCandleSeries",()=>{
     expect(result[0]?.close).toBe(101);
   });
 
+  it("rejects non-positive crypto prices",()=>{
+    const result=normalizeCandleSeries([
+      candle(1,{open:0}),
+      candle(2,{low:0}),
+      candle(3,{close:0}),
+      candle(4)
+    ],true);
+    expect(result.map(x=>x.time)).toEqual([4]);
+  });
+
   it("rejects malformed OHLC and negative volume",()=>{
     const result=normalizeCandleSeries([
       candle(1,{high:98}),
