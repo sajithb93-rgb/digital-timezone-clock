@@ -78,7 +78,7 @@ describe("reversal engine",()=>{
         {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},
         {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}
       ],
-      fvgs:[{from:32,to:34,low:101,high:103,type:"bullish",filled:false,size:1}],
+      fvgs:[{from:32,to:33,low:103,high:105,type:"bullish",filled:false,size:1}],
       orderBlocks:[{index:30,low:96,high:99,type:"bullish",mitigated:false,strength:1}],
     }),flow({direction:"WAIT",pressure:"BALANCED",absorption:"NONE",signal:"WAIT"}),{requireOrderFlow:false});
     expect(r.state).toBe("CONFIRMED");
