@@ -64,8 +64,13 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
       ? recentSweepSellValid && sweepIntegritySellValid
       : false;
   const resultDirectionAligned=direction!=="NONE"&&result.direction===direction;
+  const directionalConfluenceValid=direction==="BUY"
+    ?buyChecks.every(Boolean)
+    :direction==="SELL"
+      ?sellChecks.every(Boolean)
+      :false;
   let state: OrderFlowScanState = "WAIT";
-  if (resultDirectionAligned && geometryValid && targetQualityValid && coreDataValid && directionGateValid) state = "CONFIRMED";
+  if (resultDirectionAligned && directionalConfluenceValid && geometryValid && targetQualityValid && coreDataValid && directionGateValid) state = "CONFIRMED";
   else if (!geometryValid || !targetQualityValid || !coreDataValid || !directionGateValid || !resultDirectionAligned) state = "WAIT";
   else if (score >= 75) state = "SETUP";
   else if (score >= 50) state = "WATCH";
