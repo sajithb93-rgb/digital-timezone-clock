@@ -110,11 +110,13 @@ export function confluence(s:any,flow:FlowSnapshot,regime:Regime):ConfluenceBrea
   return{structure,liquidity,zones,location,momentum,volume,total};
 }
 
-function floorToStep(value:number,step:number){
-  if(!Number.isFinite(value)||!Number.isFinite(step)||step<=0)return 0;
-  let decimals=0,scaled=step;
+function floorToStep(value:number,step:number,base=0){
+  if(!Number.isFinite(value)||!Number.isFinite(step)||step<=0||!Number.isFinite(base)||base<0)return 0;
+  if(value<base)return 0;
+  let decimals=0,scaled=Math.max(step,base);
   while(decimals<12&&Math.abs(Math.round(scaled)-scaled)>1e-10){scaled*=10;decimals+=1;}
-  const floored=Math.floor(value/step+1e-12)*step;
+  const steps=Math.floor((value-base)/step+1e-12);
+  const floored=base+Math.max(0,steps)*step;
   return Number(floored.toFixed(decimals));
 }
 
@@ -183,7 +185,7 @@ export function riskPlan(account:number,riskPercent:number,entry:number|null,sto
   const minNotional=typeof rawMinNotional==="number"&&Number.isFinite(rawMinNotional)&&rawMinNotional>=0?rawMinNotional:0;
   const maxNotional=typeof rawMaxNotional==="number"&&Number.isFinite(rawMaxNotional)&&rawMaxNotional>0?rawMaxNotional:Infinity;
   if(Number.isFinite(maxQty)&&maxQty>0)positionSize=Math.min(positionSize,maxQty);
-  if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize);
+  if(Number.isFinite(stepSize)&&stepSize>0)positionSize=floorToStep(positionSize,stepSize,minQty);
   if(positionSize<Math.max(0,minQty)){
     return{riskAmount,desiredPositionSize,positionSize:0,stopDistance,valid:false,reason:"Below exchange minimum quantity"};
   }
