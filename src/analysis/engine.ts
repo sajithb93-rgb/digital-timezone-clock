@@ -23,6 +23,7 @@ export type ElliottResult={
  fibLevels:{label:string;price:number}[]; channel:{a:number;b:number}|null;
  phase:string;score:number;confidence:number;
  setupState:"HISTORICAL"|"INVALIDATED"|"NONE";setupReason:string;
+ liveSetup?:WaveCount|null;
 };
 export type MTFFrame={interval:string;trend:"Bullish"|"Bearish"|"Neutral";score:number;structure:string;available:boolean;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;elliottPhase:string};
 export type MTFResult={trend:"Bullish"|"Bearish"|"Neutral";score:number;elliottTrend:"Bullish"|"Bearish"|"Neutral";elliottScore:number;frames:MTFFrame[]};
