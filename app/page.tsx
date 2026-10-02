@@ -401,7 +401,7 @@ export default function Home(){
     setRestConnected(true);
     setError("");
     setCandles(prev=>mergeCandles(data,prev,true));
-    setAnalysisCandles(prev=>mergeCandles(data,prev,true).filter(x=>x.closed!==false));
+    setAnalysisCandles(prev=>normalizeCandleSeries(mergeCandles(data,prev,true),true));
     setChartDataRevision(v=>v+1);
    }catch(e){
     if(stop)return;
@@ -468,7 +468,7 @@ export default function Home(){
    if(stop)return;
    setRestConnected(true);
    setCandles(data);
-   setAnalysisCandles(data.filter(x=>x.closed!==false));
+   setAnalysisCandles(normalizeCandleSeries(data,true));
    setChartDataRevision(v=>v+1);
    setLoading(false);
    connect();
@@ -605,7 +605,7 @@ export default function Home(){
    setChartReady(false);
   };
  },[]);
- useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));setViewportTick(v=>v+1)},[chartReady,candles.length,chartDataRevision,symbol,interval]);
+ useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));setViewportTick(v=>v+1)},[chartReady,chartDataRevision,symbol,interval]);
  useEffect(()=>{const c=chartObj.current;if(!chartReady||!c||candles.length<2)return;c.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval,chartDataRevision]);
  useEffect(()=>{const s=seriesRef.current,l=candles.at(-1);if(!chartReady||!s||!l)return;s.update({time:Math.floor(l.time/1000) as any,open:l.open,high:l.high,low:l.low,close:l.close})},[candles,chartReady]);
 
