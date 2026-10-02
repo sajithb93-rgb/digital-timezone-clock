@@ -9,7 +9,7 @@ function candle(i:number, open:number, high:number, low:number, close:number, vo
 
 function smc(overrides: Partial<SMCResult> = {}): SMCResult {
   const base: SMCResult = {
-    trend:"Bearish", asOf:34, pivots:[], internalPivots:[], events:[],
+    trend:"Bearish", asOf:34, asOfTime:34, pivots:[], internalPivots:[], events:[],
     fvgs:[], orderBlocks:[], breakers:[], liquidityHighs:[], liquidityLows:[],
     equalHighs:[], equalLows:[], sweeps:[], premiumDiscount:"Discount",
     premiumDiscountRange:{high:120,low:80,mid:100}, vwap:100, volumeRatio:1,
@@ -54,6 +54,37 @@ describe("reversal engine",()=>{
     expect(r.state).toBe("CONFIRMED");
     expect(r.score).toBeGreaterThanOrEqual(75);
     expect(r.structureIndex).toBe(33);
+  });
+
+  it("rejects SMC context with the same index but a different terminal candle",()=>{
+    const candles=Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    const r=analyzeReversal(candles,smc({
+      asOf:34,
+      asOfTime:33,
+      sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],
+      events:[{index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"}]
+    }),flow(),{requireOrderFlow:false});
+    expect(r.state).toBe("NONE");
+    expect(r.reason).toContain("out of sync");
+  });
+
+  it("does not treat opposite-direction displacement as bullish reversal displacement",()=>{
+    const candles=Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[31]=candle(31,100,101,95,99);
+    candles[32]=candle(32,99,100,96,98);
+    candles[33]=candle(33,98,106,97,105);
+    candles[34]=candle(34,130,160,80,85);
+    const r=analyzeReversal(candles,smc({
+      sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],
+      events:[
+        {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},
+        {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}
+      ],
+      fvgs:[{from:32,to:33,low:103,high:105,type:"bullish",filled:false,size:1}],
+      orderBlocks:[{index:30,low:96,high:99,type:"bullish",mitigated:false,strength:1}]
+    }),flow(),{requireOrderFlow:false});
+    expect(r.displacementRatio).toBe(0);
+    expect(r.state).not.toBe("CONFIRMED");
   });
 
   it("rejects a confirmed sweep after a later invalidating close",()=>{
