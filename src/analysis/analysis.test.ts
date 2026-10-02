@@ -264,7 +264,16 @@ describe("analysis regression",()=>{
     expect(isSMCCausalSequence(10,22,null)).toBe(false);
   });
 
-  it("requires the protected swing for an SMC CHOCH",()=>{\n    expect(classifyProtectedStructureBreak("bullish","high","low")).toBe("BOS");\n    expect(classifyProtectedStructureBreak("bullish","low","low")).toBe("CHOCH");\n    expect(classifyProtectedStructureBreak("bearish","low","high")).toBe("BOS");\n    expect(classifyProtectedStructureBreak("bearish","high","high")).toBe("CHOCH");\n    expect(classifyProtectedStructureBreak("bullish","low",null)).toBeNull();\n    expect(classifyProtectedStructureBreak("bearish","high",null)).toBeNull();\n  });\n\n  it("classifies BOS and CHOCH only from the prior structure direction",()=>{
+  it("requires the protected swing for an SMC CHOCH",()=>{
+    expect(classifyProtectedStructureBreak("bullish","high","low")).toBe("BOS");
+    expect(classifyProtectedStructureBreak("bullish","low","low")).toBe("CHOCH");
+    expect(classifyProtectedStructureBreak("bearish","low","high")).toBe("BOS");
+    expect(classifyProtectedStructureBreak("bearish","high","high")).toBe("CHOCH");
+    expect(classifyProtectedStructureBreak("bullish","low",null)).toBeNull();
+    expect(classifyProtectedStructureBreak("bearish","high",null)).toBeNull();
+  });
+
+  it("classifies BOS and CHOCH only from the prior structure direction",()=>{
     expect(classifyStructureBreak(null,"bullish")).toBe("BOS");
     expect(classifyStructureBreak("bullish","bullish")).toBe("BOS");
     expect(classifyStructureBreak("bearish","bullish")).toBe("CHOCH");
