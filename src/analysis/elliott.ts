@@ -254,21 +254,16 @@ export function validateFlat(prices:number[],bullishCorrection:boolean):FlatVali
   const bRetracement=ab/xa;
   const cProjection=bc/ab;
   const direction=aUp?"bullish":"bearish";
-  const bSameDirection=b>a;
-  const cReversesA=aUp?c<b:c>b;
+  const bInXA=aUp?b<x&&b>a:b>x&&b<a;
+  const cReversesA=aUp?c>b:c<b;
+  const bExceedsX=aUp?b<=x:b>=x;
+  const cBeyondA=aUp?c<a:c>a;
+  const cFailsA=aUp?c>a:c<a;
   if(direction!==(bullishCorrection?"bullish":"bearish")||!cReversesA)return{valid:false,subtype:"None",bRetracement,cProjection};
 
-  // Regular: B approximately returns to the start of A and C stays within/near A.
-  const regular=bRetracement>=.90&&bRetracement<=1.10&&cProjection>=.618&&cProjection<=1.618&&
-    (aUp?c>=x:c<=x);
-  // Expanded: B exceeds X and C travels beyond A.
-  const expanded=bRetracement>1.00&&bRetracement<=1.382&&
-    (aUp?b>x:b<x)&&cProjection>=.618&&
-    (aUp?c<a:c>a);
-  // Running: B exceeds X but C fails to fully retrace A.
-  const running=bRetracement>1.00&&bRetracement<=1.382&&
-    (aUp?b>x:b<x)&&cProjection>=.618&&cProjection<1.0&&
-    (aUp?c>a&&c<a:c<a&&c>a);
+  const regular=bRetracement>=.90&&bRetracement<=1.10&&cProjection>=.618&&cProjection<=1.618;
+  const expanded=bExceedsX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cBeyondA;
+  const running=bExceedsX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cFailsA;
 
   const subtype=expanded?"Expanded Flat":running?"Running Flat":regular?"Regular Flat":"None";
   return{valid:subtype!=="None",subtype,bRetracement,cProjection};
@@ -355,7 +350,7 @@ function correctionCandidates(c:Candle[]){
     const p=q.map(x=>x.price),bullishCorrection=upward,dz=validateDoubleZigzag(p,bullishCorrection);
     if(!dz.valid)continue;
     out.push({
-      points:sequencePoints(q).map((x,j)=>({...x,label:["W-X-A-B-C","X","A","B","Y","A","B","C"][j]})),
+      points:sequencePoints(q).map((x,j)=>({...x,label:["W","A","B","C","X","A","B","C"][j]})),
       kind:"Correction",direction:upward?"bullish":"bearish",invalidation:q[0].price,entry:null,targets:[q[7].price],
       quality:86,rules:["W-X-Y double zigzag geometry","Both component zigzags validated","Connector is smaller than the main correction legs"],
       strict:false,pattern:"Double Zigzag"
