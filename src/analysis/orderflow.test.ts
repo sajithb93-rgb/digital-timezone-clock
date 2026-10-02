@@ -301,6 +301,15 @@ describe("order flow strategy",()=>{
     expect(r.diagnostics.find(d=>d.key==="target_quality")?.passed).toBe(true);
   });
 
+  it("requires near-complete coverage on the latest confirmation footprint",()=>{
+    const footprint=confirmedFootprints("BUY");
+    footprint[11]={...footprint[11],buyVolume:58,sellVolume:40,delta:18,deltaRatio:18/98};
+    const r=analyzeOrderFlow(fullLongCandles(),footprint);
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="latest_fp_coverage")?.passed).toBe(false);
+    expect(r.rejectionReason).toContain("latest footprint coverage");
+  });
+
   it("blocks a BUY when the calculated stop collapses to zero",()=>{
     const candles=fullLongCandles().map((c,i)=>i===8?{...c,low:0.01}:c);
     const r=analyzeOrderFlow(candles,confirmedFootprints("BUY"));
