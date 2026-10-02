@@ -267,6 +267,16 @@ describe("analysis regression",()=>{
     expect(isValidTradeGeometry("BUY",100,98,[103,-105],1.5)).toBe(false);
   });
 
+  it("stops SMC analysis at a middle forming candle",()=>{
+    const base=candles(100);
+    const live={...base[60],closed:false,high:base[60].high+50};
+    const later={...base.slice(61,90)};
+    const prefix=analyzeSMC(base.slice(0,60));
+    const withGap=analyzeSMC([...base.slice(0,60),live,...later]);
+    expect(withGap.asOf).toBe(prefix.asOf);
+    expect(withGap.premiumDiscountRange).toEqual(prefix.premiumDiscountRange);
+  });
+
   it("makes SMC analysis independent of feed ordering and duplicate timestamps",()=>{
     const base=candles(80);
     const duplicate={...base[40],close:base[40].close+0.25};
