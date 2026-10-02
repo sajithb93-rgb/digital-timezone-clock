@@ -28,7 +28,7 @@ function confirmedFootprints(direction:"BUY"|"SELL", latestOverrides:Partial<Foo
 function fullLongCandles():Candle[]{
   return [
     ...Array.from({length:8},(_,i)=>candle(i,100,102,99,101,100,60)),
-    candle(8,101,103,95,100.5,100,55),
+    candle(8,101,101.5,95,100.5,100,55),
     candle(9,100.5,101,95,100.5,100,30),
     candle(10,100.5,103,99.5,102,100,65),
     candle(11,102,106,101,105,100,70)
@@ -83,6 +83,16 @@ describe("order flow strategy",()=>{
       candle(2,103.2,104,97,103.8,100,35)
     ]);
     expect(r.recentBars.at(-1)?.absorption).toBe("BUYER");
+  });
+
+  it("does not force a directional sweep when both sides are swept on one candle",()=>{
+    const r=analyzeOrderFlow([
+      candle(0,100,102,98,101,100,50),
+      candle(1,101,103,99,102,100,50),
+      candle(2,102,104,100,103,100,50),
+      candle(3,103,105,97,101,100,50)
+    ]);
+    expect(r.recentBars.find(x=>x.index===3)?.liquiditySweep).toBe("HIGH");
   });
 
   it("detects a low liquidity sweep when price trades below prior lows and closes back above",()=>{
@@ -180,12 +190,7 @@ describe("order flow strategy",()=>{
 
   it("confirms BUY only when the complete causal sequence is present",()=>{
     const r=analyzeOrderFlow(fullLongCandles(),confirmedFootprints("BUY"));
-    expect(r.direction, JSON.stringify({
-      diagnostics:r.diagnostics.filter(d=>!d.passed),
-      rejectionReason:r.rejectionReason,
-      latestFootprint:r.footprint,
-      recent:r.recentBars.slice(-4)
-    })).toBe("BUY");
+    expect(r.direction).toBe("BUY");
     expect(r.signal).toBe("BUY CONFIRMED — CLOSED CANDLE");
     expect(r.confidence).toBe(100);
     expect(r.confirmations).toContain("Sell-side liquidity sweep → buyer absorption");
