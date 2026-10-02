@@ -270,7 +270,9 @@ export function validateZigzag(prices:number[],bullishCorrection:boolean){
   const bWithinXA=aUp ? b>x&&b<a : b<x&&b>a;
   const cExtendsA=aUp ? c>a : c<a;
   const direction=aUp ? "bullish" : "bearish";
-  const valid=direction===(bullishCorrection?"bullish":"bearish")&&bWithinXA&&cExtendsA&&bRetracement>=.382&&bRetracement<=.786&&cProjection>=.618;
+  // Fibonacci depth is a guideline, not a hard structural rule. The core
+  // zigzag invalidation is B returning to/through X; C must continue beyond A.
+  const valid=direction===(bullishCorrection?"bullish":"bearish")&&bWithinXA&&cExtendsA&&bRetracement>0&&bRetracement<1&&cProjection>0;
   return{valid,bRetracement,cProjection};
 }
 
