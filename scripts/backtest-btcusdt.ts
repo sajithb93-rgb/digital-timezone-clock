@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { analyzeSMC, analyzeElliott, type Candle } from "../src/analysis/engine";
+import { globalIndexFromWindow } from "../src/analysis/backtestIndex";
 
 const ARCHIVE_BASE = "https://data.binance.vision/data/futures/um/daily/klines";
 const SYMBOL = process.env.SYMBOL ?? "BTCUSDT";
@@ -197,11 +198,6 @@ function applySlippage(price: number, side: "BUY" | "SELL"): number {
 
 function isFavorableTarget(side: "LONG" | "SHORT", entry: number, target: number): boolean {
   return side === "LONG" ? target > entry : target < entry;
-}
-
-export function globalIndexFromWindow(windowStart:number,localIndex:number):number{
-  if(!Number.isInteger(windowStart)||windowStart<0||!Number.isInteger(localIndex)||localIndex<0)return -1;
-  return windowStart+localIndex;
 }
 
 async function main() {
