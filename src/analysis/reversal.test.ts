@@ -66,6 +66,26 @@ describe("reversal engine",()=>{
     expect(r.direction).toBe("BUY");
   });
 
+  it("supports a structural confirmation mode without pretending order flow exists",()=>{
+    const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    candles[31]=candle(31,100,101,95,99);
+    candles[32]=candle(32,99,100,96,98);
+    candles[33]=candle(33,98,106,97,105);
+    candles[34]=candle(34,105,108,103,107);
+    const r=analyzeReversal(candles,smc({
+      sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}],
+      events:[
+        {index:30,price:100,type:"BOS",direction:"bearish",strength:"normal"},
+        {index:33,price:102,type:"CHOCH",direction:"bullish",strength:"displacement"}
+      ],
+      fvgs:[{from:32,to:34,low:101,high:103,type:"bullish",filled:false,size:1}],
+      orderBlocks:[{index:30,low:96,high:99,type:"bullish",mitigated:false,strength:1}],
+    }),flow({direction:"WAIT",pressure:"BALANCED",absorption:"NONE",signal:"WAIT"}),{requireOrderFlow:false});
+    expect(r.state).toBe("CONFIRMED");
+    expect(r.orderflowConfirmed).toBe(false);
+    expect(r.reason).toContain("structural MTF mode");
+  });
+
   it("ignores the forming candle",()=>{
     const candles = Array.from({length:30},(_,i)=>candle(i,100,101,99,100));
     candles[29]={...candle(29,100,112,94,111),closed:false};
