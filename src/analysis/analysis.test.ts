@@ -21,8 +21,8 @@ function candles(count:number, start=100):Candle[]{
 }
 
 describe("analysis regression",()=>{
-  it("rejects an impulse when Wave 3 ties Wave 1 as the shortest",()=>{
-    const prices=[100,110,105,115,112,120];
+  it("rejects an impulse when Wave 3 ties both Wave 1 and Wave 5",()=>{
+    const prices=[100,110,105,115,110,120];
     const v=validateImpulseWave(prices,true);
     expect(v.w3NotShortest).toBe(false);
     expect(v.valid).toBe(false);
