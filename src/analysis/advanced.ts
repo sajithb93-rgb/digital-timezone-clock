@@ -215,15 +215,7 @@ export function runSMCBacktest(c:Candle[],riskR=1,maxHoldingCandles=30,feeBps=0,
   // Backtest input may come from a realtime feed where candles are not guaranteed
   // to arrive sorted or uniquely. Normalize it before assigning positional indexes;
   // otherwise an out-of-order candle can become artificial lookahead data.
-  const byTime=new Map<number,Candle>();
-  for(const x of c){
-    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
-    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    byTime.set(x.time,x);
-  }
-  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
-  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
-  const closedCandles=(firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized);
+  const closedCandles=normalizeCandleSeries(c,true);
   if(closedCandles.length<81){
     return{trades,wins,losses,winRate:0,totalR,grossR,costR,maxDrawdownR:maxDD,profitFactor:0,expired,notTriggered,openAtEnd};
   }
