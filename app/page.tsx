@@ -127,7 +127,7 @@ export default function Home(){
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
- const [chartReady,setChartReady]=useState(false),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
+ const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState(""),[smcEntryScanner,setSmcEntryScanner]=useState<EntryScanRow[]>([]),[elliottEntryScanner,setElliottEntryScanner]=useState<EntryScanRow[]>([]),[smcEntryTf,setSmcEntryTf]=useState("5m"),[elliottEntryTf,setElliottEntryTf]=useState("5m"),[smcEntryEnabled,setSmcEntryEnabled]=useState(false),[elliottEntryEnabled,setElliottEntryEnabled]=useState(false),[smcEntryBusy,setSmcEntryBusy]=useState(false),[elliottEntryBusy,setElliottEntryBusy]=useState(false),[smcEntryProgress,setSmcEntryProgress]=useState(""),[elliottEntryProgress,setElliottEntryProgress]=useState(""),[smcEntryUpdated,setSmcEntryUpdated]=useState(0),[elliottEntryUpdated,setElliottEntryUpdated]=useState(0),[smcEntryError,setSmcEntryError]=useState(""),[elliottEntryError,setElliottEntryError]=useState("");
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);
 
@@ -286,6 +286,7 @@ export default function Home(){
     setError("");
     setCandles(prev=>mergeCandles(data,prev));
     setAnalysisCandles(data.filter(x=>x.closed!==false));
+    setChartDataRevision(v=>v+1);
    }catch(e){
     if(stop)return;
     setRestConnected(false);
@@ -357,6 +358,7 @@ export default function Home(){
    setRestConnected(true);
    setCandles(data);
    setAnalysisCandles(data.filter(x=>x.closed!==false));
+   setChartDataRevision(v=>v+1);
    setLoading(false);
    connect();
   }).catch(e=>{
@@ -438,7 +440,7 @@ export default function Home(){
    setChartReady(false);
   };
  },[]);
- useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval,candles.length]);
+ useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));chartObj.current?.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval,candles.length,chartDataRevision]);
  useEffect(()=>{const s=seriesRef.current,l=candles.at(-1);if(!chartReady||!s||!l)return;s.update({time:Math.floor(l.time/1000) as any,open:l.open,high:l.high,low:l.low,close:l.close})},[candles,chartReady]);
 
  const quoteOptions=useMemo(()=>Array.from(new Set(pairs.map(p=>p.quoteAsset))).sort(),[pairs]);
@@ -556,7 +558,8 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const liquidity=showSMC&&layers.liquidity?<>{[...smc.liquidityHighs.slice(-3).map((p:any)=>({...p,t:"LIQ HIGH"})),...smc.liquidityLows.slice(-3).map((p:any)=>({...p,t:"LIQ LOW"}))].map((p:any,i:number)=>{const x=xOf(p.index)??x0,y=yOf(p.price);return y==null?null:<g key={"l"+i}><line x1={x} x2={xLast} y1={y} y2={y} className="liquidity-line"/>{text(x+3,y,p.t,"liquidity-label")}</g>})}{smc.sweeps.slice(-6).map((s:any,i:number)=>{const x=xOf(s.index),y=yOf(s.price);return x==null||y==null?null:<g key={"s"+i}><circle cx={x} cy={y} r="4" className="marker-sweep"/>{text(x+7,y,s.type==="high"?"SWEEP H":"SWEEP L","sweep-label")}</g>})}</>:null;
  const trade=showSMC&&layers.trade&&smc.entryZone?<>{zone(smc.entryZone.low,smc.entryZone.high,Math.max(0,lastIndex-18),lastIndex,"entry-zone","ENTRY ZONE")}{smc.setup.entry!=null&&(()=>{const y=yOf(smc.setup.entry);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="entry-line"/>{text(xLast-108,y,"ENTRY "+smc.setup.entry.toFixed(4),"entry-label")}</g>})()}{smc.stop!=null&&(()=>{const y=yOf(smc.stop);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="sl-line"/>{text(xLast-92,y,"SL "+smc.stop.toFixed(4),"sl-label")}</g>})()}{(smc.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"t"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="tp-line"/>{text(xLast-52,y,"TP"+(i+1),"tp-label")}</g>})}</>:null;
  const elite=elliott.primary;
- const eliteTrade=showElliott&&layers.trade&&elite&&elite.entry!=null&&elite.invalidation!=null?<>{(()=>{const p2=elite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(elite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-120,ye,"EW ENTRY "+elite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(elite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-100,y,"EW SL "+elite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(elite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-60,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
+ const liveElite=elliott.liveSetup ?? null;
+ const eliteTrade=showElliott&&layers.trade&&liveElite&&liveElite.entry!=null&&liveElite.invalidation!=null?<>{(()=>{const p2=liveElite.points.find((p:any)=>p.label==="B") ?? liveElite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(liveElite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-132,ye,"EW LIVE ENTRY "+liveElite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(liveElite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-132,y,"EW INVALIDATION "+liveElite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(liveElite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-84,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
  const mtfSignalMarker = layers.reversal && mtfReversal.confirmed && mtfReversal.direction !== "NONE" ? (() => {
   const dirCls = mtfReversal.direction === "BUY" ? "reversal-buy" : "reversal-sell";
@@ -624,7 +627,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={f.label==="161.8%"||f.label==="261.8%"?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
  const wave=showElliott?[
   elliott.primary?drawWave(elliott.primary.points,"impulse-"):null,
-  elliott.correction?drawWave(elliott.correction.points.slice(0,3),"abc-","wave-abc-label"):null
+  liveElite?drawWave(liveElite.points,"live-","wave-abc-label"):elliott.correction?drawWave(elliott.correction.points,"abc-","wave-abc-label"):null
  ]:null;
  const smcPanel=showSMC?(
   <div className={`setup-panel smc-setup-panel ${smc.setup.direction.toLowerCase()}`}>
