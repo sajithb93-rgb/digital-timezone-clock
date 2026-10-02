@@ -206,15 +206,26 @@ export type StandardImpulseValidation={
 export function validateStandardImpulse(prices:number[],bull:boolean):StandardImpulseValidation{
   if(prices.length<6)return{w2Valid:false,w3BeyondW1:false,w3NotShortest:false,w4Valid:false,w5DirectionValid:false,w5BeyondW3:false,truncated:false,valid:false};
   const [p0,p1,p2,p3,p4,p5]=prices;
-  const w1=abs(p1-p0),w3=abs(p3-p2),w5=abs(p5-p4);
+  const w1=abs(p1-p0),w2=abs(p2-p1),w3=abs(p3-p2),w4=abs(p4-p3),w5=abs(p5-p4);
+  // Actionary waves must have non-zero travel; this prevents flat/noise
+  // pivots from being accepted as a five-wave impulse.
+  const positiveLengths=w1>0&&w2>0&&w3>0&&w4>0&&w5>0;
+  // Wave 2 may retrace Wave 1, but it may not cross the Wave-1 origin.
   const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
+  // Wave 3 must make a new extreme beyond Wave 1.
   const w3BeyondW1=bull?p3>p1:p3<p1;
+  // Wave 3 may tie another actionary wave, but can never be the shortest.
   const w3NotShortest=w3>=w1&&w3>=w5;
+  // In a standard impulse Wave 4 must remain outside Wave-1 price
+  // territory and move counter to Wave 3.
   const w4Valid=bull?p4>p1&&p4<p3:p4<p1&&p4>p3;
+  // Wave 5 must travel in the impulse direction. It may truncate before the
+  // Wave-3 extreme, but it cannot be a zero-length pivot.
   const w5DirectionValid=bull?p5>p4:p5<p4;
   const w5BeyondW3=bull?p5>p3:p5<p3;
   const truncated=w5DirectionValid&&!w5BeyondW3;
-  return{w2Valid,w3BeyondW1,w3NotShortest,w4Valid,w5DirectionValid,w5BeyondW3,truncated,valid:w2Valid&&w3BeyondW1&&w3NotShortest&&w4Valid&&w5DirectionValid};
+  const valid=positiveLengths&&w2Valid&&w3BeyondW1&&w3NotShortest&&w4Valid&&w5DirectionValid;
+  return{w2Valid,w3BeyondW1,w3NotShortest,w4Valid,w5DirectionValid,w5BeyondW3,truncated,valid};
 }
 
 function impulseCandidate(c:Candle[],q:Pivot[],bull:boolean):WaveCount|null{
