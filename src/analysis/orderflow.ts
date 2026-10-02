@@ -358,6 +358,7 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
       direction==="BUY" ? stop<entry : stop>entry
     );
     if(validStopSide){
+      tradeGeometryValid=true;
       const risk=Math.abs(entry!-stop!);
       const targetBuild=buildOrderFlowTargets(direction,entry!,risk,closed);
       const candidateTargets=targetBuild.targets;
@@ -368,13 +369,11 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
           &&(direction==="BUY" ? target>entry! : target<entry!)
           &&Math.abs(target-entry!)/risk>=1.5
         ));
-      tradeGeometryValid=targetQualityValid
-        &&isValidTradeGeometry(direction,entry!,stop!,candidateTargets,1.5);
-      if(targetQualityValid&&tradeGeometryValid){
-        targets=candidateTargets;
-      }else{
-        targets=[];
+      if(targetQualityValid){
+        tradeGeometryValid=isValidTradeGeometry(direction,entry!,stop!,candidateTargets,1.5);
+        if(tradeGeometryValid)targets=candidateTargets;
       }
+      if(!targetQualityValid||!tradeGeometryValid)targets=[];
     }else{
       tradeGeometryValid=false;
       targetQualityValid=false;
