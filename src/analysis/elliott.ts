@@ -1,5 +1,6 @@
 // Build verification: duplicate-x declaration removed; live continuation uses the existing X pivot.
 import type { Candle, ElliottResult, Pivot, WaveCount, WavePoint } from "./engine";
+import { normalizeCandleSeries } from "./candles";
 
 export type ElliottPattern =
   | "Impulse"
@@ -498,16 +499,7 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const endIndex=xPoint?.index??-1;
   if(!xPoint||endIndex<0)return null;
   const bull=primary.direction==="bullish";
-  const byTime=new Map<number,Candle>();
-  for(const x of c){
-    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
-    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    byTime.set(x.time,x);
-  }
-  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
-  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
-  const closedCandleEnd=firstUnclosed>=0?firstUnclosed-1:normalized.length-1;
-  const data=normalized.slice(0,closedCandleEnd+1);
+  const data=normalizeCandleSeries(c,true);
   const ps=alternatePivots(swingPivots(data,2)).filter(p=>p.index>endIndex);
   // Wave 5 end is the X anchor. The correction must then be the next
   // three confirmed pivots A-B-C; never substitute a later pivot for X.
@@ -628,17 +620,7 @@ function buildFib(prices:number[],bull:boolean){
 export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   // Normalize the exchange feed before assigning pivot indices. Then stop at
   // the first forming candle so later bars cannot leak into an earlier count.
-  const byTime=new Map<number,Candle>();
-  for(const x of c){
-    if(!Number.isFinite(x.time)||!Number.isFinite(x.open)||!Number.isFinite(x.high)||!Number.isFinite(x.low)||!Number.isFinite(x.close)||!Number.isFinite(x.volume))continue;
-    if(x.volume<0||x.high<x.low||x.high<Math.max(x.open,x.close)||x.low>Math.min(x.open,x.close))continue;
-    byTime.set(x.time,x);
-  }
-  const normalized=[...byTime.values()].sort((a,b)=>a.time-b.time);
-  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
-  const closedEnd=firstUnclosed>=0?firstUnclosed-1:normalized.length-1;
-  if(closedEnd<29)return EMPTY("Insufficient closed-candle history");
-  const data=normalized.slice(0,closedEnd+1);
+  const data=normalizeCandleSeries(c,true);
   const ps=alternatePivots(swingPivots(data,2));
   const corrections=correctionCandidates(data);
   const action:WaveCount[]=[
