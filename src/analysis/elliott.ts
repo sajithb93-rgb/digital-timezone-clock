@@ -496,8 +496,12 @@ function buildFib(prices:number[],bull:boolean){
 }
 
 export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
-  let closedEnd=c.length-1;
-  while(closedEnd>=0&&c[closedEnd].closed===false)closedEnd--;
+  // Elliott pivots require future bars for confirmation. If an unclosed candle
+  // appears anywhere in the supplied sequence, do not consume candles after
+  // that point; otherwise a later closed candle can leak future information
+  // into a pivot/wave count that should only exist before the gap.
+  const firstUnclosed=c.findIndex(x=>x.closed===false);
+  const closedEnd=firstUnclosed>=0?firstUnclosed-1:c.length-1;
   if(closedEnd<29)return EMPTY("Insufficient closed-candle history");
   const data=c.slice(0,closedEnd+1);
   const ps=alternatePivots(swingPivots(data,2));
