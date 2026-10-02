@@ -21,7 +21,12 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
   if (result.source !== "BINANCE_FOOTPRINT" || !fp) {
     return {symbol,timeframe,state:"WAIT",direction:"NONE",score:0,price:result.entry,deltaRatio:result.deltaRatio,pressure:result.pressure,liquiditySweep:result.liquiditySweep,absorption:result.absorption,footprintBars:result.footprintHistoryCount,reason:"Waiting for 12 confirmed Binance footprint bars"};
   }
-  const geometryValid=result.diagnostics.find(d=>d.key==="trade_geometry")?.passed!==false;
+  const diagnosticPassed=(key:string)=>result.diagnostics.find(d=>d.key===key)?.passed!==false;
+  const geometryValid=diagnosticPassed("trade_geometry");
+  const targetQualityValid=diagnosticPassed("target_quality");
+  const recentSweepBuyValid=diagnosticPassed("sweep_recent_buy");
+  const recentSweepSellValid=diagnosticPassed("sweep_recent_sell");
+  const coreDataValid=["closed","history","exact","footprint_history","footprint_coverage","latest_fp"].every(diagnosticPassed);
   const buyChecks = [
     result.pressure === "BUYERS",
     result.deltaRatio >= 0.08,
@@ -49,9 +54,14 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
     sellScore > buyScore && sellScore >= 3 ? "SELL" : "NONE";
   const score = Math.round(Math.max(buyScore, sellScore) / buyChecks.length * 100);
 
+  const directionGateValid = direction==="BUY"
+    ? recentSweepBuyValid
+    : direction==="SELL"
+      ? recentSweepSellValid
+      : false;
   let state: OrderFlowScanState = "WAIT";
-  if (result.direction !== "WAIT" && geometryValid) state = "CONFIRMED";
-  else if (!geometryValid) state = "WAIT";
+  if (result.direction !== "WAIT" && geometryValid && targetQualityValid && coreDataValid && directionGateValid) state = "CONFIRMED";
+  else if (!geometryValid || !targetQualityValid || !coreDataValid || !directionGateValid) state = "WAIT";
   else if (direction !== "NONE" && score >= 75) state = "SETUP";
   else if (direction !== "NONE" && score >= 50) state = "WATCH";
   
@@ -62,6 +72,12 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
       : [];
   const reason = !geometryValid
     ? "Order Flow confluence present · blocked by invalid entry/SL/TP geometry"
+    : !targetQualityValid
+      ? "Order Flow confluence present · blocked by target quality"
+    : !coreDataValid
+      ? "Order Flow confluence present · blocked by incomplete confirmed footprint data"
+    : !directionGateValid
+      ? "Order Flow confluence present · blocked by stale/invalid liquidity sweep"
     : state === "CONFIRMED"
       ? result.signal
       : state === "SETUP"
