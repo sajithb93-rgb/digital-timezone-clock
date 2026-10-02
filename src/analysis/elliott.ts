@@ -105,8 +105,20 @@ function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean):Ne
   );
   const startType=bullish?"L":"H";
   const endType=bullish?"H":"L";
-  const boundaryStart:Pivot={index:start,price:c[start]?.close??0,type:startType,strength:0,confirmedAt:start};
-  const boundaryEnd:Pivot={index:end,price:c[end]?.close??0,type:endType,strength:0,confirmedAt:end};
+  const boundaryStart:Pivot={
+    index:start,
+    price:bullish?(c[start]?.low??0):(c[start]?.high??0),
+    type:startType,
+    strength:0,
+    confirmedAt:start
+  };
+  const boundaryEnd:Pivot={
+    index:end,
+    price:bullish?(c[end]?.high??0):(c[end]?.low??0),
+    type:endType,
+    strength:0,
+    confirmedAt:end
+  };
 
   let best:Pivot[]|null=null;
   for(let i=0;i<=internal.length-4;i++){
