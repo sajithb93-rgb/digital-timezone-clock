@@ -117,6 +117,14 @@ describe("reversal engine",()=>{
     expect(r.orderflowConfirmed).toBe(false); expect(r.state).not.toBe("CONFIRMED");
   });
 
+  it("does not use a prior structural level already touched by the signal candle as a future BUY target",()=>{
+    const candles=Array.from({length:30},(_,i)=>candle(i,100,101,99,100));
+    candles[20]={...candles[20],high:105};
+    candles[29]={...candles[29],open:100,high:106,low:99,close:104};
+    const r=analyzeReversal(candles,smc({sweeps:[{index:25,price:95,type:"low",confirmed:true,displacement:true}],events:[{index:26,price:101,type:"CHOCH",direction:"bullish",strength:"displacement"}]}),flow(),{requireOrderFlow:false});
+    expect(r.targets.every(t=>t>candles[29].high)).toBe(true);
+  });
+
   it("requires a symmetric six-vs-six delta history for divergence",()=>{
     const candles=Array.from({length:35},(_,i)=>i<29
       ? candle(i,100,102,99,101)
