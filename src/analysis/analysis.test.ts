@@ -661,6 +661,12 @@ describe("analysis regression",()=>{
     expect(validateDoubleZigzag([100,80,92,70,95,65,72,58],false).valid).toBe(false);
   });
 
+  it("accepts shallow and deep non-erasing zigzags outside the common Fibonacci band",()=>{
+    expect(validateZigzag([100,120,116,122],true).valid).toBe(true);
+    expect(validateZigzag([100,120,102,122],true).valid).toBe(true);
+    expect(validateZigzag([122,102,116,100],false).valid).toBe(true);
+  });
+
   it("validates live Elliott continuation with the required X-A-B-C geometry",()=>{
     expect(validateZigzag([165,150,158,145],false).valid).toBe(true);
     expect(validateFlat([165,150,164,146],false).valid).toBe(true);
