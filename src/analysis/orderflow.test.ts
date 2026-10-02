@@ -158,6 +158,16 @@ describe("order flow strategy",()=>{
     expect(r.targets).toEqual([]);
   });
 
+  it("falls back to candle-estimated flow when taker-buy volume is invalid",()=>{
+    const r=analyzeOrderFlow([
+      {...candle(0,100,101,99,100.5,200,250)},
+      {...candle(1,100.5,102,100,101.5,200,NaN)}
+    ]);
+    expect(r.source).toBe("CANDLE_ESTIMATE_FALLBACK");
+    expect(r.buyVolume).toBeCloseTo(215,10);
+    expect(r.sellVolume).toBeCloseTo(185,10);
+  });
+
   it("does not confirm when Binance taker-flow data is unavailable",()=>{
     const r=analyzeOrderFlow([
       {time:0,open:100,high:101,low:99,close:100.5,volume:100,closed:true},
