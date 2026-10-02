@@ -496,6 +496,17 @@ export function makeBreakers(obs:OB[],c:Candle[],asOf=c.length-1):Breaker[]{
  return out;
 }
 type ZoneCandidate={low:number;high:number;origin:number;kind:"OB"|"FVG"|"BREAKER";strength:number;linked:boolean;distance:number};
+export function isCurrentRetestEligible(
+ kind:"OB"|"FVG"|"BREAKER",
+ asOf:number,
+ state:{mitigated?:boolean;mitigationIndex?:number;partial?:boolean;partialFillIndex?:number;filled?:boolean}
+):boolean{
+ if(!Number.isInteger(asOf)||asOf<0)return false;
+ if(kind==="OB")return !state.mitigated||state.mitigationIndex===asOf;
+ if(kind==="FVG")return !state.filled&&(!state.partial||state.partialFillIndex===asOf);
+ return true;
+}
+
 function chooseEntryZone(
  direction:"bullish"|"bearish"|null,
  obs:OB[],
@@ -512,7 +523,7 @@ function chooseEntryZone(
  if(!latestEvent)return null;
  const candidates:ZoneCandidate[]=[];
  for(const o of obs){
-  if(o.type!==direction||o.mitigated)continue;
+  if(o.type!==direction||!isCurrentRetestEligible("OB",asOf,o))continue;
   const age=asOf-o.index;
   if(age<0||age>50)continue;
   if(!isEntryZoneCausal(o.index,sweepIndex,latestEvent.index,"OB",12))continue;
@@ -521,7 +532,7 @@ function chooseEntryZone(
   candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked:true,distance});
  }
  for(const f of fvgs){
-  if(f.type!==direction||f.filled||f.partial)continue;
+  if(f.type!==direction||!isCurrentRetestEligible("FVG",asOf,f))continue;
   const origin=f.to,age=asOf-origin;
   if(age<0||age>40)continue;
   if(!isEntryZoneCausal(origin,sweepIndex,latestEvent.index,"FVG",12))continue;
