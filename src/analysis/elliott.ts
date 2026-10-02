@@ -124,7 +124,7 @@ export function validateNestedImpulse(prices:number[],bullish:boolean):NestedImp
   return{alternating,structural,valid:alternating&&structural};
 }
 
-function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean):NestedWaveEvidence{
+function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean,wave:"3"|"5"|"C"="3"):NestedWaveEvidence{
   // A genuine nested 5-wave subdivision needs the two parent boundaries
   // plus four internal turning points. A raw pivot count is not enough.
   const internal=alternatePivots(
@@ -165,7 +165,7 @@ function internalEvidence(c:Candle[],start:number,end:number,bullish:boolean):Ne
   const score=best
     ? 100
     : clamp((Math.min(internal.length,4)/4)*55+(alternating?15:0)+(directionAligned?30:0));
-  return{wave:"3",subwaves,alternating,directionAligned,score};
+  return{wave,subwaves,alternating,directionAligned,score};
 }
 function inferDegree(spanBars:number,totalBars:number):ElliottDegree{
   const r=spanBars/Math.max(totalBars,1);
@@ -684,7 +684,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   const w1=abs(prices[1]-prices[0]),w2=abs(prices[2]-prices[1]),w3=abs(prices[3]-prices[2]),w4=abs(prices[4]-prices[3]),w5=abs(prices[5]-prices[4]);
   const fibLevels=buildFib(prices,primary.direction==="bullish");
   const nested3=internalEvidence(data,primary.points[2].index,primary.points[3].index,primary.direction==="bullish");
-  const nested5=internalEvidence(data,primary.points[4].index,primary.points[5].index,primary.direction==="bullish");
+  const nested5=internalEvidence(data,primary.points[4].index,primary.points[5].index,primary.direction==="bullish","5");
   nested3.wave="3"; nested5.wave="5";
   const nested=[nested3,nested5];
   const degree=inferDegree((primary.points.at(-1)?.index??0)-(primary.points[0]?.index??0),data.length);
