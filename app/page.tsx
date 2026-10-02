@@ -32,16 +32,39 @@ const binanceRestState={nextAllowedAt:0,lastRequestAt:0};
 let binanceRequestQueue:Promise<void>=Promise.resolve();
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 
+function proxyBinanceUrl(url:string):string{
+ if(typeof window==="undefined")return url;
+ try{
+  const u=new URL(url);
+  const match=([["api.binance.com","spot"],["fapi.binance.com","usdm"],["dapi.binance.com","coinm"]] as const).find(([host])=>u.hostname===host);
+  if(!match)return url;
+  const endpoint=({"/api/v3":true,"/fapi/v1":true,"/dapi/v1":true} as const);
+  const pathPrefix=Object.keys(endpoint).find(prefix=>u.pathname.startsWith(prefix+"/"));
+  if(!pathPrefix)return url;
+  const path=u.pathname.slice(pathPrefix.length);
+  if(!["/klines","/exchangeInfo","/ticker/24hr","/openInterest","/premiumIndex","/aggTrades"].includes(path))return url;
+  const q=new URLSearchParams();
+  q.set("market",match[1]);
+  q.set("path",path);
+  u.searchParams.forEach((value,key)=>q.append(key,value));
+  return "/api/binance?"+q.toString();
+ }catch{
+  return url;
+ }
+}
+
 async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<any>{
  const run=binanceRequestQueue.then(async()=>{
-  // Serialize all REST callers. A shared timestamp alone is racy when the
-  // scanners fire concurrent requests.
+  // Serialize REST callers and route Binance traffic through the same-origin
+  // Next.js proxy so browser CORS/network restrictions cannot blank the chart.
   for(let attempt=0;attempt<=retries;attempt+=1){
    const now=Date.now();
    const wait=Math.max(binanceRestState.nextAllowedAt-now,binanceRestState.lastRequestAt+220-now,0);
    if(wait>0)await sleep(wait);
    binanceRestState.lastRequestAt=Date.now();
-   const r=await fetch(url,init);
+   const target=proxyBinanceUrl(url);
+   const requestInit:RequestInit={...(init??{}),cache:"no-store"};
+   const r=await fetch(target,requestInit);
    if(r.ok)return r.json();
    if(r.status===429||r.status===418){
     const retryAfter=Number(r.headers.get("Retry-After")||0);
@@ -50,7 +73,9 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
     if(attempt<retries){await sleep(backoff);continue;}
     throw new Error(`Binance rate limit ${r.status}. Retried safely; REST temporarily throttled.`);
    }
-   throw new Error(`Binance request failed ${r.status}`);
+   let detail="";
+   try{const body=await r.json();detail=typeof body?.error==="string"?body.error:""}catch{}
+   throw new Error(detail||`Binance request failed ${r.status}`);
   }
   throw new Error("Binance request failed");
  });
@@ -568,12 +593,21 @@ export default function Home(){
   let chart:any=null;
   let series:any=null;
   let ro:ResizeObserver|undefined;
-  let onViewport:(()=>void)|undefined;  const host=chartRef.current;
+  let onViewport:(()=>void)|undefined;
+  const host=chartRef.current;
   if(!host)return;
 
   import("lightweight-charts").then(({createChart,CandlestickSeries})=>{
    if(disposed||!chartRef.current)return;
-   chart=createChart(host,{width:Math.max(320,host.clientWidth||900),height:Math.max(360,host.clientHeight||500),autoSize:false,layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},rightPriceScale:{borderColor:"#26303f",scaleMargins:{top:.08,bottom:.08}},timeScale:{borderColor:"#26303f",timeVisible:true,secondsVisible:false,rightOffset:6,barSpacing:11,minBarSpacing:5},crosshair:{mode:0},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
+   const measure=()=>{
+    const rect=host.getBoundingClientRect();
+    return {
+     width:Math.max(320,Math.floor(rect.width)||host.clientWidth||320),
+     height:Math.max(360,Math.floor(rect.height)||host.clientHeight||360)
+    };
+   };
+   const size=measure();
+   chart=createChart(host,{width:size.width,height:size.height,autoSize:false,layout:{background:{color:"#0b0f15"},textColor:"#8792a5"},grid:{vertLines:{color:"#151b25"},horzLines:{color:"#151b25"}},rightPriceScale:{borderColor:"#26303f",scaleMargins:{top:.08,bottom:.08}},timeScale:{borderColor:"#26303f",timeVisible:true,secondsVisible:false,rightOffset:6,barSpacing:11,minBarSpacing:5},crosshair:{mode:0},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
    series=chart.addSeries(CandlestickSeries,{upColor:"#36d399",downColor:"#f06b78",borderVisible:false,wickUpColor:"#36d399",wickDownColor:"#f06b78",priceLineVisible:true,lastValueVisible:true});
    chartObj.current=chart;
    seriesRef.current=series;
@@ -582,11 +616,15 @@ export default function Home(){
    onViewport=()=>setViewportTick(v=>v+1);
    chart.timeScale().subscribeVisibleLogicalRangeChange(onViewport);
    ro=new ResizeObserver(()=>{
-    if(!chart)return;
-    chart.resize(Math.max(320,host.clientWidth||900),Math.max(360,host.clientHeight||500));
+    if(!chart||disposed)return;
+    const next=measure();
+    chart.resize(next.width,next.height);
     setViewportTick(v=>v+1);
    });
    ro.observe(host);
+   requestAnimationFrame(()=>{
+    if(!disposed&&chart){const next=measure();chart.resize(next.width,next.height);setViewportTick(v=>v+1);}
+   });
   }).catch(e=>{
    if(!disposed)setError(e instanceof Error?e.message:"Chart library failed");
   });
@@ -603,9 +641,37 @@ export default function Home(){
    setChartReady(false);
   };
  },[]);
- useEffect(()=>{const s=seriesRef.current;if(!chartReady||!s||candles.length<2)return;s.setData(candles.map(c=>({time:Math.floor(c.time/1000) as any,open:c.open,high:c.high,low:c.low,close:c.close})));setViewportTick(v=>v+1)},[chartReady,chartDataRevision,symbol,interval]);
- useEffect(()=>{const c=chartObj.current;if(!chartReady||!c||candles.length<2)return;c.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});setViewportTick(v=>v+1)},[chartReady,symbol,interval,chartDataRevision]);
- useEffect(()=>{const s=seriesRef.current,l=candles.at(-1);if(!chartReady||!s||!l)return;s.update({time:Math.floor(l.time/1000) as any,open:l.open,high:l.high,low:l.low,close:l.close})},[candles,chartReady]);
+ useEffect(()=>{
+  const s=seriesRef.current;
+  if(!chartReady||!s)return;
+  if(candles.length<2){try{s.setData([])}catch{};return;}
+  const mapped=[];
+  const seen=new Set<number>();
+  for(const c of candles){
+   const time=Math.floor(c.time/1000);
+   if(!Number.isFinite(time)||time<=0||seen.has(time)||!Number.isFinite(c.open)||!Number.isFinite(c.high)||!Number.isFinite(c.low)||!Number.isFinite(c.close))continue;
+   if(c.high<c.low||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close)||c.open<=0||c.high<=0||c.low<=0||c.close<=0)continue;
+   seen.add(time);
+   mapped.push({time:time as any,open:c.open,high:c.high,low:c.low,close:c.close});
+  }
+  if(mapped.length<2){try{s.setData([])}catch{};return;}
+  try{s.setData(mapped);setViewportTick(v=>v+1);}catch(e){setError(e instanceof Error?e.message:"Chart data update failed");}
+ },[chartReady,chartDataRevision,candles,symbol,interval]);
+ useEffect(()=>{
+  const c=chartObj.current;
+  if(!chartReady||!c||candles.length<2)return;
+  try{
+   c.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-100),to:candles.length-1+4});
+  }catch{}
+  setViewportTick(v=>v+1);
+ },[chartReady,symbol,interval,chartDataRevision,candles.length]);
+ useEffect(()=>{
+  const s=seriesRef.current,l=candles.at(-1);
+  if(!chartReady||!s||!l)return;
+  const time=Math.floor(l.time/1000);
+  if(!Number.isFinite(time)||time<=0)return;
+  try{s.update({time:time as any,open:l.open,high:l.high,low:l.low,close:l.close});}catch{}
+ },[candles,chartReady]);
 
  const quoteOptions=useMemo(()=>Array.from(new Set(pairs.map(p=>p.quoteAsset))).sort(),[pairs]);
  const filtered=useMemo(()=>pairs.filter(p=>(quoteFilter==="ALL"||p.quoteAsset===quoteFilter)&&p.symbol.includes(pairSearch)),[pairs,quoteFilter,pairSearch]);
@@ -631,7 +697,7 @@ export default function Home(){
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef}/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef} aria-label="Live Binance candlestick chart" role="img"/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span>{mode==="orderflow"&&<span><i className="legend-dot liq-dot"/> Order Flow</span>}<span className="chart-tip">Live Binance {marketConfig[marketType].label.toLowerCase()} data · analysis uses closed candles</span></div>
    </div>
 
