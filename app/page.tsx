@@ -713,7 +713,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     <span>Absorption<b>{orderFlow.absorption}</b></span><span>Liquidity<b>{orderFlow.liquiditySweep}</b></span><span>POC<b>{orderFlow.footprint?.poc!=null?orderFlow.footprint.poc.toFixed(4):"—"}</b></span><span>FP Δ<b>{orderFlow.footprint?orderFlow.footprint.deltaRatio.toFixed(3):"—"}</b></span>
     <span>Entry<b>{fmt(orderFlow.entry)}</b></span><span>SL<b>{fmt(orderFlow.stop)}</b></span><span>TP1<b>{orderFlow.targets[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{orderFlow.targets[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{orderFlow.targets[2]?.toFixed(4)||"—"}</b></span>
    </div>
-   <div className="setup-empty">{orderFlow.confirmations.length?orderFlow.confirmations.join(" · "):orderFlow.signal}</div>
+   <div className="setup-empty">{orderFlow.confirmations.length?orderFlow.confirmations.join(" · "):(orderFlow.rejectionReason||orderFlow.signal)}</div>
   </div>
  ):null;
  return (
