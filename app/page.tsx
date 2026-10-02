@@ -85,7 +85,7 @@ async function fetchAggTrades(symbol:string,marketType:MarketKind,startTime:numb
    if(t.time<startTime||t.time>endTime||seen.has(t.id))continue;
    seen.add(t.id);out.push(t);if(out.length>=maxTrades)break;
   }
-  if(rows.length<1000||lastTime<=cursor)break;
+  if(lastTime<=cursor)break;
   cursor=lastTime+1;
  }
  return out.sort((a,b)=>a.time-b.time||a.id-b.id);
@@ -128,7 +128,7 @@ async function fetchScannerAggTrades(symbol:string,marketType:MarketKind,startTi
    if(bucket<currentBucket&&bucket>=startTime)coveredClosedBuckets.add(bucket);
   }
   if(coveredClosedBuckets.size>=targetBars)break;
-  if(rows.length<1000||earliestTime>=cursorEnd)break;
+  if(earliestTime>=cursorEnd)break;
   cursorEnd=earliestTime-1;
  }
  return out.filter(t=>t.time>=startTime&&t.time<=endTime).sort((a,b)=>a.time-b.time||a.id-b.id);
