@@ -359,6 +359,14 @@ describe("analysis regression",()=>{
     expect(r.frames[0].structure).toBe("UNAVAILABLE");
   });
 
+  it("makes MTF analysis independent of conflicting duplicate candle timestamps",()=>{
+    const base=candles(40);
+    const duplicate={...base[20],close:999};
+    const ordered=analyzeMTF([{interval:"5m",candles:base}]);
+    const conflicted=analyzeMTF([{interval:"5m",candles:[...base,duplicate]}]);
+    expect(conflicted.frames[0]).toEqual(ordered.frames[0]);
+  });
+
   it("exposes Elliott evidence separately for available MTF frames",()=>{
     const m=analyzeMTF([{interval:"4h",candles:candles(100)}]);
     expect(m.frames[0].available).toBe(true);
