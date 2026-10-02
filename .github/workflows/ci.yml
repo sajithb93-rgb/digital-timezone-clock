@@ -4,6 +4,10 @@ on:
     branches: [trading-analysis-dashboard, feature/elitewave-autodraw]
   pull_request:
     branches: [trading-analysis-dashboard]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
