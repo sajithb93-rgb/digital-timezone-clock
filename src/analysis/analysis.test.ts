@@ -415,6 +415,18 @@ describe("analysis regression",()=>{
     expect(validateImpulseWave([100,120,110,150,115,160],true).valid).toBe(false);
   });
 
+  it("allows an impulse where Wave 3 is not the shortest but is not the longest",()=>{
+    expect(validateImpulseWave([100,140,120,150,130,145],true).valid).toBe(true);
+    expect(validateImpulseWave([200,160,180,150,170,155],false).valid).toBe(true);
+  });
+
+  it("allows a contracting diagonal when Wave 3 is shorter than Wave 1 but longer than Wave 5",()=>{
+    const v=validateDiagonalWave([100,130,115,125,118,121],true);
+    expect(v.contracting).toBe(true);
+    expect(v.w3NotShortest).toBe(true);
+    expect(v.valid).toBe(true);
+  });
+
   it("recognizes diagonal overlap without weakening the Wave 3 rule",()=>{
     const v=validateDiagonalWave([100,120,110,150,118,155],true);
     expect(v.w4OverlapsW1).toBe(true);
