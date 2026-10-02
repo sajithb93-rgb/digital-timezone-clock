@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isPostSweepZoneCausal, isSetupActive, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, validateDiagonalWave, validateImpulseWave } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag } from "./elliott";
 
@@ -75,6 +75,13 @@ describe("analysis regression",()=>{
     expect(isPostSweepZoneCausal(10,1,30,12)).toBe(false);
   });
 
+  it("requires internal structure confirmation to follow the swing break",()=>{
+    expect(isSMCCausalSequence(10,15,18)).toBe(true);
+    expect(isSMCCausalSequence(10,15,14)).toBe(false);
+    expect(isSMCCausalSequence(10,15,28)).toBe(false);
+    expect(isSMCCausalSequence(10,22,null)).toBe(false);
+  });
+
   it("never emits two opposing structure events on the same candle",()=>{
     const c=candles(120);
     const m=analyzeSMC(c);
@@ -117,8 +124,7 @@ describe("analysis regression",()=>{
       {interval:"4h",candles:candles(100)},
       {interval:"1h",candles:[]}
     ]);
-    expect(m.frames.find(x=>x.interval==="1h")?.available).toBe(false);
-    expect(m.frames.find(x=>x.interval==="1h")?.structure).toBe("UNAVAILABLE");
+    expect(m.frames.find(x=>x.interval==="1h")?.available).toBe(false);    expect(m.frames.find(x=>x.interval==="1h")?.structure).toBe("UNAVAILABLE");
   });
 
   it("calculates Wave 5 from Wave 4 end to Wave 5 end",()=>{
@@ -237,7 +243,6 @@ describe("analysis regression",()=>{
     const invalidC=[...pre,...invalidValues].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
     expect(buildLiveContinuationSetup(invalidC,primary)).toBeNull();
   });
-
   it("keeps corrective structures separate from the primary impulse count",()=>{
     expect(validateZigzag([200,150,170,130],false).valid).toBe(true);
     expect(validateFlat([200,150,195,145],false).valid).toBe(true);
