@@ -107,16 +107,35 @@ function analyzeBar(candles:Candle[],i:number,buy:number,sell:number):OrderFlowB
   const lookbackStart=Math.max(0,i-10),history=candles.slice(lookbackStart,i);
   if(history.length>=3){
     const previousHigh=Math.max(...history.map(x=>x.high)),previousLow=Math.min(...history.map(x=>x.low));
-    if(c.high>previousHigh&&c.close<previousHigh){liquiditySweep="HIGH";sweepPrice=previousHigh}
-    else if(c.low<previousLow&&c.close>previousLow){liquiditySweep="LOW";sweepPrice=previousLow}
+    const referenceRange=avg(history.map(barRange));
+    // A sweep must penetrate the prior liquidity range by a meaningful amount.
+    // This filters one-tick/rounding noise while keeping the threshold adaptive
+    // to the local volatility of the analyzed market.
+    const minSweepPenetration=Math.max(referenceRange*0.05,1e-12);
+    const sweptHigh=c.high-previousHigh>=minSweepPenetration&&c.close<previousHigh;
+    const sweptLow=previousLow-c.low>=minSweepPenetration&&c.close>previousLow;
+    // A candle that raids both sides is ambiguous; do not classify either side
+    // as a directional liquidity sweep.
+    if(sweptHigh!==sweptLow){
+      if(sweptHigh){liquiditySweep="HIGH";sweepPrice=previousHigh}
+      else {liquiditySweep="LOW";sweepPrice=previousLow}
+    }
   }
 
   const structure=candles.slice(Math.max(0,i-3),i);
   let microStructure:MicroStructure="NEUTRAL";
   if(structure.length>=2){
     const previousHigh=Math.max(...structure.map(x=>x.high)),previousLow=Math.min(...structure.map(x=>x.low));
-    if(c.close>previousHigh)microStructure="BULLISH";
-    else if(c.close<previousLow)microStructure="BEARISH";
+    const structureRange=avg(structure.map(barRange));
+    // Require a close materially beyond the prior micro-range rather than a
+    // one-tick breach. The displacement threshold adapts to recent volatility.
+    const minStructureBreak=Math.max(structureRange*0.10,1e-12);
+    const bullishBreak=c.close-previousHigh>=minStructureBreak;
+    const bearishBreak=previousLow-c.close>=minStructureBreak;
+    if(bullishBreak!==bearishBreak){
+      if(bullishBreak)microStructure="BULLISH";
+      else if(bearishBreak)microStructure="BEARISH";
+    }
   }
   return {index:i,time:c.time,buyVolume:buy,sellVolume:sell,delta,deltaRatio,buyerPressure,sellerPressure,
     imbalanceRatio:Number.isFinite(imbalanceRatio)?imbalanceRatio:0,imbalance,absorption,absorptionStrength,
