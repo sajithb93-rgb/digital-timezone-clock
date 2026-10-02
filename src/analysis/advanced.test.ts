@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backtestCostR, flowSnapshot, detectRegime, riskPlan, runSMCBacktest } from "./advanced";
+import { backtestCostR, flowSnapshot, detectRegime, riskPlan, runSMCBacktest, confluence } from "./advanced";
 import type { Candle } from "./engine";
 
 function candle(i:number):Candle {
