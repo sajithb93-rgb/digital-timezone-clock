@@ -479,9 +479,9 @@ export default function Home(){
 
   // REST remains a live-data fallback when the Binance WebSocket is blocked,
   // intermittently unavailable, or dropped by the browser/network.
-  restFallbackTimer=window.setInterval(()=>{
+  void (restFallbackTimer=window.setInterval(()=>{
    if(!stop&&(!ws||ws.readyState!==WebSocket.OPEN))void syncFromRest();
-  },15_000);
+  },15_000));
 
   fetchKlines(symbol,interval,350,marketType,controller.signal).then(data=>{
    if(stop)return;
