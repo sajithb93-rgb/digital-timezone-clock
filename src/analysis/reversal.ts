@@ -104,12 +104,14 @@ function findDeltaDivergence(candles: Candle[], flow: OrderFlowResult, direction
   return false;
 }
 
-function chooseZone(smc: SMCResult, direction: ReversalDirection, triggerIndex: number, lastClose: number): { low: number; high: number } | null {
-  if (direction === "NONE") return null;
+function chooseZone(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, triggerIndex: number, lastClose: number): { low: number; high: number } | null {
+  if (direction === "NONE" || sweepIndex < 0 || triggerIndex < sweepIndex) return null;
   const wanted = direction === "BUY" ? "bullish" : "bearish";
+  // Reversal zones must belong to the post-sweep leg. A pre-sweep OB/FVG can
+  // be valid SMC structure but cannot be used as causal reversal confirmation.
   const zones = [
-    ...smc.fvgs.filter(x => x.type === wanted && !x.filled && x.to <= triggerIndex && triggerIndex - x.to <= 12).map(x => ({ low: x.low, high: x.high, index: x.to })),
-    ...smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index <= triggerIndex && triggerIndex - x.index <= 20).map(x => ({ low: x.low, high: x.high, index: x.index })),
+    ...smc.fvgs.filter(x => x.type === wanted && !x.filled && x.to >= sweepIndex && x.to <= triggerIndex && triggerIndex - x.to <= 12).map(x => ({ low: x.low, high: x.high, index: x.to })),
+    ...smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index >= sweepIndex && x.index <= triggerIndex && triggerIndex - x.index <= 20).map(x => ({ low: x.low, high: x.high, index: x.index })),
   ];
   if (!zones.length) return null;
   zones.sort((a, b) => {
@@ -120,34 +122,41 @@ function chooseZone(smc: SMCResult, direction: ReversalDirection, triggerIndex: 
   return { low: zones[0].low, high: zones[0].high };
 }
 
-function findRelevantFvg(smc: SMCResult, direction: ReversalDirection, anchorIndex: number): ReversalEngineResult["fvg"] {
+function findRelevantFvg(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, anchorIndex: number): ReversalEngineResult["fvg"] {
   const wanted = direction === "BUY" ? "bullish" : "bearish";
-  const item = smc.fvgs.filter(x => x.type === wanted && !x.filled && x.to <= anchorIndex && anchorIndex - x.to <= 12).at(-1);
+  const item = smc.fvgs.filter(x => x.type === wanted && !x.filled && x.to >= sweepIndex && x.to <= anchorIndex && anchorIndex - x.to <= 12).at(-1);
   return item ? { low: item.low, high: item.high, index: item.to } : null;
 }
 
-function findRelevantOb(smc: SMCResult, direction: ReversalDirection, anchorIndex: number): ReversalEngineResult["orderBlock"] {
+function findRelevantOb(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, anchorIndex: number): ReversalEngineResult["orderBlock"] {
   const wanted = direction === "BUY" ? "bullish" : "bearish";
-  const item = smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index <= anchorIndex && anchorIndex - x.index <= 20).at(-1);
+  const item = smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index >= sweepIndex && x.index <= anchorIndex && anchorIndex - x.index <= 20).at(-1);
   return item ? { low: item.low, high: item.high, index: item.index } : null;
 }
 
 function calculateTargets(candles: Candle[], entry: number, invalidation: number, direction: ReversalDirection): number[] {
   const risk = Math.abs(entry - invalidation);
-  if (!risk || !Number.isFinite(risk)) return [];
+  if (!risk || !Number.isFinite(risk) || direction === "NONE") return [];
   const recent = candles.slice(-60);
+  const minRR = 1.5;
   const levels = direction === "BUY"
-    ? recent.map(c => c.high).filter(p => p > entry).sort((a, b) => a - b)
-    : recent.map(c => c.low).filter(p => p < entry).sort((a, b) => b - a);
+    ? recent.map(c => c.high).filter(p => p > entry + risk * minRR).sort((a, b) => a - b)
+    : recent.map(c => c.low).filter(p => p < entry - risk * minRR).sort((a, b) => b - a);
   const unique: number[] = [];
+  const spacing = risk * 0.25;
   for (const level of levels) {
-    if (!unique.some(x => Math.abs(x - level) <= risk * 0.15)) unique.push(level);
+    if (!unique.some(x => Math.abs(x - level) <= spacing)) unique.push(level);
     if (unique.length >= 3) break;
   }
   const fallback = direction === "BUY"
     ? [entry + risk * 1.5, entry + risk * 2, entry + risk * 3]
     : [entry - risk * 1.5, entry - risk * 2, entry - risk * 3];
-  return [...unique, ...fallback].slice(0, 3);
+  for (const level of fallback) {
+    if (unique.length >= 3) break;
+    if (!unique.some(x => Math.abs(x - level) <= spacing)) unique.push(level);
+  }
+  unique.sort((a, b) => direction === "BUY" ? a - b : b - a);
+  return unique.slice(0, 3);
 }
 
 export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: OrderFlowResult, options: { requireOrderFlow?: boolean } = {}): ReversalEngineResult {
@@ -173,7 +182,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
 
     let bestDisplacement = 0;
     let bestDisplacementIndex = anchor;
-    for (let i = Math.max(0, anchor); i <= asOf; i += 1) {
+    for (let i = Math.max(0, anchor); i <= asOf && i - anchor <= 12; i += 1) {
       const ratio = displacementRatio(closed, i);
       if (ratio > bestDisplacement) {
         bestDisplacement = ratio;
@@ -183,9 +192,9 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const displacementOk = bestDisplacement >= 0.7;
     const triggerIndex = Math.max(anchor, bestDisplacementIndex);
 
-    const fvg = findRelevantFvg(smc, direction, triggerIndex);
-    const orderBlock = findRelevantOb(smc, direction, triggerIndex);
-    const zone = chooseZone(smc, direction, triggerIndex, last.close);
+    const fvg = findRelevantFvg(smc, direction, sweep.index, triggerIndex);
+    const orderBlock = findRelevantOb(smc, direction, sweep.index, triggerIndex);
+    const zone = chooseZone(smc, direction, sweep.index, triggerIndex, last.close);
 
     const orderflowConfirmed = direction === "BUY"
       ? orderFlow.direction === "BUY" || (orderFlow.pressure === "BUYERS" && orderFlow.absorption === "BUYER")
