@@ -32,6 +32,16 @@ describe("normalizeCandleSeries",()=>{
     expect(result).toEqual([]);
   });
 
+  it("allows a closed snapshot to recover after conflicting open snapshots",()=>{
+    const openA=candle(1,{closed:false,close:100.5});
+    const openB=candle(1,{closed:false,close:101.2});
+    const closed=candle(1,{closed:true,close:102});
+    const result=normalizeCandleSeries([openA,openB,closed],true);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.closed).toBe(true);
+    expect(result[0]?.close).toBe(102);
+  });
+
   it("prefers a closed snapshot over an open snapshot with the same timestamp",()=>{
     const result=normalizeCandleSeries([
       candle(1,{closed:false,close:100.5}),
