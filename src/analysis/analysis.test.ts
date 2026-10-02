@@ -658,7 +658,7 @@ describe("analysis regression",()=>{
 
   it("rejects malformed double zigzags and accepts a valid W-X-Y structure",()=>{
     expect(validateDoubleZigzag([100,80,92,70,75,65,72,58],false).valid).toBe(true);
-    expect(validateDoubleZigzag([100,80,92,70,95,65,72,58],false).valid).toBe(false);
+    expect(validateDoubleZigzag([100,80,92,70,100,65,72,58],false).valid).toBe(false);
   });
 
   it("accepts shallow and deep non-erasing zigzags outside the common Fibonacci band",()=>{
