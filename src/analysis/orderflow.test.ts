@@ -514,7 +514,7 @@ describe("order flow strategy",()=>{
     const noSweep=fullLongCandles().map((c,i)=>(i===8||i===9)?{...c,low:99.5,close:100.2}:c);
     expect(analyzeOrderFlow(noSweep,fp).direction).toBe("WAIT");
 
-    const noAbsorption=fullLongCandles().map((c,i)=>i===9?{...c,close:c.open,low:c.open-0.1}:c);
+    const noAbsorption=fullLongCandles().map((c,i)=>i===9?{...c,close:c.open,low:c.open-0.1}:i===8?{...c,low:100.4,close:c.open}:c);
     expect(analyzeOrderFlow(noAbsorption,fp).direction).toBe("WAIT");
 
     const noBreak=fullLongCandles().map((c,i)=>i===11?{...c,high:103,close:102.5}:c);
