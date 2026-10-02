@@ -450,6 +450,7 @@ export default function Home(){
 
  useEffect(()=>{
   let stop=false;let socket:WebSocket|undefined;let retry:number|undefined;let flush:number|undefined;let attempt=0;
+  const controller=new AbortController();
   const tfMs=intervalMs(interval);const tick=selectedPair?.tickSize??0;const book=new FootprintBook(tfMs,tick,36);footprintBookRef.current=book;setFootprintVersion(v=>v+1);
   let pendingRevision=0,flushedRevision=0,lastConfirmedBucket=-1;
   const schedule=()=>{if(stop||retry)return;const delay=Math.min(15000,1000*Math.pow(2,Math.min(attempt++,4)));retry=window.setTimeout(()=>{retry=undefined;connect()},delay)};
@@ -459,7 +460,7 @@ export default function Home(){
    socket.onerror=()=>{if(!stop)setFootprintConnected(false)};
    socket.onclose=()=>{if(stop)return;setFootprintConnected(false);schedule()};
   };
-  const loadHistory=async()=>{if(!symbol||!selectedPair?.tickSize)return;try{const lookback=Math.max(tfMs*14,60*60*1000);const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,undefined,12);if(stop)return;book.load(trades);pendingRevision+=1;setFootprintVersion(v=>v+1);setFootprintConnected(true)}catch{if(!stop)setFootprintConnected(false)}};
+  const loadHistory=async()=>{if(!symbol||!selectedPair?.tickSize)return;try{const lookback=Math.max(tfMs*14,60*60*1000);const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now()-1500,tfMs,controller.signal,12);if(stop)return;book.load(trades);pendingRevision+=1;setFootprintVersion(v=>v+1);setFootprintConnected(true)}catch{if(!stop)setFootprintConnected(false)}};
   void loadHistory();connect();
   flush=window.setInterval(()=>{
     if(stop)return;
@@ -475,7 +476,7 @@ export default function Home(){
       setFootprintVersion(v=>v+1);
     }
   },1000);
-  return()=>{stop=true;if(retry)clearTimeout(retry);if(flush)clearInterval(flush);try{socket?.close(1000,"cleanup")}catch{};if(footprintBookRef.current===book)footprintBookRef.current=null;setFootprintConnected(false)};
+  return()=>{stop=true;controller.abort();if(retry)clearTimeout(retry);if(flush)clearInterval(flush);try{socket?.close(1000,"cleanup")}catch{};if(footprintBookRef.current===book)footprintBookRef.current=null;setFootprintConnected(false)};
  },[symbol,interval,marketType,selectedPair?.tickSize]);
 
  const lastClosed=candles.at(-1)?.closed!==false?candles.at(-1):candles.at(-2);
