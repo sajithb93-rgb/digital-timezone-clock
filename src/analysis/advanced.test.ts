@@ -72,7 +72,7 @@ describe("risk sizing precision",()=>{
     },"BUY");
     expect(r.valid).toBe(false);
     expect(r.positionSize).toBe(0);
-    expect(r.reason).toContain("risk");
+    expect(r.reason).toContain("exchange minimum quantity");
   });
 
   it("preserves decimal step precision when minQty is large",()=>{
