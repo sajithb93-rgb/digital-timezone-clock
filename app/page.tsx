@@ -275,6 +275,9 @@ export default function Home(){
   let active=true;
   let inFlight=false;
   const controller=new AbortController();
+  // Never carry MTF candles from a previous symbol/market into the new
+  // instrument while its first refresh is still loading.
+  setMtfCandles([]);
   const refresh=async()=>{
    if(!active||inFlight)return;
    inFlight=true;
