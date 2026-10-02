@@ -31,7 +31,10 @@ export function normalizeNews(raw: any): NewsEvent[] {
   }).filter((x: NewsEvent) => x.title && x.date > 0 && x.country === "USD");
 }
 export function getNewsRisk(events: NewsEvent[], now = Date.now(), bufferMinutes = 30): NewsRisk {
-  const buffer = bufferMinutes * 60_000;
+  // Treat invalid/negative windows as the safe default instead of allowing a
+  // caller to accidentally disable the news block through NaN/negative input.
+  const safeBufferMinutes=Number.isFinite(bufferMinutes)?Math.max(0,bufferMinutes):30;
+  const buffer = safeBufferMinutes * 60_000;
   const relevant = events.filter(e => e.impact === "high").sort((a,b) => a.date - b.date);
   // If an upcoming high-impact event and a recently completed one are both
   // inside the window, the upcoming event must take precedence. Otherwise an
