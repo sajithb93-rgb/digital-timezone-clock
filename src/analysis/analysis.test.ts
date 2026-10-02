@@ -427,6 +427,13 @@ describe("analysis regression",()=>{
     expect(v.valid).toBe(true);
   });
 
+  it("allows a deeper Wave-4 diagonal overlap beyond the Wave-2 endpoint",()=>{
+    const v=validateDiagonalWave([100,130,115,135,110,125],true);
+    expect(v.w4OverlapsW1).toBe(true);
+    expect(v.w4DoesNotPassW2).toBe(false);
+    expect(v.valid).toBe(true);
+  });
+
   it("recognizes diagonal overlap without weakening the Wave 3 rule",()=>{
     const v=validateDiagonalWave([100,120,110,150,118,155],true);
     expect(v.w4OverlapsW1).toBe(true);
