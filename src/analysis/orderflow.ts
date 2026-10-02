@@ -189,7 +189,9 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
     if(c.volume<0||c.high<c.low||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))continue;
     byTime.set(c.time,c);
   }
-  const closed=[...byTime.values()].filter(c=>c.closed!==false).sort((x,y)=>x.time-y.time);
+  const normalized=[...byTime.values()].sort((x,y)=>x.time-y.time);
+  const firstUnclosed=normalized.findIndex(x=>x.closed===false);
+  const closed=(firstUnclosed>=0?normalized.slice(0,firstUnclosed):normalized);
   if(!closed.length)return emptyResult();
 
   let cumulativeDelta=0,allExact=true;
