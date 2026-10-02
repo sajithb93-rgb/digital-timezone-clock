@@ -495,6 +495,14 @@ describe("order flow strategy",()=>{
     expect(r.diagnostics.find(d=>d.key==="footprint_history")?.passed).toBe(false);
   });
 
+  it("rejects a footprint when summary volume disagrees with level ledger",()=>{
+    const footprint=confirmedFootprints("BUY");
+    footprint[11]={...footprint[11],buyVolume:70,sellVolume:40,delta:30,deltaRatio:30/110};
+    const r=analyzeOrderFlow(fullLongCandles(),footprint);
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="footprint_history")?.passed).toBe(false);
+  });
+
   it("rejects a footprint with inconsistent level totals",()=>{
     const footprint=confirmedFootprints("BUY");
     footprint[11]={...footprint[11],levels:[{
