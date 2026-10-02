@@ -225,6 +225,25 @@ describe("reversal engine",()=>{
     const ordered=analyzeReversal(candles,base,flow(),{requireOrderFlow:false}); const reversed=analyzeReversal([...candles].reverse(),base,flow(),{requireOrderFlow:false});
     expect(reversed.asOf).toBe(ordered.asOf); expect(reversed.sweepIndex).toBe(ordered.sweepIndex); expect(reversed.structureIndex).toBe(ordered.structureIndex);
   });
+  it("rejects delta divergence when flow timestamps do not match price candles",()=>{
+    const candles=Array.from({length:35},(_,i)=>candle(i,100,102,99,101));
+    const recentBars=Array.from({length:12},(_,i)=>({
+      index:i,time:i+1000,buyVolume:60,sellVolume:40,delta:20,deltaRatio:i<6?-0.2:0.1,
+      buyerPressure:60,sellerPressure:40,imbalanceRatio:1.5,imbalance:"NONE" as const,
+      absorption:"NONE" as const,absorptionStrength:0,liquiditySweep:"NONE" as const,
+      sweepPrice:null,microStructure:"NEUTRAL" as const
+    }));
+    const r=analyzeReversal(candles,smc({sweeps:[{index:31,price:95,type:"low",confirmed:true,displacement:true}]}),flow({direction:"WAIT",recentBars}),{requireOrderFlow:false});
+    expect(r.deltaDivergence).toBe(false);
+  });
+
+  it("rejects reversal analysis when SMC context is from a different candle horizon",()=>{
+    const candles=Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
+    const r=analyzeReversal(candles,smc({asOf:30}),flow(),{requireOrderFlow:false});
+    expect(r.state).toBe("NONE");
+    expect(r.reason).toContain("out of sync");
+  });
+
   it("does not increase MTF reversal score when 1h context is opposed",()=>{
     const flat=Array.from({length:45},(_,i)=>candle(i,100,101,99,100));
     const frames=[
