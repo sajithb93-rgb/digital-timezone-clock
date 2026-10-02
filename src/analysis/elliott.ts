@@ -408,19 +408,21 @@ function diagonalCandidates(c:Candle[],bull:boolean){
 
 function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null{
   if(primary.kind!=="Impulse"&&primary.kind!=="Diagonal")return null;
-  const endIndex=primary.points.at(-1)?.index??-1;
+  const xPoint=primary.points.at(-1);
+  const endIndex=xPoint?.index??-1;
+  if(!xPoint||endIndex<0)return null;
   const bull=primary.direction==="bullish";
   const ps=alternatePivots(swingPivots(c,2)).filter(p=>p.index>endIndex);
-  // A live continuation correction must be represented as X-A-B-C.
-  // Scan every recent 4-pivot window instead of only the final four pivots;
-  // an extra minor swing must not hide an otherwise valid correction.
-  if(ps.length<4)return null;
+  // Wave 5 end is the X anchor. The correction must then be the next
+  // three confirmed pivots A-B-C; never substitute a later pivot for X.
+  if(ps.length<3)return null;
 
+  const x:Pivot={index:endIndex,price:xPoint.price,type:bull?"H":"L",confirmedAt:endIndex};
   let best:{q:Pivot[];correction:ReturnType<typeof validateZigzag>;flat:ReturnType<typeof validateFlat>}|null=null;
-  const expected=bull?["H","L","H","L"]:["L","H","L","H"];
-  for(let i=0;i<=ps.length-4;i++){
-    const q=ps.slice(i,i+4);
-    if(q.some((p,j)=>p.type!==expected[j]))continue;
+  const expected=bull?["L","H","L"]:["H","L","H"];
+  for(let i=0;i<=ps.length-3;i++){
+    const q=[x,...ps.slice(i,i+3)];
+    if(q.slice(1).some((p,j)=>p.type!==expected[j]))continue;
     const prices=q.map(p=>p.price);
     const correction=bull
       ? validateZigzag(prices,false)
@@ -429,7 +431,7 @@ function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCount|null
       ? validateFlat(prices,false)
       : validateFlat(prices,true);
     if(!correction.valid&&!flat.valid)continue;
-    if(!best || q[3].index>best.q[3].index) best={q,correction,flat};
+    if(!best||q[3].index>best.q[3].index)best={q,correction,flat};
   }
   if(!best)return null;
 
