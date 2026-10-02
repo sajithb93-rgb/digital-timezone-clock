@@ -80,6 +80,7 @@ describe("Order Flow pair scanner", () => {
           {key:"history",label:"12+ closed candles",passed:true,detail:"12/12"},
           {key:"exact",label:"Real Binance taker/footprint flow",passed:true,detail:"Footprint"},
           {key:"footprint_history",label:"12 confirmed footprint bars",passed:true,detail:"12/12"},
+          {key:"footprint_unique",label:"Unique footprint candle times",passed:true,detail:"No duplicates"},
           {key:"footprint_coverage",label:"Footprint volume coverage 95–105%",passed:true,detail:"98%"} ,
           {key:"latest_fp",label:"Latest closed footprint",passed:true,detail:"Available"}
         ]
