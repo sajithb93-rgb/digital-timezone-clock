@@ -117,6 +117,14 @@ describe("reversal engine",()=>{
     expect(r.orderflowConfirmed).toBe(false); expect(r.state).not.toBe("CONFIRMED");
   });
 
+  it("stops Reversal analysis before a middle forming candle",()=>{
+    const base=Array.from({length:40},(_,i)=>candle(i,100,101,99,100));
+    const prefix=base.slice(0,30);
+    const gap={...base[30],closed:false,high:150};
+    const actual=analyzeReversal([...prefix,gap,...base.slice(31)],smc(),flow(),{requireOrderFlow:false});
+    expect(actual.asOf).toBe(prefix.length-1);
+  });
+
   it("uses the normalized chronological candle sequence for reversal indices",()=>{
     const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
     candles[31]=candle(31,100,101,95,99); candles[32]=candle(32,99,100,96,98); candles[33]=candle(33,98,106,97,105); candles[34]=candle(34,105,108,103,107);
