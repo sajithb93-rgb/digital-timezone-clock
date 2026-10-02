@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, validateStandardImpulse, classifyProtectedStructureBreak } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { normalizeCandleSeries } from "./candles";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
@@ -417,6 +417,10 @@ describe("analysis regression",()=>{
     const levels=buildImpulseFibLevels([100,120,110,150,135,165],true);
     expect(levels.find(x=>x.label==="0%")?.price).toBe(165);
     expect(levels.find(x=>x.label==="100%")?.price).toBe(100);
+  });
+
+  it("uses the strict non-shortest Wave 3 rule in the advanced validator",()=>{
+    expect(validateStandardImpulse([100,120,110,130,125,145],true).valid).toBe(false);
   });
 
   it("enforces the three strict standard-impulse rules",()=>{
