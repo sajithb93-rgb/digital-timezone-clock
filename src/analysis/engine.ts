@@ -194,10 +194,14 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
     events.push({index:i,price:activeH!.price,type,direction:"bullish",strength:disp?"displacement":"normal"});
     structure="bullish";
     activeH=null;
-    // A bullish BOS establishes the low that produced that break as the
-    // protected low. A CHoCH does not get a protected high until a bearish
-    // BOS confirms the new direction.
-    protectedLow=latestBefore(confirmedLows,i);
+    if(type==="BOS"){
+     // Only a continuation BOS promotes the swing that produced the break
+     // into protected structure. A CHoCH is a warning, not a confirmed new
+     // trend, so it must not manufacture a protected swing prematurely.
+     protectedLow=latestBefore(confirmedLows,i);
+    }else{
+     protectedLow=null;
+    }
     protectedHigh=null;
    }
   }else if(brokeBear){
@@ -206,7 +210,11 @@ function detectStructureEvents(c:Candle[],ps:Pivot[]):StructureEvent[]{
     events.push({index:i,price:activeL!.price,type,direction:"bearish",strength:disp?"displacement":"normal"});
     structure="bearish";
     activeL=null;
-    protectedHigh=latestBefore(confirmedHighs,i);
+    if(type==="BOS"){
+     protectedHigh=latestBefore(confirmedHighs,i);
+    }else{
+     protectedHigh=null;
+    }
     protectedLow=null;
    }
   }
