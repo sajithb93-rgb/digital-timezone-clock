@@ -1,7 +1,7 @@
 import { analyzeElliottAdvanced, type AdvancedElliottResult } from "./elliott";
 export type Candle={time:number;open:number;high:number;low:number;close:number;volume:number;takerBuyVolume?:number;closed?:boolean};
 export type Pivot={index:number;price:number;type:"H"|"L";label?:string;strength?:number;confirmedAt?:number};
-export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"bearish";filled:boolean;fillIndex?:number;size?:number};
+export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"bearish";filled:boolean;fillIndex?:number;partial?:boolean;partialFillIndex?:number;size?:number};
 export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mitigated:boolean;mitigationIndex?:number;strength?:number};
 export type Breaker={index:number;low:number;high:number;type:"bullish"|"bearish";active:boolean};
 export type StructureEvent={index:number;price:number;type:"BOS"|"CHOCH";direction:"bullish"|"bearish";strength:"normal"|"displacement"};
@@ -237,12 +237,18 @@ export function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
   const high=bull?right.low:left.low;
   if(!(high>low))continue;
   let fillIndex:number|undefined;
+  let partialFillIndex:number|undefined;
   for(let j=i+2;j<=end;j++){
-   if(bull ? c[j].low<=low : c[j].high>=high){fillIndex=j;break}
+   const entered=bull ? c[j].low<high : c[j].high>low;
+   const fullyFilled=bull ? c[j].low<=low : c[j].high>=high;
+   if(partialFillIndex===undefined&&entered)partialFillIndex=j;
+   if(fullyFilled){fillIndex=j;break}
   }
   out.push({
    from:i-1,to:i+1,low,high,type:bull?"bullish":"bearish",
    filled:fillIndex!==undefined,fillIndex,
+   partial:partialFillIndex!==undefined,
+   partialFillIndex,
    size:(high-low)/Math.max(atrAt(c,i,14),0.0000001)
   });
  }
