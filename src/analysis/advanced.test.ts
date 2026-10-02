@@ -59,6 +59,12 @@ describe("risk sizing precision",()=>{
     expect(r.positionSize).toBe(10);
   });
 
+  it("preserves decimal step precision when minQty is large",()=>{
+    const r=riskPlan(10000,1,100000,99900,{minQty:100.15,maxQty:1000,stepSize:0.01,minNotional:0},"BUY");
+    expect(r.valid).toBe(true);
+    expect(r.positionSize).toBeCloseTo(100.15,10);
+  });
+
   it("returns exchange-step quantities without floating-point residue",()=>{
     const r=riskPlan(1000,1,100,98,{minQty:0.001,maxQty:10,stepSize:0.1,minNotional:0}, "BUY");
     expect(r.valid).toBe(true);
