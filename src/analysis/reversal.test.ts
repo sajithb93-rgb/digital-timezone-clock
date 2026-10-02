@@ -199,7 +199,7 @@ describe("reversal engine",()=>{
       ? candle(i,100,102,99,101)
       : candle(i,100,103,95,102));
     const recentBars=Array.from({length:12},(_,i)=>({
-      index:i,time:i,buyVolume:0,sellVolume:0,delta:0,deltaRatio:i<6?-0.2:0.1,
+      index:i,time:23+i,buyVolume:0,sellVolume:0,delta:0,deltaRatio:i<6?-0.2:0.1,
       buyerPressure:0,sellerPressure:0,imbalanceRatio:1,imbalance:"NONE" as const,
       absorption:"NONE" as const,absorptionStrength:0,liquiditySweep:"NONE" as const,
       sweepPrice:null,microStructure:"NEUTRAL" as const
