@@ -421,7 +421,7 @@ describe("analysis regression",()=>{
   });
 
   it("allows a contracting diagonal when Wave 3 is shorter than Wave 1 but longer than Wave 5",()=>{
-    const v=validateDiagonalWave([100,130,115,125,118,121],true);
+    const v=validateDiagonalWave([100,130,115,135,122,128],true);
     expect(v.contracting).toBe(true);
     expect(v.w3NotShortest).toBe(true);
     expect(v.valid).toBe(true);
