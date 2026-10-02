@@ -128,10 +128,17 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const candleTotal=Math.max(candleBuyVolume+candleSellVolume,1e-12);
   const candleDelta=candleBuyVolume-candleSellVolume;
 
-  const fpAll=footprints.filter(f=>f.confirmed).slice(-36);
-  const fpRecent=fpAll.slice(-12);
-  const latestFootprint=fpRecent.find(f=>f.candleTime===last.time) ?? null;
-  const useFootprint=!!latestFootprint && fpRecent.length>=12;
+  const fpAll=footprints
+    .filter(f=>f.confirmed && Number.isFinite(f.candleTime))
+    .sort((a,b)=>a.candleTime-b.candleTime)
+    .slice(-36);
+  const footprintByTime=new Map(fpAll.map(f=>[f.candleTime,f]));
+  const expectedFootprintTimes=closed.slice(-12).map(c=>c.time);
+  const fpRecent=expectedFootprintTimes
+    .map(time=>footprintByTime.get(time))
+    .filter((f): f is FootprintSnapshot => !!f);
+  const latestFootprint=footprintByTime.get(last.time) ?? null;
+  const useFootprint=expectedFootprintTimes.length===12 && fpRecent.length===12;
   const buyVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.buyVolume,0):candleBuyVolume;
   const sellVolume=useFootprint?fpRecent.reduce((s,f)=>s+f.sellVolume,0):candleSellVolume;
   const total=Math.max(buyVolume+sellVolume,1e-12);
