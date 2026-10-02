@@ -96,6 +96,47 @@ describe("order flow strategy",()=>{
     expect(r.recentBars.find(x=>x.index===3)?.liquiditySweep).toBe("LOW");
   });
 
+  it("rejects a marginal liquidity sweep that only barely pierces the prior low",()=>{
+    const r=analyzeOrderFlow([
+      candle(0,100,102,99,101,100,50),
+      candle(1,101,103,99.5,102,100,50),
+      candle(2,102,104,100,103,100,50),
+      candle(3,103,104,98.9,101,100,65)
+    ]);
+    expect(r.recentBars.at(-1)?.liquiditySweep).toBe("NONE");
+  });
+
+  it("rejects an ambiguous candle that sweeps both sides of the prior range",()=>{
+    const r=analyzeOrderFlow([
+      candle(0,100,102,99,101,100,50),
+      candle(1,101,103,99.5,102,100,50),
+      candle(2,102,104,100,103,100,50),
+      candle(3,103,105,98,101,100,65)
+    ]);
+    expect(r.recentBars.at(-1)?.liquiditySweep).toBe("NONE");
+    expect(r.liquiditySweep).toBe("NONE");
+  });
+
+  it("requires material bullish microstructure displacement beyond the prior micro-range",()=>{
+    const r=analyzeOrderFlow([
+      candle(0,100,102,99,101,100,60),
+      candle(1,101,103,99.5,102,100,60),
+      candle(2,102,104,100,103,100,60),
+      candle(3,103,105,102,104.1,100,70)
+    ]);
+    expect(r.recentBars.at(-1)?.microStructure).toBe("NEUTRAL");
+  });
+
+  it("requires material bearish microstructure displacement beyond the prior micro-range",()=>{
+    const r=analyzeOrderFlow([
+      candle(0,100,103,98,99,100,40),
+      candle(1,99,102.5,97.5,98,100,40),
+      candle(2,98,101,96,97,100,40),
+      candle(3,97,98,94,95.6,100,30)
+    ]);
+    expect(r.recentBars.at(-1)?.microStructure).toBe("NEUTRAL");
+  });
+
   it("never confirms a signal from an open candle",()=>{ 
     const r=analyzeOrderFlow([
       candle(0,100,101,99,100.2,100,70),
