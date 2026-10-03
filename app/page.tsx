@@ -22,7 +22,7 @@ const intervals=["1m","5m","15m","1h","4h","1d"] as const;
 const mtfIntervals=["4h","1h","15m","5m"];
 const marketConfig:Record<MarketKind,{label:string;rest:string;ws:string;aggRest:string}>={
  spot:{label:"SPOT",rest:"https://api.binance.com/api/v3",ws:"wss://stream.binance.com:9443/ws/",aggRest:"https://api.binance.com/api/v3/aggTrades"},
- usdm:{label:"USDⓈ-M FUTURES",rest:"https://fapi.binance.com/fapi/v1",ws:"wss://fstream.binance.com/public/ws/",aggRest:"https://fapi.binance.com/fapi/v1/aggTrades"},
+ usdm:{label:"USDⓈ-M FUTURES",rest:"https://fapi.binance.com/fapi/v1",ws:"wss://fstream.binance.com/market/ws/",aggRest:"https://fapi.binance.com/fapi/v1/aggTrades"},
  coinm:{label:"COIN-M FUTURES",rest:"https://dapi.binance.com/dapi/v1",ws:"wss://dstream.binance.com/ws/",aggRest:"https://dapi.binance.com/dapi/v1/aggTrades"}
 };
 
