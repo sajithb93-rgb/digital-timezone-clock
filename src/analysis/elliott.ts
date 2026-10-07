@@ -573,7 +573,11 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const liveBeforeTarget=bull?lastCandle.high<target:lastCandle.low>target;
   if(!liveNotInvalidated||!liveBeforeTarget)return null;
   const triggered=bull?lastClose>=entry:lastClose<=entry;
-  const quality=clamp(72+(correction.valid?8:4)+(triggered?10:0)+(flat.valid?0:2));
+  // A continuation is an executable/live setup only after a CLOSED candle
+  // confirms the Wave-B trigger. Keeping pre-trigger ABC geometry in
+  // liveSetup would make the chart/scanner treat a pending setup as active.
+  if(!triggered)return null;
+  const quality=clamp(82+(correction.valid?8:4)+(flat.valid?0:2));
 
   return{
     points:sequencePoints(q).map((x,i)=>({...x,label:["X","A","B","C"][i]})),
