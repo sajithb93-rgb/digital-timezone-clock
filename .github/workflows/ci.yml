@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [trading-analysis-dashboard, feature/elitewave-autodraw]
+    branches: [trading-analysis-dashboard, feature/elitewave-autodraw, feature/smc-signal-engine]
   pull_request:
     branches: [trading-analysis-dashboard]
 concurrency:
