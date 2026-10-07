@@ -3,7 +3,7 @@
 // Build repair: ensure Vercel deploys the valid EliteWave source.
 
 import { memo, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, isValidTradeGeometry } from "../src/analysis/engine";
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 import { analyzeOrderFlow, type OrderFlowResult } from "../src/analysis/orderflow";
@@ -869,21 +869,68 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const eliteTrade=showElliott&&layers.trade&&liveElite&&liveElite.entry!=null&&liveElite.invalidation!=null?<>{(()=>{const p2=liveElite.points.find((p:any)=>p.label==="B") ?? liveElite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(liveElite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-132,ye,"EW LIVE ENTRY "+liveElite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(liveElite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-132,y,"EW INVALIDATION "+liveElite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(liveElite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-84,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
  const positionModel = (() => {
+  // Auto-position is a presentation layer only. It may consume a setup after
+  // the strategy itself has reached its confirmed/active gate, but it must
+  // never create a new signal or bypass any strategy confirmation.
   let direction:"BUY"|"SELL"|null=null,entry:number|null=null,stop:number|null=null,target:number|null=null,source="";
-  if(showSMC&&smc.setup.status==="ACTIVE"&&smc.setup.direction!=="WAIT"&&smc.setup.entry!=null&&smc.stop!=null&&smc.targets?.[0]!=null){
-    direction=smc.setup.direction;entry=smc.setup.entry;stop=smc.stop;target=smc.targets[0];source="SMC ACTIVE";
-  } else if(showOrderFlow&&orderFlow.direction!=="WAIT"&&orderFlow.entry!=null&&orderFlow.stop!=null&&orderFlow.targets?.[0]!=null){
-    direction=orderFlow.direction;entry=orderFlow.entry;stop=orderFlow.stop;target=orderFlow.targets[0];source="ORDER FLOW CONFIRMED";
-  } else if(showElliott&&liveElite&&liveElite.strict!==false&&liveElite.entry!=null&&liveElite.invalidation!=null&&liveElite.targets?.[0]!=null){
-    const risk=Math.abs(liveElite.entry-liveElite.invalidation),px=candles.at(-1)?.close??null,bullish=liveElite.direction==="bullish";
-    const triggered=px!=null&&risk>0&&(bullish?px>=liveElite.entry&&px<liveElite.targets[0]&&px>liveElite.invalidation:px<=liveElite.entry&&px>liveElite.targets[0]&&px<liveElite.invalidation);
-    if(triggered){direction=bullish?"BUY":"SELL";entry=liveElite.entry;stop=liveElite.invalidation;target=liveElite.targets[0];source="ELLIOTT CONFIRMED";}
+  const currentPrice=candles.at(-1)?.close??null;
+
+  if(showSMC&&smc.setup.status==="ACTIVE"&&smc.setup.direction!=="WAIT"
+    &&smc.setup.entry!=null&&smc.stop!=null&&smc.targets?.[0]!=null
+    &&smc.setup.rr!=null&&smc.setup.rr>=1.5
+    &&isValidTradeGeometry(smc.setup.direction,smc.setup.entry,smc.stop,smc.setup.targets,1.5)){
+    direction=smc.setup.direction;
+    entry=smc.setup.entry;
+    stop=smc.stop;
+    target=smc.targets[0];
+    source="SMC ACTIVE";
+  } else if(showOrderFlow&&orderFlow.direction!=="WAIT"
+    &&orderFlow.entry!=null&&orderFlow.stop!=null&&orderFlow.targets?.length===3
+    &&orderFlow.diagnostics.some(d=>d.key==="trade_geometry"&&d.passed)
+    &&orderFlow.diagnostics.some(d=>d.key==="target_quality"&&d.passed)
+    &&orderFlow.source==="BINANCE_FOOTPRINT"
+    &&isValidTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
+    direction=orderFlow.direction;
+    entry=orderFlow.entry;
+    stop=orderFlow.stop;
+    target=orderFlow.targets[0];
+    source="ORDER FLOW CONFIRMED";
+  } else if(showElliott&&liveElite&&liveElite.strict===true
+    &&liveElite.entry!=null&&liveElite.invalidation!=null&&liveElite.targets?.[0]!=null
+    &&currentPrice!=null){
+    const riskPerUnit=Math.abs(liveElite.entry-liveElite.invalidation);
+    const rewardPerUnit=Math.abs(liveElite.targets[0]-liveElite.entry);
+    const bullish=liveElite.direction==="bullish";
+    const triggered=riskPerUnit>0&&(
+      bullish
+        ? currentPrice>=liveElite.entry&&currentPrice>liveElite.invalidation&&currentPrice<liveElite.targets[0]
+        : currentPrice<=liveElite.entry&&currentPrice<liveElite.invalidation&&currentPrice>liveElite.targets[0]
+    );
+    const rr=rewardPerUnit/riskPerUnit;
+    const ewDirection=bullish?"BUY":"SELL";
+    const geometry=isValidTradeGeometry(ewDirection,liveElite.entry,liveElite.invalidation,liveElite.targets,1.5);
+    if(triggered&&Number.isFinite(rr)&&rr>=1.5&&geometry){
+      direction=ewDirection;
+      entry=liveElite.entry;
+      stop=liveElite.invalidation;
+      target=liveElite.targets[0];
+      source="ELLIOTT CONFIRMED";
+    }
   }
+
   if(!direction||entry==null||stop==null||target==null)return null;
   const riskPerUnit=Math.abs(entry-stop),rewardPerUnit=Math.abs(target-entry);
   if(!(riskPerUnit>0&&rewardPerUnit>0))return null;
+  if(!isValidTradeGeometry(direction,entry,stop,[target],1.5))return null;
   const riskAmount=Math.max(0,account)*Math.max(0,riskPercent)/100;
-  return {direction,entry,stop,target,source,rr:rewardPerUnit/riskPerUnit,riskAmount,qty:riskAmount/riskPerUnit,slPct:riskPerUnit/Math.abs(entry)*100,tpPct:rewardPerUnit/Math.abs(entry)*100};
+  return {
+    direction,entry,stop,target,source,
+    rr:rewardPerUnit/riskPerUnit,
+    riskAmount,
+    qty:riskAmount/riskPerUnit,
+    slPct:riskPerUnit/Math.abs(entry)*100,
+    tpPct:rewardPerUnit/Math.abs(entry)*100
+  };
  })();
  const autoPosition = layers.position&&positionModel ? (() => {
   const p=positionModel,yEntry=yOf(p.entry),yStop=yOf(p.stop),yTarget=yOf(p.target);
