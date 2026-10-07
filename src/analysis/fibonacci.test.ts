@@ -34,6 +34,8 @@ function baseElliott() {
       ],
     },
     correction:null,
+    activeWave:"Wave 4",
+    liveSetup:null,
   } as any;
 }
 
@@ -86,4 +88,31 @@ describe("strategy-aware auto Fibonacci", () => {
     const sets = buildAutoFibonacci(openCandles as any, baseSMC(), baseElliott(), baseOrderFlow(), "smc");
     expect(sets).toHaveLength(0);
   });
+  it("uses the completed Wave-5 leg after the Elliott engine enters ABC continuation", () => {
+    const elliott = {
+      ...baseElliott(),
+      activeWave:"A",
+      liveSetup:{points:[]},
+    } as any;
+    const [set] = buildAutoFibonacci(candles as any, baseSMC(), elliott, baseOrderFlow(), "elliott");
+    expect(set.source).toBe("ELLIOTT");
+    expect(set.startIndex).toBe(4);
+    expect(set.endIndex).toBe(5);
+    expect(set.startPrice).toBe(105);
+    expect(set.endPrice).toBe(115);
+  });
+
+  it("does not use a pivot whose confirmation occurs after the SMC event", () => {
+    const smc = {
+      pivots:[
+        {index:1,price:103,type:"H",confirmedAt:2},
+        {index:2,price:101,type:"L",confirmedAt:6},
+        {index:4,price:110,type:"H",confirmedAt:5},
+      ],
+      events:[{index:5,price:110,type:"BOS",direction:"bullish",strength:"normal"}],
+    } as any;
+    const sets = buildAutoFibonacci(candles as any, smc, baseElliott(), baseOrderFlow(), "smc");
+    expect(sets.length).toBe(0);
+  });
+
 });
