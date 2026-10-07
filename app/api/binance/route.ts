@@ -98,9 +98,11 @@ export async function GET(request: NextRequest) {
         lastStatus = upstream.status;
         lastBody = body;
 
-        // A 451 can be specific to an upstream edge. Try the next official
-        // Binance endpoint before declaring the server region blocked.
-        if (upstream.status === 451) continue;
+        // Edge-specific geo blocks and transient upstream failures can differ
+        // between Binance's official endpoints. Keep deterministic 4xx
+        // validation errors on the first response, but fail over on 451,
+        // rate-limit, and server-error responses.
+        if (upstream.status === 451 || upstream.status === 429 || upstream.status >= 500) continue;
 
         return new NextResponse(body, {
           status: upstream.status,
