@@ -199,7 +199,7 @@ export default function Home(){
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[footprintHistoryReady,setFootprintHistoryReady]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
- const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true,fibonacci:true});
+ const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,position:true,forecast:true,reversal:true,fibonacci:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState(""),[smcEntryScanner,setSmcEntryScanner]=useState<EntryScanRow[]>([]),[elliottEntryScanner,setElliottEntryScanner]=useState<EntryScanRow[]>([]),[smcEntryTf,setSmcEntryTf]=useState("5m"),[elliottEntryTf,setElliottEntryTf]=useState("5m"),[smcEntryEnabled,setSmcEntryEnabled]=useState(false),[elliottEntryEnabled,setElliottEntryEnabled]=useState(false),[smcEntryBusy,setSmcEntryBusy]=useState(false),[elliottEntryBusy,setElliottEntryBusy]=useState(false),[smcEntryProgress,setSmcEntryProgress]=useState(""),[elliottEntryProgress,setElliottEntryProgress]=useState(""),[smcEntryUpdated,setSmcEntryUpdated]=useState(0),[elliottEntryUpdated,setElliottEntryUpdated]=useState(0),[smcEntryError,setSmcEntryError]=useState(""),[elliottEntryError,setElliottEntryError]=useState("");
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);
  const orderFlowScanInFlightRef=useRef(false);
@@ -755,7 +755,7 @@ export default function Home(){
    <div className={`analysis-tabs${isModePending?" pending":""}`} aria-busy={isModePending}>{([["smc","SMC"],["elliott","ELLIOTT WAVE"],["combined","COMBINED"],["orderflow","ORDER FLOW"]] as const).map(([k,l])=><button className={mode===k?"active":""} onClick={()=>startModeTransition(()=>setMode(k))} key={k}>{l}</button>)}</div>
   </section>
 
-  <section className="toolbar"><div className="toolbar-title">CHART</div>{([["structure","STRUCTURE"],["zones","FVG / OB"],["liquidity","LIQUIDITY"],["trade","SETUP LEVELS"],["reversal","REVERSAL"],["fibonacci","FIBONACCI"]] as const).map(([k,l])=><button className={layers[k]?"layer-on":""} onClick={()=>toggle(k)} key={k}><i/>{l}</button>)}<button onClick={reset}>RESET VIEW</button><span className="toolbar-note">Closed-candle analysis only</span></section>
+  <section className="toolbar"><div className="toolbar-title">CHART</div>{([["structure","STRUCTURE"],["zones","FVG / OB"],["liquidity","LIQUIDITY"],["trade","SETUP LEVELS"],["position","LONG POSITION"],["forecast","FORECAST"],["reversal","REVERSAL"],["fibonacci","FIBONACCI"]] as const).map(([k,l])=><button className={layers[k]?"layer-on":""} onClick={()=>toggle(k)} key={k}><i/>{l}</button>)}<button onClick={reset}>RESET VIEW</button><span className="toolbar-note">Closed-candle analysis only</span></section>
   {error&&<div className="alert">{error}</div>}
   <div className={`news-filter news-${newsRisk.level.toLowerCase()}`}><div><span className="news-kicker">NEWS FILTER</span><strong>{newsRisk.level}</strong><span className="news-message">{newsLoading?"Checking calendar…":newsRisk.message}</span></div><b>{newsRisk.blocked?"TRADING BLOCKED":"TRADING ALLOWED"}</b></div>
 
@@ -839,7 +839,7 @@ export default function Home(){
  </main>;
 }
 
-function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mtfReversal,mode,tick,layers,autoFib}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mtfReversal:any;mode:Mode;tick:number;layers:any;autoFib:AutoFibonacciSet[]}){
+function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mtfReversal,mode,tick,layers,autoFib,account,riskPercent}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mtfReversal:any;mode:Mode;tick:number;layers:any;autoFib:AutoFibonacciSet[];account:number;riskPercent:number}){
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
  const ts=chart.timeScale(),lastIndex=candles.length-1,xCache=new Map<number,number|null>(),yCache=new Map<number,number|null>();
@@ -868,6 +868,72 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const liveElite=elliott.liveSetup ?? null;
  const eliteTrade=showElliott&&layers.trade&&liveElite&&liveElite.entry!=null&&liveElite.invalidation!=null?<>{(()=>{const p2=liveElite.points.find((p:any)=>p.label==="B") ?? liveElite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(liveElite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-132,ye,"EW LIVE ENTRY "+liveElite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(liveElite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-132,y,"EW INVALIDATION "+liveElite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(liveElite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-84,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
+ const autoPosition = layers.position ? (() => {
+  let direction:"BUY"|"SELL"|null=null,entry:number|null=null,stop:number|null=null,target:number|null=null,source="";
+  if((showSMC)&&smc.setup.status==="ACTIVE"&&smc.setup.direction!=="WAIT"&&smc.setup.entry!=null&&smc.stop!=null&&smc.targets?.[0]!=null){
+    direction=smc.setup.direction;entry=smc.setup.entry;stop=smc.stop;target=smc.targets[0];source="SMC ACTIVE";
+  } else if(showOrderFlow&&orderFlow.direction!=="WAIT"&&orderFlow.entry!=null&&orderFlow.stop!=null&&orderFlow.targets?.[0]!=null){
+    direction=orderFlow.direction;entry=orderFlow.entry;stop=orderFlow.stop;target=orderFlow.targets[0];source="ORDER FLOW CONFIRMED";
+  } else if(showElliott&&liveElite&&liveElite.strict!==false&&liveElite.entry!=null&&liveElite.invalidation!=null&&liveElite.targets?.[0]!=null){
+    const risk=Math.abs(liveElite.entry-liveElite.invalidation);
+    const px=candles.at(-1)?.close??null;
+    const bullish=liveElite.direction==="bullish";
+    const triggered=px!=null&&risk>0&&(bullish?px>=liveElite.entry&&px<liveElite.targets[0]&&px>liveElite.invalidation:px<=liveElite.entry&&px>liveElite.targets[0]&&px<liveElite.invalidation);
+    if(triggered){
+      direction=bullish?"BUY":"SELL";entry=liveElite.entry;stop=liveElite.invalidation;target=liveElite.targets[0];source="ELLIOTT CONFIRMED";
+    }
+  }
+  if(!direction||entry==null||stop==null||target==null)return null;
+  const riskPerUnit=Math.abs(entry-stop);
+  const rewardPerUnit=Math.abs(target-entry);
+  if(!(riskPerUnit>0&&rewardPerUnit>0))return null;
+  const rr=rewardPerUnit/riskPerUnit;
+  const riskAmount=Math.max(0,account)*Math.max(0,riskPercent)/100;
+  const qty=riskAmount/riskPerUnit;
+  const slPct=riskPerUnit/Math.abs(entry)*100;
+  const tpPct=rewardPerUnit/Math.abs(entry)*100;
+  const profit=riskAmount*rr;
+  const loss=riskAmount;
+  const lastPx=candles.at(-1)?.close??entry;
+  const openPnl=(direction==="BUY"?lastPx-entry:entry-lastPx)*qty;
+  const yEntry=yOf(entry),yStop=yOf(stop),yTarget=yOf(target);
+  if(yEntry==null||yStop==null||yTarget==null)return null;
+  const top=Math.min(yStop,yEntry,yTarget),bottom=Math.max(yStop,yEntry,yTarget);
+  const left=Math.max(8,(xLast??width)-255),right=Math.min(width-8,width-8);
+  const boxWidth=Math.max(80,right-left);
+  const stat=(y:number,label:string,value:string,cls:string)=><g><line x1={x0} x2={xLast} y1={y} y2={y} className={cls}/>{text(Math.max(8,xLast-155),y,label+" "+value,cls+"-label")}</g>;
+  return <g className="auto-long-position-layer">
+    <rect x={Math.max(0,x0)} y={Math.min(yEntry,yTarget)} width={Math.max(2,xLast-x0)} height={Math.max(2,Math.abs(yEntry-yTarget))} className="position-profit-zone"/>
+    <rect x={Math.max(0,x0)} y={Math.min(yEntry,yStop)} width={Math.max(2,xLast-x0)} height={Math.max(2,Math.abs(yEntry-yStop))} className="position-loss-zone"/>
+    {stat(yEntry,"ENTRY",entry.toFixed(6),"position-entry-line")}
+    {stat(yStop,"SL",stop.toFixed(6),"position-stop-line")}
+    {stat(yTarget,"TP1",target.toFixed(6),"position-target-line")}
+    {text(Math.max(8,xLast-205),Math.max(22,top+16),source+" · R:R "+rr.toFixed(2)+":1","position-stat-label")}
+    {text(Math.max(8,xLast-205),Math.min(height-20,bottom+18),"RISK "+riskPercent.toFixed(2)+"% · QTY "+qty.toFixed(4),"position-stat-label")}
+    {text(Math.max(8,xLast-205),Math.min(height-4,(yTarget+yEntry)/2),"TP +"+tpPct.toFixed(2)+"% · P&L +"+profit.toFixed(2),"position-profit-label")}
+    {text(Math.max(8,xLast-205),Math.max(12,(yStop+yEntry)/2),"SL -"+slPct.toFixed(2)+"% · P&L -"+loss.toFixed(2),"position-loss-label")}
+    <circle cx={xLast} cy={yEntry} r="5" className={direction==="BUY"?"position-buy-marker":"position-sell-marker"}/>
+  </g>;
+ })() : null;
+ const forecast = layers.forecast ? (() => {
+  const p=autoPosition;
+  if(!p)return null;
+  const target=smc.setup.status==="ACTIVE"&&showSMC?smc.setup.targets?.[0]:orderFlow.direction!=="WAIT"&&showOrderFlow?orderFlow.targets?.[0]:liveElite?.targets?.[0];
+  if(target==null)return null;
+  const bars=12;
+  const fromX=xLast;
+  const toX=Math.min(width-8,Math.max(fromX+40,fromX+bars*10));
+  const startY=yOf(candles.at(-1)?.close??0);
+  const targetY=yOf(target);
+  if(startY==null||targetY==null)return null;
+  const success=(p["direction"]==="BUY" ? (candles.at(-1)?.close??0)>=target : (candles.at(-1)?.close??0)<=target);
+  return <g className="position-forecast-layer">
+    <line x1={fromX} y1={startY} x2={toX} y2={targetY} className="forecast-line"/>
+    <circle cx={toX} cy={targetY} r="5" className={success?"forecast-success":"forecast-target"}/>
+    {text(Math.max(8,Math.min(width-190,toX-165)),Math.max(20,targetY-14),success?"FORECAST SUCCESS":"FORECAST → TP1","forecast-label")}
+    {text(Math.max(8,Math.min(width-170,toX-145)),Math.min(height-10,targetY+18),bars+" BARS · TARGET "+target.toFixed(6),"forecast-label")}
+  </g>;
+ })() : null;
  const mtfSignalMarker = layers.reversal && mtfReversal.confirmed && mtfReversal.direction !== "NONE" ? (() => {
   const dirCls = mtfReversal.direction === "BUY" ? "reversal-buy" : "reversal-sell";
   // Annotation coordinates use the latest closed candle. The raw chart
