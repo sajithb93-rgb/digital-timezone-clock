@@ -27,7 +27,9 @@ try {
     const text = document.body.innerText;
     const status = document.querySelector(".data-status")?.textContent ?? "";
     const alert = document.querySelector(".alert")?.textContent ?? "";
-    return /\d+ candles/.test(text) || status.includes("WAITING FOR DATA") || /Binance blocked|HTTP 451|server region/i.test(alert);
+    return /[1-9]\d* candles/.test(text)
+      || status.includes("WAITING FOR DATA")
+      || /Binance blocked|HTTP 451|server region/i.test(alert);
   }, { timeout: 60_000 });
 
   await page.waitForTimeout(1000);
