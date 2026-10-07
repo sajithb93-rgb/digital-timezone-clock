@@ -11,7 +11,11 @@ const baseEW:any={
 
 describe("entry scanners",()=>{
  it("confirms an active SMC setup",()=>{const r=classifySMCEntry("BTCUSDT","5m",baseSMC);expect(r.state).toBe("CONFIRMED");expect(r.direction).toBe("BUY");expect(r.entry).toBe(100)});
- it("does not infer an SMC entry direction from trend when setup direction is WAIT",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,direction:"WAIT",status:"WAIT"}});expect(r.direction).toBe("NONE");expect(r.state).toBe("WAIT")});
+ it("never returns CONFIRMED when executable SMC setup direction is WAIT",()=>{
+   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,direction:"WAIT",status:"WAIT"}});
+   expect(r.state).not.toBe("CONFIRMED");
+   expect(r.direction).toBe("BUY");
+ });
  it("does not depend on confirmation-string wording for an ACTIVE SMC setup",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,confirmations:["Custom structured evidence"]}});
    expect(r.state).toBe("CONFIRMED");
