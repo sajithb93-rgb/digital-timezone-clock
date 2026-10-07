@@ -107,6 +107,11 @@ export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{
  if(!Number.isFinite(last.high)||!Number.isFinite(last.low)||last.high<last.low)return false;
  return last.high>=zone.low&&last.low<=zone.high;
 }
+
+export function isZoneRetestAfterFormation(asOf:number,formationIndex:number):boolean{
+ return Number.isInteger(asOf)&&Number.isInteger(formationIndex)
+  &&asOf>=0&&formationIndex>=0&&asOf>formationIndex;
+}
 export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{
  // Treat the swing break and internal confirmation as two distinct events.
  // An internal event printed on the exact same candle as the swing break is
@@ -652,7 +657,7 @@ function chooseEntryZone(
   if(o.type!==direction||!isCurrentRetestEligible("OB",asOf,o))continue;
   const age=asOf-o.index;
   if(age<0||age>windows.obAgeBars)continue;
-  if(o.breakIndex===undefined||asOf<=o.breakIndex)continue;
+  if(o.breakIndex===undefined||!isZoneRetestAfterFormation(asOf,o.breakIndex))continue;
   if(!isOrderBlockCausal(o.index,o.breakIndex,latestEvent.index,windows.structureGapBars))continue;
   if(!isEntryZoneCausal(o.index,sweepIndex,latestEvent.index,"OB",windows.structureGapBars))continue;
   const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
@@ -663,7 +668,7 @@ function chooseEntryZone(
   if(f.type!==direction||!isCurrentRetestEligible("FVG",asOf,f))continue;
   const origin=f.to,age=asOf-origin;
   if(age<0||age>windows.zoneAgeBars)continue;
-  if(origin>=asOf)continue;
+  if(!isZoneRetestAfterFormation(asOf,origin))continue;
   if(!isEntryZoneCausal(origin,sweepIndex,latestEvent.index,"FVG",windows.structureGapBars))continue;
   const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
   if(distance>atrValue*3.5)continue;
@@ -673,7 +678,7 @@ function chooseEntryZone(
   if(!b.active||b.type!==direction)continue;
   const age=asOf-b.index;
   if(age<0||age>windows.zoneAgeBars)continue;
-  if(b.index>=asOf)continue;
+  if(!isZoneRetestAfterFormation(asOf,b.index))continue;
   if(!isEntryZoneCausal(b.index,sweepIndex,latestEvent.index,"BREAKER",windows.structureGapBars))continue;
   const distance=last.close<b.low?b.low-last.close:last.close>b.high?last.close-b.high:0;
   if(distance>atrValue*3.5)continue;
