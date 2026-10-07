@@ -64,6 +64,12 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
    const target=proxyBinanceUrl(url);
    const requestInit:RequestInit={...(init??{}),cache:"no-store"};
    let r=await fetch(target,requestInit);
+   // Binance can reject the Vercel function IP with HTTP 451 even when the
+   // user's browser can access the public API. Retry the public Binance URL
+   // only for region/policy blocks; keep 429/418 on the serialized backoff path.
+   if((r.status===451||r.status===403)&&target!==url){
+    r=await fetch(url,requestInit);
+   }
    if(r.ok)return r.json();
    if(r.status===429||r.status===418){
     const retryAfter=Number(r.headers.get("Retry-After")||0);
