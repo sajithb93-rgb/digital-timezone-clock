@@ -535,7 +535,7 @@ function chooseAnalyticalEntryZone(
   const age=asOf-o.index;
   if(age<0||age>windows.obAgeBars)continue;
   const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
-  if(distance>atrValue*3.5)continue;
+  if(distance>atrValue*8)continue;
   candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked:false,distance});
  }
  for(const f of fvgs){
@@ -672,7 +672,7 @@ function buildSetupWindowProfile(intervalMs:number):SMCSetupWindowProfile{
  // All setup windows are time-based first, then converted to bars. This keeps
  // the same elapsed-market-time logic across 1m/5m/15m/1h/4h/1d while still
  // enforcing a small minimum sample for structural confirmation.
- const barsFor=(windowMs:number,minBars:number,maxBars=240)=>Math.max(
+ const barsFor=(windowMs:number,minBars=1,maxBars=240)=>Math.max(
   minBars,
   Math.min(maxBars,Math.ceil(windowMs/safeInterval))
  );
