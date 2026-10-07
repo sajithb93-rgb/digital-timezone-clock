@@ -962,7 +962,8 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
    </div>
    <svg className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
     {showSMC&&<>{zones}{structure}{liquidity}{trade}</>}
-    {showElliott&&<>{eliteTrade}{wave}{fib}</>}
+    {showElliott&&<>{eliteTrade}{wave}</>}
+    {layers.fibonacci&&fib}
     {orderFlowMarker}
     {footprintOverlay}
     {reversalMarker}
