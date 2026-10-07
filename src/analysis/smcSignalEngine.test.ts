@@ -145,7 +145,7 @@ describe("SMC signal engine", () => {
     expect(isValidTradeGeometry("SELL", 100, 105, [90, 90], 1.5)).toBe(false);
   });
 
-  it("selects the freshest fully compatible causal chain instead of incompatible latest events", () => {
+  it("selects the freshest compatible sweep for the latest swing event", () => {
     const sweeps: Sweep[] = [
       { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
       { index: 20, price: 98, type: "low", confirmed: true, displacement: true },
@@ -155,15 +155,29 @@ describe("SMC signal engine", () => {
       { index: 22, price: 104, type: "BOS", direction: "bullish", strength: "displacement" },
     ];
     const internalEvents: StructureEvent[] = [
-      { index: 19, price: 102.5, type: "BOS", direction: "bullish", strength: "normal" },
-      { index: 40, price: 105, type: "BOS", direction: "bullish", strength: "normal" },
+      { index: 25, price: 105, type: "BOS", direction: "bullish", strength: "normal" },
     ];
 
     const chain = findLatestSMCCausalSequence(sweeps, events, internalEvents, 40, 12);
     expect(chain).not.toBeNull();
-    expect(chain?.sweep.index).toBe(5);
-    expect(chain?.structure.index).toBe(17);
-    expect(chain?.internal.index).toBe(19);
+    expect(chain?.structure.index).toBe(22);
+    expect(chain?.internal.index).toBe(25);
+    expect(chain?.sweep.index).toBe(20);
+  });
+
+  it("rejects an older bullish chain after a newer opposite swing event", () => {
+    const sweeps: Sweep[] = [
+      { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
+    ];
+    const events: StructureEvent[] = [
+      { index: 15, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
+      { index: 25, price: 96, type: "CHOCH", direction: "bearish", strength: "normal" },
+    ];
+    const internalEvents: StructureEvent[] = [
+      { index: 17, price: 102.5, type: "BOS", direction: "bullish", strength: "normal" },
+    ];
+
+    expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 30, 12)).toBeNull();
   });
 
   it("does not accept same-candle swing and internal confirmation as a causal chain", () => {
