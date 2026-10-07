@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vitest";
+import { buildAutoFibonacci } from "./fibonacci";
+
+const candles = [
+  {time:1,open:100,high:101,low:99,close:100,volume:10,closed:true},
+  {time:2,open:100,high:103,low:100,close:102,volume:10,closed:true},
+  {time:3,open:102,high:106,low:101,close:105,volume:12,closed:true},
+  {time:4,open:105,high:108,low:104,close:107,volume:13,closed:true},
+  {time:5,open:107,high:110,low:106,close:109,volume:14,closed:true},
+  {time:6,open:109,high:111,low:108,close:110,volume:15,closed:true},
+];
+
+function baseSMC() {
+  return {
+    pivots:[
+      {index:1,price:103,type:"H",confirmedAt:4},
+      {index:2,price:101,type:"L",confirmedAt:5},
+      {index:4,price:110,type:"H",confirmedAt:5},
+    ],
+    events:[{index:5,price:110,type:"BOS",direction:"bullish",strength:"normal"}],
+  } as any;
+}
+
+function baseElliott() {
+  return {
+    primary:{
+      points:[
+        {index:0,price:95,label:"0"},
+        {index:1,price:100,label:"1"},
+        {index:2,price:98,label:"2"},
+        {index:3,price:110,label:"3"},
+        {index:4,price:105,label:"4"},
+        {index:5,price:115,label:"5"},
+      ],
+    },
+    correction:null,
+  } as any;
+}
+
+function baseOrderFlow() {
+  return {
+    recentBars:[
+      {index:2,time:3,liquiditySweep:"LOW",sweepPrice:100,microStructure:"NEUTRAL"},
+      {index:4,time:5,liquiditySweep:"NONE",sweepPrice:null,microStructure:"BULLISH"},
+    ],
+  } as any;
+}
+
+describe("strategy-aware auto Fibonacci", () => {
+  it("draws SMC retracement from confirmed swing low to BOS high", () => {
+    const [set] = buildAutoFibonacci(candles as any, baseSMC(), baseElliott(), baseOrderFlow(), "smc");
+    expect(set.source).toBe("SMC");
+    expect(set.startPrice).toBe(101);
+    expect(set.endPrice).toBe(110);
+    expect(set.levels.map(x => x.label)).toEqual(["0%","23.6%","38.2%","50.0%","61.8%","78.6%","100%"]);
+    expect(set.levels[3].price).toBeCloseTo(105.5);
+  });
+
+  it("uses the validated Elliott Wave-3 leg for Wave-4 retracement", () => {
+    const [set] = buildAutoFibonacci(candles as any, baseSMC(), baseElliott(), baseOrderFlow(), "elliott");
+    expect(set.source).toBe("ELLIOTT");
+    expect(set.startIndex).toBe(2);
+    expect(set.endIndex).toBe(3);
+    expect(set.startPrice).toBe(98);
+    expect(set.endPrice).toBe(110);
+    expect(set.levels[3].price).toBeCloseTo(104);
+  });
+
+  it("uses order-flow sweep to confirmed micro-structure break", () => {
+    const [set] = buildAutoFibonacci(candles as any, baseSMC(), baseElliott(), baseOrderFlow(), "orderflow");
+    expect(set.source).toBe("ORDER_FLOW");
+    expect(set.startIndex).toBe(2);
+    expect(set.endIndex).toBe(4);
+    expect(set.startPrice).toBe(100);
+    expect(set.endPrice).toBe(110);
+    expect(set.levels[3].price).toBeCloseTo(105);
+  });
+
+  it("shows all valid strategy-specific sets in Combined mode", () => {
+    const sets = buildAutoFibonacci(candles as any, baseSMC(), baseElliott(), baseOrderFlow(), "combined");
+    expect(sets.map(x => x.source)).toEqual(["SMC","ELLIOTT","ORDER_FLOW"]);
+  });
+
+  it("does not create a set from an open final candle", () => {
+    const openCandles = [...candles.slice(0, -1), {...candles.at(-1)!, closed:false}];
+    const [set] = buildAutoFibonacci(openCandles as any, baseSMC(), baseElliott(), baseOrderFlow(), "smc");
+    expect(set.endIndex).toBeLessThan(openCandles.length);
+  });
+});
