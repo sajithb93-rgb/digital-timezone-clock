@@ -11,12 +11,7 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  // qualified analytical zone is present. For scanner state, infer the side
  // from the current closed-candle SMC trend instead of collapsing every
  // forming setup to NONE.
- const direction:"BUY"|"SELL"|"NONE"=
-  s.direction!=="WAIT"
-   ?s.direction
-   :r.trend==="Bullish"?"BUY"
-   :r.trend==="Bearish"?"SELL"
-   :"NONE";
+ const direction:"BUY"|"SELL"|"NONE"=s.direction==="WAIT"?"NONE":s.direction;
  const latestEvent=r.events.slice().reverse().find(e=>e.direction===(direction==="BUY"?"bullish":direction==="SELL"?"bearish":"none"));
  const latestSweep=r.sweeps.slice().reverse().find(sw=>sw.type===(direction==="BUY"?"low":direction==="SELL"?"high":"none"));
  const asOf=r.asOf??0;
