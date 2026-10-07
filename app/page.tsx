@@ -868,7 +868,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const liveElite=elliott.liveSetup ?? null;
  const eliteTrade=showElliott&&layers.trade&&liveElite&&liveElite.entry!=null&&liveElite.invalidation!=null?<>{(()=>{const p2=liveElite.points.find((p:any)=>p.label==="B") ?? liveElite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(liveElite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-132,ye,"EW LIVE ENTRY "+liveElite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(liveElite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-132,y,"EW INVALIDATION "+liveElite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(liveElite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-84,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
- const positionModel = layers.position ? (() => {
+ const positionModel = (() => {
   let direction:"BUY"|"SELL"|null=null,entry:number|null=null,stop:number|null=null,target:number|null=null,source="";
   if(showSMC&&smc.setup.status==="ACTIVE"&&smc.setup.direction!=="WAIT"&&smc.setup.entry!=null&&smc.stop!=null&&smc.targets?.[0]!=null){
     direction=smc.setup.direction;entry=smc.setup.entry;stop=smc.stop;target=smc.targets[0];source="SMC ACTIVE";
@@ -885,7 +885,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   const riskAmount=Math.max(0,account)*Math.max(0,riskPercent)/100;
   return {direction,entry,stop,target,source,rr:rewardPerUnit/riskPerUnit,riskAmount,qty:riskAmount/riskPerUnit,slPct:riskPerUnit/Math.abs(entry)*100,tpPct:rewardPerUnit/Math.abs(entry)*100};
  })() : null;
- const autoPosition = positionModel ? (() => {
+ const autoPosition = layers.position&&positionModel ? (() => {
   const p=positionModel,yEntry=yOf(p.entry),yStop=yOf(p.stop),yTarget=yOf(p.target);
   if(yEntry==null||yStop==null||yTarget==null)return null;
   const stat=(y:number,label:string,value:string,cls:string)=><g><line x1={x0} x2={xLast} y1={y} y2={y} className={cls}/>{text(Math.max(8,xLast-155),y,label+" "+value,cls+"-label")}</g>;
@@ -898,7 +898,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     {text(Math.max(8,xLast-205),Math.max(22,Math.min(height-30,Math.min(yStop,yTarget)+16)),p.source+" · R:R "+p.rr.toFixed(2)+":1","position-stat-label")}
     {text(Math.max(8,xLast-205),Math.min(height-20,Math.max(yStop,yTarget)+18),"RISK "+riskPercent.toFixed(2)+"% · QTY "+p.qty.toFixed(4),"position-stat-label")}
     {text(Math.max(8,xLast-205),Math.min(height-4,(yTarget+yEntry)/2),"TP +"+p.tpPct.toFixed(2)+"% · P&L +"+(p.riskAmount*p.rr).toFixed(2),"position-profit-label")}
-    {text(Math.max(8,(yStop+yEntry)/2),"SL -"+p.slPct.toFixed(2)+"% · P&L -"+p.riskAmount.toFixed(2),"position-loss-label")}
+    {text(Math.max(8,xLast-205),Math.max(12,(yStop+yEntry)/2),"SL -"+p.slPct.toFixed(2)+"% · P&L -"+p.riskAmount.toFixed(2),"position-loss-label")}
     <circle cx={xLast} cy={yEntry} r="5" className={p.direction==="BUY"?"position-buy-marker":"position-sell-marker"}/>
   </g>;
  })() : null;
