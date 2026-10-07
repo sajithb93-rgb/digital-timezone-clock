@@ -4,6 +4,7 @@ import {
   analyzeSMC,
   findLatestSMCCausalSequence,
   isSetupActive,
+  isZoneRetestAfterFormation,
   isValidTradeGeometry,
   type Candle,
   type StructureEvent,
@@ -176,6 +177,13 @@ describe("SMC signal engine", () => {
     ];
 
     expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 20, 12)).toBeNull();
+  });
+
+  it("requires a completed zone before allowing a retest", () => {
+    expect(isZoneRetestAfterFormation(10, 9)).toBe(true);
+    expect(isZoneRetestAfterFormation(10, 10)).toBe(false);
+    expect(isZoneRetestAfterFormation(9, 10)).toBe(false);
+    expect(isZoneRetestAfterFormation(10, -1)).toBe(false);
   });
 
   it("requires an executable zone to be valid and touched by a closed candle", () => {
