@@ -260,9 +260,11 @@ export function isEntryZoneCausal(zoneOrigin:number,sweepIndex:number,structureI
  if(structureIndex<=sweepIndex||structureIndex-sweepIndex>maxGap)return false;
  if(kind==="BREAKER"){
   // A breaker exists only after the original OB has been broken and the
-  // polarity-flipped zone is created shortly after that structural event.
-  // A wide post-event window can accidentally attach an unrelated later zone.
-  return zoneOrigin>=structureIndex&&zoneOrigin-structureIndex<=Math.min(maxGap,3);
+  // polarity-flipped zone is created within the same structure-causality
+  // window. The broader configured maxGap is intentional: formation can take
+  // several closed candles after the break, and zoneAgeBars still limits stale
+  // executable retests.
+  return zoneOrigin>=structureIndex&&zoneOrigin-structureIndex<=maxGap;
  }
  if(kind==="OB"){
   // The OB is the opposing candle/base that precedes the displacement/structure
