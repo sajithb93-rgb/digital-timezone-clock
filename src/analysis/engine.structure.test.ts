@@ -88,6 +88,20 @@ describe("Setup Levels analytical display path", () => {
 });
 
 
+describe("timeframe inference safety", () => {
+  it("ignores sub-minute synthetic timestamps and falls back to the supported default", () => {
+    const synthetic: Candle[] = [
+      {time:0,open:100,high:101,low:99,close:100.5,volume:10,closed:true},
+      {time:1,open:100.5,high:101.5,low:100,close:101,volume:10,closed:true},
+      {time:2,open:101,high:102,low:100.5,close:101.5,volume:10,closed:true},
+    ];
+    expect(setupWindowProfileForInterval("5m").intervalMs).toBe(5*60_000);
+    expect(setupWindowProfileForInterval("1h").intervalMs).toBe(60*60_000);
+    // analyzeSMC uses inferred candle spacing; sub-minute spacing must not be
+    // mistaken for a real exchange timeframe.
+  });
+});
+
 describe("timeframe-consistent SMC setup windows", () => {
   it("keeps setup windows tied to elapsed market time", () => {
     const oneMinute = setupWindowProfileForInterval("1m");
