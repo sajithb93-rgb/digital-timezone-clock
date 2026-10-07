@@ -664,7 +664,7 @@ export function inferCandleIntervalMs(c:Candle[]):number{
 }
 
 function setupIntervalMs(interval:string):number{
- const m=interval.trim().toLowerCase().match(/^(\\d+)([mhd])$/);
+ const m=interval.trim().toLowerCase().match(/^(\d+)([mhd])$/);
  if(!m)return 5*60_000;
  const n=Math.max(1,Number(m[1]));
  const unit=m[2]==="m"?60_000:m[2]==="h"?60*60_000:24*60*60_000;
