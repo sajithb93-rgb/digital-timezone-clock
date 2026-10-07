@@ -297,8 +297,7 @@ export default function Home(){
     const deepWorkers=Math.min(3,deepLimit);
     const scanOne=async(c:{candidate:(typeof candidates)[number];score:number;candles:Candle[]})=>{
       try{
-        const pair=c.candidate.pair;        const tfMs=intervalMs(orderFlowScanTf);
-        const lookback=Math.max(tfMs*14,60*60*1000);
+        const pair=c.candidate.pair;        const tfMs=intervalMs(orderFlowScanTf);        const lookback=Math.max(tfMs*14,60*60*1000);
         const trades=await fetchScannerAggTrades(pair.symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
         const book=new FootprintBook(tfMs,pair.tickSize,36);
         book.load(trades);
@@ -597,8 +596,7 @@ export default function Home(){
    if(!stop){
     setFootprintHistoryReady(true);
     setFootprintVersion(v=>v+1);    if(lastError) setError(lastError instanceof Error?lastError.message:"Order Flow history backfill unavailable; live footprint will continue");
-   }
-  };
+   }  };
   void loadHistory();connect();
   flush=window.setInterval(()=>{
     if(stop)return;
@@ -795,7 +793,7 @@ export default function Home(){
       <div className="panel-card mtf-card entry-scanner-card">
        <div className="section-title">SMC ENTRY SETUP SCANNER <span>{smcEntryEnabled?(smcEntryBusy?"SCANNING…":smcEntryUpdated?new Date(smcEntryUpdated).toLocaleTimeString():"—"):"OFF"}</span></div>
        {newsRisk.blocked&&<div className="news-signal-warning">⚠ NEWS BLOCKED — scanner results remain analytical; do not treat confirmations as executable during this window.</div>}
-       <div className="scanner-controls"><div className="scanner-buttons"><button type="button" className="scanner-start-btn" onClick={()=>{setSmcEntryError("");setSmcEntryScanner([]);setSmcEntryProgress("");setSmcEntryEnabled(true)}} disabled={smcEntryEnabled}>START</button><button type="button" className="scanner-stop-btn" onClick={()=>{setSmcEntryEnabled(false);setSmcEntryBusy(false);setSmcEntryProgress("Stopped")}} disabled={!smcEntryEnabled&&!smcEntryBusy}>STOP</button></div><select value={smcEntryTf} onChange={e=>setSmcEntryTf(e.target.value)}>{(["1m","5m","15m","1h","4h","1d"] as const).map(tf=><option key={tf}>{tf}</option>)}</select><small>{smcEntryBusy?"Scanning "+smcEntryProgress:smcEntryProgress||"Ready"} · TOP 40 liquidity · closed candles</small></div>
+       <div className="scanner-controls"><div className="scanner-buttons"><button type="button" className="scanner-start-btn" onClick={()=>{setSmcEntryError("");setSmcEntryScanner([]);setSmcEntryProgress("");setSmcEntryEnabled(true)}} disabled={smcEntryEnabled}>START</button><button type="button" className="scanner-stop-btn" onClick={()=>{setSmcEntryEnabled(false);setSmcEntryBusy(false);setSmcEntryProgress("Stopped")}} disabled={!smcEntryEnabled&&!smcEntryBusy}>STOP</button></div><select value={smcEntryTf} onChange={e=>setSmcEntryTf(e.target.value)}>{(["1m","5m","15m","1h","4h","1d"] as const).map(tf=><option key={tf}>{tf}</option>)}</select><small>{smcEntryBusy?"Scanning "+smcEntryProgress:smcEntryProgress||"Ready"} · ALL eligible pairs · closed candles</small></div>
        {!smcEntryEnabled&&<div className="setup-empty">Scanner STOPPED — START to scan SMC entry setups.</div>}
        {smcEntryEnabled&&smcEntryError&&<div className="setup-empty">Scanner error: {smcEntryError}</div>}
        {smcEntryEnabled&&smcEntryScanner.length>0&&<div className="scanner-live-confirmed"><div className="scanner-live-title"><span>SMC ACTIVE / CONFIRMED</span><small>{smcEntryBusy?"LIVE":"SCAN COMPLETE"}</small></div>{smcEntryScanner.map(x=><div className="scanner-row scanner-confirmed-row" key={"smc-"+x.symbol+"-"+x.timeframe}><span><b>{x.symbol}</b><small>{x.timeframe} · {x.state}</small></span><b className={x.direction==="BUY"?"positive":"negative"}>{x.direction} · {x.score}/100</b><small>{x.rr?x.rr.toFixed(2)+":1":"—"}</small></div>)}</div>}
@@ -804,7 +802,7 @@ export default function Home(){
 
       <div className="panel-card mtf-card entry-scanner-card">
        <div className="section-title">ELLIOTT WAVE ENTRY SETUP SCANNER <span>{elliottEntryEnabled?(elliottEntryBusy?"SCANNING…":elliottEntryUpdated?new Date(elliottEntryUpdated).toLocaleTimeString():"—"):"OFF"}</span></div>
-       <div className="scanner-controls"><div className="scanner-buttons"><button type="button" className="scanner-start-btn" onClick={()=>{setElliottEntryError("");setElliottEntryScanner([]);setElliottEntryProgress("");setElliottEntryEnabled(true)}} disabled={elliottEntryEnabled}>START</button><button type="button" className="scanner-stop-btn" onClick={()=>{setElliottEntryEnabled(false);setElliottEntryBusy(false);setElliottEntryProgress("Stopped")}} disabled={!elliottEntryEnabled&&!elliottEntryBusy}>STOP</button></div><select value={elliottEntryTf} onChange={e=>setElliottEntryTf(e.target.value)}>{(["1m","5m","15m","1h","4h","1d"] as const).map(tf=><option key={tf}>{tf}</option>)}</select><small>{elliottEntryBusy?"Scanning "+elliottEntryProgress:elliottEntryProgress||"Ready"} · TOP 40 liquidity · closed candles</small></div>
+       <div className="scanner-controls"><div className="scanner-buttons"><button type="button" className="scanner-start-btn" onClick={()=>{setElliottEntryError("");setElliottEntryScanner([]);setElliottEntryProgress("");setElliottEntryEnabled(true)}} disabled={elliottEntryEnabled}>START</button><button type="button" className="scanner-stop-btn" onClick={()=>{setElliottEntryEnabled(false);setElliottEntryBusy(false);setElliottEntryProgress("Stopped")}} disabled={!elliottEntryEnabled&&!elliottEntryBusy}>STOP</button></div><select value={elliottEntryTf} onChange={e=>setElliottEntryTf(e.target.value)}>{(["1m","5m","15m","1h","4h","1d"] as const).map(tf=><option key={tf}>{tf}</option>)}</select><small>{elliottEntryBusy?"Scanning "+elliottEntryProgress:elliottEntryProgress||"Ready"} · ALL eligible pairs · closed candles</small></div>
        {!elliottEntryEnabled&&<div className="setup-empty">Scanner STOPPED — START to scan Elliott Wave entry setups.</div>}
        {elliottEntryEnabled&&elliottEntryError&&<div className="setup-empty">Scanner error: {elliottEntryError}</div>}
        {elliottEntryEnabled&&elliottEntryScanner.length>0&&<div className="scanner-live-confirmed"><div className="scanner-live-title"><span>ELLIOTT ACTIVE / CONFIRMED</span><small>{elliottEntryBusy?"LIVE":"SCAN COMPLETE"}</small></div>{elliottEntryScanner.map(x=><div className="scanner-row scanner-confirmed-row" key={"ew-"+x.symbol+"-"+x.timeframe}><span><b>{x.symbol}</b><small>{x.timeframe} · {x.state}</small></span><b className={x.direction==="BUY"?"positive":"negative"}>{x.direction} · {x.score}/100</b><small>{x.rr?x.rr.toFixed(2)+":1":"—"}</small></div>)}</div>}
@@ -897,8 +895,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     &&orderFlow.diagnostics.some(d=>d.key==="target_quality"&&d.passed)
     &&orderFlow.source==="BINANCE_FOOTPRINT"    &&isValidAutoTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
     direction=orderFlow.direction;
-    entry=orderFlow.entry;
-    stop=orderFlow.stop;
+    entry=orderFlow.entry;    stop=orderFlow.stop;
     target=orderFlow.targets[0];
     source="ORDER FLOW CONFIRMED";
   } else if(showElliott&&liveElite&&liveElite.strict===true
