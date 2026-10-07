@@ -659,18 +659,38 @@ export function inferCandleIntervalMs(c:Candle[]):number{
  return deltas[Math.floor(deltas.length/2)];
 }
 
-export function setupWindowProfile(c:Candle[]):SMCSetupWindowProfile{
- const intervalMs=inferCandleIntervalMs(c);
- const base=5*60_000;
- const scale=base/Math.max(intervalMs,1);
- const scaleBars=(baseBars:number,minBars:number,maxBars:number)=>Math.max(minBars,Math.min(maxBars,Math.round(baseBars*scale)));
+function setupIntervalMs(interval:string):number{
+ const m=interval.trim().toLowerCase().match(/^(\\d+)([mhd])$/);
+ if(!m)return 5*60_000;
+ const n=Math.max(1,Number(m[1]));
+ const unit=m[2]==="m"?60_000:m[2]==="h"?60*60_000:24*60*60_000;
+ return n*unit;
+}
+
+function buildSetupWindowProfile(intervalMs:number):SMCSetupWindowProfile{
+ const safeInterval=Math.max(60_000,Number.isFinite(intervalMs)?intervalMs:5*60_000);
+ // All setup windows are time-based first, then converted to bars. This keeps
+ // the same elapsed-market-time logic across 1m/5m/15m/1h/4h/1d while still
+ // enforcing a small minimum sample for structural confirmation.
+ const barsFor=(windowMs:number,minBars:number,maxBars=240)=>Math.max(
+  minBars,
+  Math.min(maxBars,Math.ceil(windowMs/safeInterval))
+ );
  return{
-  intervalMs,
-  sweepLookbackBars:scaleBars(20,5,20),
-  structureGapBars:scaleBars(12,3,12),
-  obAgeBars:scaleBars(50,10,50),
-  zoneAgeBars:scaleBars(40,8,40)
+  intervalMs:safeInterval,
+  sweepLookbackBars:barsFor(100*60_000,5),
+  structureGapBars:barsFor(60*60_000,3),
+  obAgeBars:barsFor(250*60_000,10),
+  zoneAgeBars:barsFor(200*60_000,8)
  };
+}
+
+export function setupWindowProfileForInterval(interval:string):SMCSetupWindowProfile{
+ return buildSetupWindowProfile(setupIntervalMs(interval));
+}
+
+export function setupWindowProfile(c:Candle[]):SMCSetupWindowProfile{
+ return buildSetupWindowProfile(inferCandleIntervalMs(c));
 }
 
 export function analyzeSMC(c:Candle[]):SMCResult{
@@ -755,11 +775,13 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const levelZone=zone??(analyticalZone?{low:analyticalZone.low,high:analyticalZone.high,type:"entry" as const}:null);
  const direction=levelZone?rawDirection:null;
  const entry=levelZone?(levelZone.low+levelZone.high)/2:null;
- const zoneOrigin=levelZone?analyticalZone?.origin??confirmedZone?.origin??asOf:asOf;
- const priorLow=zone?[...lows].reverse().find(p=>p.index<zoneOrigin):undefined;
- const priorHigh=zone?[...highs].reverse().find(p=>p.index<zoneOrigin):undefined;
- const structuralLow=zone?(priorLow&&zone.low-priorLow.price<=a*1.8?priorLow.price:zone.low):null;
- const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.8?priorHigh.price:zone.high):null;
+ const zoneOrigin=levelZone
+  ?(zone?confirmedZone?.origin??asOf:analyticalZone?.origin??asOf)
+  :asOf;
+ const priorLow=levelZone?[...lows].reverse().find(p=>p.index<zoneOrigin):undefined;
+ const priorHigh=levelZone?[...highs].reverse().find(p=>p.index<zoneOrigin):undefined;
+ const structuralLow=levelZone?(priorLow&&levelZone.low-priorLow.price<=a*1.8?priorLow.price:levelZone.low):null;
+ const structuralHigh=levelZone?(priorHigh&&priorHigh.price-levelZone.high<=a*1.8?priorHigh.price:levelZone.high):null;
  const stop=levelZone
   ?direction==="bullish"
    ?Math.min(structuralLow??levelZone.low,levelZone.low)-a*.15
