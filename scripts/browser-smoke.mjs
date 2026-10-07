@@ -68,7 +68,9 @@ try {
   if (!result.chartPresent || !result.canvasPresent) throw new Error("Chart canvas did not render");
   if (!result.canvasSize || result.canvasSize.width < 300 || result.canvasSize.height < 200) throw new Error("Rendered chart canvas has invalid dimensions");
   if (!result.chartSize || result.chartSize.width < 300 || result.chartSize.height < 300) throw new Error("Chart container has invalid dimensions");
-  if (!result.overlayPresent) throw new Error("Analysis SVG overlay did not mount");
+  // No analysis SVG is expected until closed Binance candles exist. Once real
+  // market data is present, the overlay is mandatory.
+  if (result.candleCount >= 2 && !result.overlayPresent) throw new Error("Analysis SVG overlay did not mount with real candle data");
   if (result.timeframeButtons.join(",") !== "1m,5m,15m,1h,4h,1d") throw new Error("Timeframe controls are incomplete or out of order");
   const upstreamBlocked = /Binance blocked|HTTP 451|server region/i.test(result.errorAlertText);
   if (result.candleCount < 2 && !upstreamBlocked && !result.status.includes("WAITING FOR DATA")) {
