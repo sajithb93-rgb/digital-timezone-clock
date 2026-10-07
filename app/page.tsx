@@ -248,7 +248,6 @@ export default function Home(){
    try{
     const candidates=pairs
       .filter(p=>quoteFilter==="ALL"||p.quoteAsset===quoteFilter)
-      .filter(p=>p.symbol!==symbol)
       .map(pair=>({pair,rank:scanner.findIndex(x=>x.symbol===pair.symbol),volume:scannerRef.current.find(x=>x.symbol===pair.symbol)?.quoteVolume??0}))
       .sort((a,b)=>b.volume-a.volume||a.pair.symbol.localeCompare(b.pair.symbol));
     const rows:OrderFlowScanRow[]=[];
