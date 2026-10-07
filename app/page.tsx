@@ -919,10 +919,12 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     {latest.microStructure!=="NEUTRAL"&&latestChartIndex>=0&&<text x={Math.max(8,orderFlowXLast-42)} y={latest.microStructure==="BULLISH"?22:height-22} className="orderflow-structure-label">{latest.microStructure==="BULLISH"?"OF BULL BREAK":"OF BEAR BREAK"}</text>}
     {latest.deltaRatio!==0&&<text x={Math.max(8,orderFlowXLast-170)} y={22} className="orderflow-delta-label">DELTA {(latest.deltaRatio*100).toFixed(1)}% · {latest.imbalance}</text>}
    </g>}
-   {level(orderFlow.entry,"orderflow-entry-line","OF ENTRY "+(orderFlow.entry!=null?orderFlow.entry.toFixed(4):"—"))}
-   {level(orderFlow.stop,"orderflow-sl-line","OF SL "+(orderFlow.stop!=null?orderFlow.stop.toFixed(4):"—"))}
-   {(orderFlow.targets||[]).slice(0,3).map((p:number,i:number)=>level(p,"orderflow-tp-line","OF TP"+(i+1)+" "+p.toFixed(4)))}
-   {latest&&orderFlow.direction!=="WAIT"&&latestChartIndex>=0&&<g>{(()=>{
+   {layers.trade&&<>
+    {level(orderFlow.entry,"orderflow-entry-line","OF ENTRY "+(orderFlow.entry!=null?orderFlow.entry.toFixed(4):"—"))}
+    {level(orderFlow.stop,"orderflow-sl-line","OF SL "+(orderFlow.stop!=null?orderFlow.stop.toFixed(4):"—"))}
+    {(orderFlow.targets||[]).slice(0,3).map((p:number,i:number)=>level(p,"orderflow-tp-line","OF TP"+(i+1)+" "+p.toFixed(4)))}
+   </>}
+   {layers.trade&&latest&&orderFlow.direction!=="WAIT"&&latestChartIndex>=0&&<g>{(()=>{
     const x=xOf(latestChartIndex);
     const y=yOf(candles[latestChartIndex].close);
     if(x==null||y==null)return null;
