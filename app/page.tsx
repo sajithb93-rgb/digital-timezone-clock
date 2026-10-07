@@ -884,7 +884,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   if(!(riskPerUnit>0&&rewardPerUnit>0))return null;
   const riskAmount=Math.max(0,account)*Math.max(0,riskPercent)/100;
   return {direction,entry,stop,target,source,rr:rewardPerUnit/riskPerUnit,riskAmount,qty:riskAmount/riskPerUnit,slPct:riskPerUnit/Math.abs(entry)*100,tpPct:rewardPerUnit/Math.abs(entry)*100};
- })() : null;
+ })();
  const autoPosition = layers.position&&positionModel ? (() => {
   const p=positionModel,yEntry=yOf(p.entry),yStop=yOf(p.stop),yTarget=yOf(p.target);
   if(yEntry==null||yStop==null||yTarget==null)return null;
