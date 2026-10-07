@@ -736,6 +736,10 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   const sweepType=p.type==="H"?"high":"low";
   const latest=findLatestValidLiquiditySweep(data,p.price,sweepType,p.index+1,asOf);
   if(latest){
+   // Freshness belongs to the sweep event, not the age of the liquidity
+   // pivot that was swept. An old EQH/EQL can remain valid liquidity if price
+   // sweeps it recently; rejecting it by pivot age causes missed setups.
+   if(asOf-latest.index>windows.sweepLookbackBars)continue;
    latest.displacement=displacementAt(data,latest.index)>=.7;
    // Only displacement-confirmed sweeps are actionable liquidity events.
    // Keep the raw wick/close-back test in findLatestValidLiquiditySweep,
