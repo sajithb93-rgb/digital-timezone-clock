@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeReversal, analyzeReversalMTF } from "./reversal";
+import { analyzeReversal, reversalWindowProfile, analyzeReversalMTF } from "./reversal";
 import type { Candle, SMCResult } from "./engine";
 import type { OrderFlowResult } from "./orderflow";
 
@@ -31,6 +31,30 @@ function flow(overrides: Partial<OrderFlowResult> = {}): OrderFlowResult {
   };
   return {...base,...overrides};
 }
+
+describe("reversal timeframe windows", () => {
+  it("keeps the baseline 5m elapsed windows", () => {
+    const candles = Array.from({length:4}, (_,i)=>({
+      time:i*5*60_000,open:100+i,high:101+i,low:99+i,close:100.5+i,volume:10,closed:true
+    }));
+    const w=reversalWindowProfile(candles);
+    expect(w.sweepLookbackBars).toBe(20);
+    expect(w.structureGapBars).toBe(12);
+    expect(w.fvgGapBars).toBe(12);
+    expect(w.orderBlockGapBars).toBe(20);
+  });
+
+  it("compresses reversal windows on higher timeframes", () => {
+    const candles = Array.from({length:4}, (_,i)=>({
+      time:i*60*60_000,open:100+i,high:101+i,low:99+i,close:100.5+i,volume:10,closed:true
+    }));
+    const w=reversalWindowProfile(candles);
+    expect(w.sweepLookbackBars).toBe(2);
+    expect(w.structureGapBars).toBe(1);
+    expect(w.fvgGapBars).toBe(1);
+    expect(w.orderBlockGapBars).toBe(2);
+  });
+});
 
 describe("reversal engine",()=>{
   it("confirms a bullish reversal after sweep, opposite structure, CHOCH, displacement and order flow",()=>{
