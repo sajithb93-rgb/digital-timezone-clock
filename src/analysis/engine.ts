@@ -547,7 +547,9 @@ function chooseAnalyticalEntryZone(
   // directional FVG available even when price has travelled farther than the
   // active-signal proximity threshold; the strict confirmed path still uses
   // the tighter 3.5×ATR gate.
-  if(distance>atrValue*12)continue;
+  // Analytical context may remain visible after a larger move; the strict
+  // executable confirmation path retains its own 3.5×ATR proximity gate.
+  if(distance>atrValue*20)continue;
   candidates.push({low:f.low,high:f.high,origin,kind:"FVG",strength:f.size??0,linked:false,distance});
  }
  for(const b of breakers){
@@ -555,7 +557,9 @@ function chooseAnalyticalEntryZone(
   const age=asOf-b.index;
   if(age<0||age>windows.zoneAgeBars)continue;
   const distance=last.close<b.low?b.low-last.close:last.close>b.high?last.close-b.high:0;
-  if(distance>atrValue*12)continue;
+  // Analytical context may remain visible after a larger move; the strict
+  // executable confirmation path retains its own 3.5×ATR proximity gate.
+  if(distance>atrValue*20)continue;
   candidates.push({low:b.low,high:b.high,origin:b.index,kind:"BREAKER",strength:0.8,linked:false,distance});
  }
  if(!candidates.length)return null;
