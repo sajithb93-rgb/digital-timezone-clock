@@ -8,7 +8,7 @@ export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"be
 export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mitigated:boolean;mitigationIndex?:number;strength?:number;breakIndex?:number};
 export type Breaker={index:number;low:number;high:number;type:"bullish"|"bearish";active:boolean};
 export type StructureEvent={index:number;price:number;type:"BOS"|"CHOCH";direction:"bullish"|"bearish";strength:"normal"|"displacement"};
-export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean;displacement?:boolean};
+export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean;displacement?:boolean;displacementIndex?:number};
 export type Zone={
  low:number;
  high:number;
@@ -151,8 +151,9 @@ export function findLatestSMCCausalSequence(
  const sweepType=latestStructure.direction==="bullish"?"low":"high";
  const candidates:SMCCausalSequence[]=[];
  for(const sweep of sweeps){
-  if(!sweep.confirmed||sweep.index<0||sweep.index>asOf||sweep.type!==sweepType)continue;
+  if(!sweep.confirmed||sweep.displacement!==true||sweep.displacementIndex===undefined||sweep.index<0||sweep.index>asOf||sweep.type!==sweepType)continue;
   if(sweep.index>=latestStructure.index||latestStructure.index-sweep.index>maxGap)continue;
+  if(sweep.displacementIndex<sweep.index||sweep.displacementIndex>latestStructure.index)continue;
   for(const internal of internalEvents){
    if(internal.index<=latestStructure.index||internal.index>asOf)continue;
    if(internal.direction!==latestStructure.direction||internal.index-latestStructure.index>maxGap)continue;
@@ -196,6 +197,45 @@ export function findLatestValidLiquiditySweep(c:Candle[],level:number,type:"high
  for(let i=Math.max(0,startIndex);i<=closedEnd;i++){
   if(isValidLiquiditySweep(c,i,level,type,closedEnd)){
    latest={index:i,price:level,type,confirmed:true};
+  }
+ }
+ return latest;
+}
+
+export function findLatestActionableLiquiditySweep(
+ c:Candle[],
+ level:number,
+ type:"high"|"low",
+ startIndex:number,
+ asOf=c.length-1,
+ maxDisplacementBars=2
+):Sweep|null{
+ let closedEnd=Math.min(Math.floor(asOf),c.length-1);
+ const firstUnclosed=c.slice(0,closedEnd+1).findIndex(x=>x.closed===false);
+ if(firstUnclosed>=0)closedEnd=firstUnclosed-1;
+ if(startIndex>closedEnd||!Number.isInteger(maxDisplacementBars)||maxDisplacementBars<0)return null;
+
+ let latest:Sweep|null=null;
+ for(let i=Math.max(0,startIndex);i<=closedEnd;i++){
+  if(!isValidLiquiditySweep(c,i,level,type,closedEnd))continue;
+  const displacementEnd=Math.min(closedEnd,i+maxDisplacementBars);
+  let displacementIndex:number|undefined;
+  for(let j=i;j<=displacementEnd;j++){
+   if(c[j].closed===false)continue;
+   if(displacementAt(c,j)>=.7){
+    displacementIndex=j;
+    break;
+   }
+  }
+  if(displacementIndex!==undefined){
+   latest={
+    index:i,
+    price:level,
+    type,
+    confirmed:true,
+    displacement:true,
+    displacementIndex
+   };
   }
  }
  return latest;
@@ -801,19 +841,15 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const sweeps:Sweep[]=[];
  for(const p of [...liquidityHighs,...liquidityLows]){
   const sweepType=p.type==="H"?"high":"low";
-  const latest=findLatestValidLiquiditySweep(data,p.price,sweepType,p.index+1,asOf);
+  const latest=findLatestActionableLiquiditySweep(data,p.price,sweepType,p.index+1,asOf,2);
   if(latest){
    // Freshness belongs to the sweep event, not the age of the liquidity
    // pivot that was swept. An old EQH/EQL can remain valid liquidity if price
    // sweeps it recently; rejecting it by pivot age causes missed setups.
    if(asOf-latest.index>windows.sweepLookbackBars)continue;
-   latest.displacement=displacementAt(data,latest.index)>=.7;
-   // Only displacement-confirmed sweeps are actionable liquidity events.
-   // Keep the raw wick/close-back test in findLatestValidLiquiditySweep,
-   // then apply displacement here as the confirmation layer.
-   if(!latest.displacement)continue;
-   // Avoid duplicate sweep events when equal-level clustering and recent
-   // raw pivots resolve to effectively the same liquidity pool.
+   // Displacement may happen on the sweep candle or within the next two
+   // closed candles. The causal chain later requires it to occur before the
+   // swing structure break.
    const duplicate=sweeps.some(x=>x.type===latest!.type&&Math.abs(x.price-latest!.price)<=tol&&x.index===latest!.index);
    if(!duplicate)sweeps.push(latest);
   }
