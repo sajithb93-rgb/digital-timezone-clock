@@ -686,10 +686,10 @@ function buildSetupWindowProfile(intervalMs:number):SMCSetupWindowProfile{
  );
  return{
   intervalMs:safeInterval,
-  sweepLookbackBars:barsFor(100*60_000,5),
-  structureGapBars:barsFor(60*60_000,3),
-  obAgeBars:barsFor(250*60_000,10),
-  zoneAgeBars:barsFor(200*60_000,8)
+  sweepLookbackBars:barsFor(100*60_000),
+  structureGapBars:barsFor(60*60_000),
+  obAgeBars:barsFor(250*60_000),
+  zoneAgeBars:barsFor(200*60_000)
  };
 }
 
