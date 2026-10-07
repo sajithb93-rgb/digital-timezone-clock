@@ -27,7 +27,13 @@ export function isValidTradeGeometry(direction:"BUY"|"SELL",entry:number,stop:nu
  if(direction==="BUY"&&stop>=entry)return false;
  if(direction==="SELL"&&stop<=entry)return false;
  if(!Array.isArray(targets)||targets.length===0)return false;
- if(!targets.every(t=>Number.isFinite(t)))return false;
+ if(!targets.every(t=>Number.isFinite(t)&&t>0))return false;
+ // Targets must progress away from entry. Reject reversed/duplicate objectives
+ // because a scanner/chart could otherwise label TP2 below TP1 (or vice versa).
+ for(let i=1;i<targets.length;i++){
+  if(direction==="BUY"&&targets[i]<=targets[i-1])return false;
+  if(direction==="SELL"&&targets[i]>=targets[i-1])return false;
+ }
  if(!targets.every(t=>direction==="BUY"?t>entry:t<entry))return false;
  const requiredRR=Number.isFinite(minRR)&&minRR>0?minRR:MIN_SETUP_RR;
  return targets.every(t=>Math.abs(t-entry)/risk>=requiredRR);
@@ -95,7 +101,12 @@ export function classifyPremiumDiscount(price:number,high:number,low:number):"Pr
  const mid=(high+low)/2;
  return price>mid?"Premium":price<mid?"Discount":"Equilibrium";
 }
-export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{return !!zone&&!!last&&last.closed!==false&&last.high>=zone.low&&last.low<=zone.high}
+export function isSetupActive(zone:Zone|null,last:Candle|undefined):boolean{
+ if(!zone||!last||last.closed===false)return false;
+ if(!Number.isFinite(zone.low)||!Number.isFinite(zone.high)||zone.low>=zone.high)return false;
+ if(!Number.isFinite(last.high)||!Number.isFinite(last.low)||last.high<last.low)return false;
+ return last.high>=zone.low&&last.low<=zone.high;
+}
 export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,internalBreakIndex:number|null,maxGap=12):boolean{
  // Treat the swing break and internal confirmation as two distinct events.
  // An internal event printed on the exact same candle as the swing break is
