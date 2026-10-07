@@ -177,6 +177,10 @@ function inferDegree(spanBars:number,totalBars:number):ElliottDegree{
 
 const MAX_PRIMARY_AGE_MS = 12 * 60 * 60 * 1000;
 
+export function elliottRecentAgeBars(c:Candle[]): number {
+  return Math.max(1, Math.ceil(MAX_PRIMARY_AGE_MS / Math.max(inferCandleIntervalMs(c), 1)));
+}
+
 export function isCompletedWaveCountInvalidated(c:Candle[],primary:WaveCount):boolean{
   const origin=primary.points[0]?.price;
   const endIndex=primary.points.at(-1)?.index??-1;
@@ -631,7 +635,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   // the first forming candle so later bars cannot leak into an earlier count.
   const data=normalizeCandleSeries(c,true);
   const primaryIntervalMs=inferCandleIntervalMs(data);
-  const maxPrimaryAgeBars=Math.max(1,Math.ceil(MAX_PRIMARY_AGE_MS/Math.max(primaryIntervalMs,1)));
+  const maxPrimaryAgeBars=elliottRecentAgeBars(data);
   const ps=alternatePivots(swingPivots(data,2));
   const corrections=correctionCandidates(data);
   const action:WaveCount[]=[
