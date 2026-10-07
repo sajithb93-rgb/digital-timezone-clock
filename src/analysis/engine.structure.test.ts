@@ -71,16 +71,11 @@ describe("protected SMC structure breaks", () => {
 describe("Setup Levels analytical display path", () => {
   it("exposes a valid analytical entry zone even when no confirmed causal setup exists", () => {
     const candles: Candle[] = Array.from({ length: 36 }, (_, i) => {
-      const base = 100 + i;
-      return {
-        time: i,
-        open: base,
-        high: base + 1,
-        low: base - 1,
-        close: base + 0.5,
-        volume: 100,
-        closed: true,
-      };
+      if (i === 20) return { time:i, open:120, high:121, low:119, close:120.5, volume:100, closed:true };
+      if (i === 21) return { time:i, open:121.5, high:122.2, low:121.4, close:122, volume:100, closed:true };
+      if (i === 22) return { time:i, open:124, high:125, low:123.9, close:124.5, volume:100, closed:true };
+      const base = i > 22 ? 102 + i : 100 + i;
+      return { time:i, open:base, high:base+1, low:base-1, close:base+0.5, volume:100, closed:true };
     });
     const result = analyzeSMC(candles);
     expect(result.trend).toBe("Bullish");
