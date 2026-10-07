@@ -1,4 +1,4 @@
-import type { SMCResult, ElliottResult } from "./engine";
+import { setupWindowProfileForInterval, type SMCResult, type ElliottResult } from "./engine";
 
 export type EntryScanState="CONFIRMED"|"SETUP"|"WATCH"|"WAIT";
 export type EntryScanRow={symbol:string;timeframe:string;state:EntryScanState;direction:"BUY"|"SELL"|"NONE";score:number;price:number|null;entry:number|null;stop:number|null;target:number|null;rr:number|null;reason:string};
@@ -7,25 +7,49 @@ const make=(symbol:string,timeframe:string,state:EntryScanState,direction:"BUY"|
 
 export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):EntryScanRow{
  const s=r.setup;
- const direction=s.direction==="WAIT"?"NONE":s.direction;
+ // The engine may intentionally keep executable setup fields empty while a
+ // qualified analytical zone is present. For scanner state, infer the side
+ // from the current closed-candle SMC trend instead of collapsing every
+ // forming setup to NONE.
+ const direction:"BUY"|"SELL"|"NONE"=
+  s.direction!=="WAIT"
+   ?s.direction
+   :r.trend==="Bullish"?"BUY"
+   :r.trend==="Bearish"?"SELL"
+   :"NONE";
  const latestEvent=r.events.slice().reverse().find(e=>e.direction===(direction==="BUY"?"bullish":direction==="SELL"?"bearish":"none"));
  const latestSweep=r.sweeps.slice().reverse().find(sw=>sw.type===(direction==="BUY"?"low":direction==="SELL"?"high":"none"));
  const asOf=r.asOf??0;
- const intervalHint=timeframe.trim().toLowerCase();
- const timeframeSweepLookback:Record<string,number>={"1m":20,"5m":20,"15m":7,"1h":5,"4h":5,"1d":5};
- const sweepLookback=timeframeSweepLookback[intervalHint]??20;
- const sweepRecent=!!latestSweep && latestSweep.index>=Math.max(0,asOf-sweepLookback);
- const sweepAligned=direction==="BUY" ? latestSweep?.type==="low" : direction==="SELL" ? latestSweep?.type==="high" : false;
+ const windows=setupWindowProfileForInterval(timeframe);
+ const sweepLookback=windows.sweepLookbackBars;
+ const sweepRecent=!!latestSweep&&latestSweep.index>=Math.max(0,asOf-sweepLookback);
+ const sweepAligned=direction==="BUY"?latestSweep?.type==="low":direction==="SELL"?latestSweep?.type==="high":false;
  const causalSequence=!!latestEvent&&!!latestSweep&&latestSweep.index<latestEvent.index&&sweepRecent&&sweepAligned;
  const activeCausal=causalSequence&&(latestEvent?.type==="BOS"||latestEvent?.type==="CHOCH");
- if(s.status==="ACTIVE"&&s.direction!=="WAIT"&&s.entry!=null&&s.stop!=null&&s.targets[0]!=null&&s.rr!=null&&activeCausal) return make(symbol,timeframe,"CONFIRMED",s.direction,s.confidence,null,s.entry,s.stop,s.targets[0],s.rr,"SMC ACTIVE · "+(s.confirmations.slice(0,3).join(" · ")||"all entry conditions passed"));
- const checks=[direction==="BUY"?r.trend==="Bullish":direction==="SELL"?r.trend==="Bearish":false,!!latestEvent&&((direction==="BUY"&&latestEvent.direction==="bullish")||(direction==="SELL"&&latestEvent.direction==="bearish")),!!r.entryZone,causalSequence,direction==="BUY"?r.premiumDiscount==="Discount":direction==="SELL"?r.premiumDiscount==="Premium":false,r.targets.length>0];
- const passed=checks.filter(Boolean).length; const score=Math.round(passed/checks.length*100);
+ if(s.status==="ACTIVE"&&s.direction!=="WAIT"&&s.entry!=null&&s.stop!=null&&s.targets[0]!=null&&s.rr!=null&&activeCausal){
+  return make(symbol,timeframe,"CONFIRMED",s.direction,s.confidence,null,s.entry,s.stop,s.targets[0],s.rr,
+   "SMC ACTIVE · "+(s.confirmations.slice(0,3).join(" · ")||"all entry conditions passed"));
+ }
+ const analyticalEntry=r.entryZone?(r.entryZone.low+r.entryZone.high)/2:null;
+ const checks=[
+  direction==="BUY"?r.trend==="Bullish":direction==="SELL"?r.trend==="Bearish":false,
+  !!latestEvent&&((direction==="BUY"&&latestEvent.direction==="bullish")||(direction==="SELL"&&latestEvent.direction==="bearish")),
+  !!r.entryZone,
+  causalSequence,
+  direction==="BUY"?r.premiumDiscount==="Discount":direction==="SELL"?r.premiumDiscount==="Premium":false,
+  r.targets.length>0
+ ];
+ const passed=checks.filter(Boolean).length;
+ const score=Math.round(passed/checks.length*100);
  const state:EntryScanState=score>=83?"SETUP":score>=66?"WATCH":"WAIT";
- const reason=state==="SETUP"?direction+" setup forming · waiting for active entry/retest":state==="WATCH"?direction+" watch · "+passed+"/"+checks.length+" entry conditions":"No qualifying SMC entry setup";
- return make(symbol,timeframe,state,direction==="BUY"||direction==="SELL"?direction:"NONE",score,null,s.entry,s.stop,s.targets[0]??null,s.rr,reason);
+ const reason=state==="SETUP"
+  ?direction+" setup forming · waiting for active entry/retest"
+  :state==="WATCH"
+   ?direction+" watch · "+passed+"/"+checks.length+" entry conditions"
+   :"No qualifying SMC entry setup";
+ return make(symbol,timeframe,state,direction,score,null,
+  analyticalEntry,s.stop,r.targets[0]??null,s.rr,reason);
 }
-
 export function classifyElliottEntry(symbol:string,timeframe:string,r:ElliottResult,currentPrice?:number):EntryScanRow{
  const live=r.liveSetup;
  if(!live||live.entry==null||live.invalidation==null){
