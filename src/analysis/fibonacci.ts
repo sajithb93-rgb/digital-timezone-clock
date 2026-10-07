@@ -23,6 +23,19 @@ export type AutoFibonacciSet = {
 
 const RETRACEMENTS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
 
+function inferFibLookbackBars(candles: Candle[]): number {
+  const deltas: number[] = [];
+  for (let i = 1; i < candles.length; i += 1) {
+    const d = candles[i].time - candles[i - 1].time;
+    if (Number.isFinite(d) && d > 0) deltas.push(d);
+  }
+  if (!deltas.length) return 12;
+  deltas.sort((a, b) => a - b);
+  const intervalMs = deltas[Math.floor(deltas.length / 2)];
+  const target = Math.round((12 * 5 * 60 * 1000) / Math.max(intervalMs, 1));
+  return Math.max(3, Math.min(60, target));
+}
+
 function finite(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n);
 }
@@ -82,7 +95,9 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
   const lastClosed = candles.reduce((last, c, i) => (c.closed === false ? last : i), -1);
   if (lastClosed < 0) return null;
 
-  const events = smc.events.filter((e) => e.index <= lastClosed);
+  const events = smc.events
+    .filter((e) => e.index >= 0 && e.index <= lastClosed && finite(e.price))
+    .sort((a, b) => a.index - b.index);
   const event = events.at(-1);
 
   if (event) {
@@ -219,7 +234,10 @@ function orderFlowFib(candles: Candle[], orderFlow: OrderFlowResult): AutoFibona
   const lastClosed = candles.reduce((last, c, i) => (c.closed === false ? last : i), -1);
   if (lastClosed < 0) return null;
 
-  const bars = orderFlow.recentBars.filter((b) => b.index >= 0 && b.index <= lastClosed && candles[b.index]?.closed !== false);
+  const bars = orderFlow.recentBars
+    .filter((b) => b.index >= 0 && b.index <= lastClosed && candles[b.index]?.closed !== false)
+    .sort((a, b) => a.index - b.index);
+  const lookbackBars = inferFibLookbackBars(candles);
   const latestBuySweep = bars.filter((b) => b.liquiditySweep === "LOW" && finite(b.sweepPrice)).at(-1);
   const latestSellSweep = bars.filter((b) => b.liquiditySweep === "HIGH" && finite(b.sweepPrice)).at(-1);
 
@@ -268,10 +286,11 @@ function orderFlowFib(candles: Candle[], orderFlow: OrderFlowResult): AutoFibona
   if (micro) {
     const c = candles[micro.index];
     if (c) {
-      const lookback = candles.slice(Math.max(0, micro.index - 12), micro.index);
+      const lookbackStart = Math.max(0, micro.index - lookbackBars);
+      const lookback = candles.slice(lookbackStart, micro.index);
       if (micro.microStructure === "BULLISH") {
         const low = lookback.reduce<{index:number;price:number}|null>((best, x, offset) => {
-          const index = Math.max(0, micro.index - 12) + offset;
+          const index = lookbackStart + offset;
           return !best || x.low < best.price ? {index, price:x.low} : best;
         }, null);
         if (low) return makeSet("ORDER_FLOW", low.index, low.price, micro.index, c.high, "Latest confirmed bullish micro-structure leg");
