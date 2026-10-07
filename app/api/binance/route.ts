@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     const body = await upstream.text();
     if (upstream.status === 451) {
       return NextResponse.json(
-        { error: "Binance blocked the Vercel function region (HTTP 451)", region: process.env.VERCEL_REGION ?? "unknown" },
+        { error: "Binance blocked this server region (HTTP 451)", region: process.env.VERCEL_REGION ?? "unknown" },
         { status: 451, headers: { "cache-control": "no-store, max-age=0" } },
       );
     }
