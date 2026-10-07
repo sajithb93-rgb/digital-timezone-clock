@@ -159,6 +159,10 @@ export function isConfirmedSMCSignal(signal: SMCSignal | null): signal is SMCSig
   ) return false;
   if (!finite(signal.confidence) || signal.confidence < 0 || signal.confidence > 100) return false;
   if (!finite(signal.rr) || signal.rr < 1.5) return false;
+  if (
+    (signal.direction === "BUY" && signal.premiumDiscount !== "Discount") ||
+    (signal.direction === "SELL" && signal.premiumDiscount !== "Premium")
+  ) return false;
 
   const validDirection =
     signal.direction === "BUY" ? signal.stop < signal.entry : signal.stop > signal.entry;
