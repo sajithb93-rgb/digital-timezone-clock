@@ -935,9 +935,12 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   <div className={`setup-panel smc-setup-panel ${smc.setup.direction.toLowerCase()}`}>
    <div className="setup-head"><span>SMC SETUP LEVELS</span><strong className={smc.setup.status==="ACTIVE"?"setup-active":"setup-wait"}>{smc.setup.status==="ACTIVE"?"ACTIVE":smc.setup.direction==="WAIT"?"WAIT":"WAIT · "+smc.setup.direction}</strong></div>
    <div className="setup-grid">
-    <span>Trend<b>{smc.trend}</b></span><span>Score<b>{smc.setup.confidence}/100</b></span><span>Entry<b>{smc.setup.entry!=null?smc.setup.entry.toFixed(4):"—"}</b></span><span>SL<b>{smc.stop!=null?smc.stop.toFixed(4):"—"}</b></span>
+    <span>Trend<b>{smc.trend}</b></span><span>Score<b>{smc.setup.confidence}/100</b></span>
+    <span>Entry<b>{smc.setup.entry!=null?smc.setup.entry.toFixed(4):smc.entryZone?((smc.entryZone.low+smc.entryZone.high)/2).toFixed(4):"—"}</b></span>
+    <span>SL<b>{smc.stop!=null?smc.stop.toFixed(4):"—"}</b></span>
     <span>TP1<b>{smc.targets?.[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{smc.targets?.[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{smc.targets?.[2]?.toFixed(4)||"—"}</b></span><span>R:R<b>{smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}</b></span>
    </div>
+   {smc.entryZone&&smc.setup.status!=="ACTIVE"&&<div className="setup-empty">ANALYTICAL LEVELS · NOT AN ACTIVE SIGNAL</div>}
   </div>
  ):null;
  const elitewavePanel=showElliott?(
