@@ -155,7 +155,10 @@ export function findLatestSMCCausalSequence(
   if(sweep.index>=latestStructure.index||latestStructure.index-sweep.index>maxGap)continue;
   if(sweep.displacementIndex<sweep.index||sweep.displacementIndex>latestStructure.index)continue;
   for(const internal of internalEvents){
-   if(internal.index<=latestStructure.index||internal.index>asOf)continue;
+   // The internal confirmation must be on a prior closed candle. Reusing
+   // the current retest candle as both confirmation and entry double-counts
+   // one price move and weakens confirmed-only semantics.
+   if(internal.index<=latestStructure.index||internal.index>=asOf)continue;
    if(internal.direction!==latestStructure.direction||internal.index-latestStructure.index>maxGap)continue;
    candidates.push({direction:latestStructure.direction,sweep,structure:latestStructure,internal});
   }
