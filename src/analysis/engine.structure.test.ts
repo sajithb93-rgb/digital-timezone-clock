@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyProtectedStructureBreak, detectStructureEvents, equalLevels, pivots, type Candle, type Pivot } from "./engine";
+import { analyzeSMC, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, pivots, type Candle, type Pivot } from "./engine";
 
 describe("protected SMC structure breaks", () => {
   it("does not classify a newer unprotected low as CHOCH", () => {
