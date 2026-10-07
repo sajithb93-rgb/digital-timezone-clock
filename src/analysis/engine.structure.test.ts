@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeSMC, chooseAnalyticalEntryZone, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, pivots, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
+import { analyzeSMC, chooseAnalyticalEntryZone, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, inferCandleIntervalMs, pivots, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
 
 describe("protected SMC structure breaks", () => {
   it("does not classify a newer unprotected low as CHOCH", () => {
@@ -95,10 +95,11 @@ describe("timeframe inference safety", () => {
       {time:1,open:100.5,high:101.5,low:100,close:101,volume:10,closed:true},
       {time:2,open:101,high:102,low:100.5,close:101.5,volume:10,closed:true},
     ];
+    expect(inferCandleIntervalMs(synthetic)).toBe(5*60_000);
+    const oneMinute = synthetic.map((c,i)=>({...c,time:i*60_000}));
+    expect(inferCandleIntervalMs(oneMinute)).toBe(60_000);
     expect(setupWindowProfileForInterval("5m").intervalMs).toBe(5*60_000);
     expect(setupWindowProfileForInterval("1h").intervalMs).toBe(60*60_000);
-    // analyzeSMC uses inferred candle spacing; sub-minute spacing must not be
-    // mistaken for a real exchange timeframe.
   });
 });
 
