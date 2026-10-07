@@ -319,8 +319,13 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   // Keep sweep/absorption freshness tied to elapsed market time rather than a
   // fixed number of candles. The reference is five 5-minute bars (25 minutes),
   // then rounded up to at least one bar for higher timeframes.
-  const intervalMs = inferCandleIntervalMs(closed);
-  const maxSweepAge = Math.max(1, Math.ceil((5 * 5 * 60_000) / Math.max(intervalMs, 1)));
+  const detectedIntervalMs = inferCandleIntervalMs(closed);
+  // Unit-sized synthetic fixtures and malformed feeds can report sub-second
+  // spacing. Real Binance klines are minute-based, so use the existing 5m
+  // reference for those ambiguous inputs rather than creating a multi-billion
+  // bar confirmation horizon.
+  const intervalMs = detectedIntervalMs >= 60_000 ? detectedIntervalMs : 5 * 60_000;
+  const maxSweepAge = Math.max(1, Math.min(60, Math.ceil((5 * 5 * 60_000) / intervalMs)));
   const maxCausalGap = maxSweepAge;
   // Use the latest qualifying event, not the oldest one in the lookback window.
   const sweepLow=recentBars.filter(b=>b.liquiditySweep==="LOW").at(-1);
