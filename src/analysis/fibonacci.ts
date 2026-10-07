@@ -156,7 +156,7 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
 
 function elliottFib(elliott: AdvancedElliottResult): AutoFibonacciSet | null {
   const primary = elliott.primary;
-  if (primary?.points?.length >= 4) {
+  if (primary && Array.isArray(primary.points) && primary.points.length >= 4) {
     // Wave 3 is the strongest completed impulse leg in the validated count.
     // Retracing that leg is the correct Wave-4 Fibonacci context.
     const p2 = primary.points[2];
@@ -173,7 +173,7 @@ function elliottFib(elliott: AdvancedElliottResult): AutoFibonacciSet | null {
   }
 
   const correction = elliott.correction;
-  if (correction?.points?.length >= 2) {
+  if (correction && Array.isArray(correction.points) && correction.points.length >= 2) {
     const a = correction.points.at(-2)!;
     const b = correction.points.at(-1)!;
     return makeSet(
