@@ -180,6 +180,24 @@ describe("SMC signal engine", () => {
     expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 30, 12)).toBeNull();
   });
 
+  it("requires sweep displacement to occur no later than the swing structure break", () => {
+    const sweepsBeforeStructure: Sweep[] = [
+      { index: 10, price: 99, type: "low", confirmed: true, displacement: true, displacementIndex: 11 },
+    ];
+    const sweepsAfterStructure: Sweep[] = [
+      { index: 10, price: 99, type: "low", confirmed: true, displacement: true, displacementIndex: 16 },
+    ];
+    const events: StructureEvent[] = [
+      { index: 15, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
+    ];
+    const internalEvents: StructureEvent[] = [
+      { index: 17, price: 104, type: "BOS", direction: "bullish", strength: "normal" },
+    ];
+
+    expect(findLatestSMCCausalSequence(sweepsBeforeStructure, events, internalEvents, 20, 12)).not.toBeNull();
+    expect(findLatestSMCCausalSequence(sweepsAfterStructure, events, internalEvents, 20, 12)).toBeNull();
+  });
+
   it("does not accept same-candle swing and internal confirmation as a causal chain", () => {
     const sweeps: Sweep[] = [
       { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
