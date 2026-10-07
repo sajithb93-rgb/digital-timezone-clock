@@ -956,13 +956,14 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const geometryValid=direction!==null&&entry!==null&&stop!==null&&targets.length>0
   &&isValidTradeGeometry(direction as "BUY"|"SELL",entry,stop,targets,MIN_SETUP_RR);
  const usable=geometryValid&&risk>0&&rr!==null&&rr>=MIN_SETUP_RR;
- const hasSwing=confirmations.includes("Swing structure aligned");
+ const hasSwing=!!latestDirectionalEvent&&latestDirectionalEvent.direction===rawDirection;
  const hasConfirmedStructureBreak=(latestDirectionalEvent?.type==="BOS"||latestDirectionalEvent?.type==="CHOCH")
   &&latestDirectionalEvent.direction===rawDirection;
- const hasInternal=confirmations.includes("Internal structure aligned"); const hasSweep=confirmations.includes("Liquidity sweep + displacement");
- const hasPD=confirmations.includes("Premium/discount aligned");
- const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap")||confirmations.includes("Qualified active breaker"); // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
- // "entry zone + RR". A scanner row can remain WATCH/SETUP without this gate.
+ const hasInternal=!!latestInternalDirectionalEvent&&latestInternalDirectionalEvent.direction===rawDirection;
+ const hasSweep=!!sweep&&sweep.confirmed===true&&sweep.displacement===true;
+ const hasPD=(rawDirection==="bullish"&&pd==="Discount")||(rawDirection==="bearish"&&pd==="Premium");
+ const hasQualifiedZone=!!confirmedZoneSelected&&!!selectedZone&&selectedZone.linked===true;
+ // ACTIVE is driven by structured evidence, not display-string wording.
  const confirmedGate=last.closed!==false
   &&rawDirection!==null
   &&hasSwing
