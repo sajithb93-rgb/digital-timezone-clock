@@ -106,7 +106,7 @@ export function generateSMCSignal(
   const rr = Math.abs(targets[0] - entry) / risk;
   if (!finite(rr) || rr < 1.5) return null;
 
-  return {
+  const signal: SMCSignal = {
     direction,
     status: "ACTIVE",
     entry,
@@ -124,15 +124,46 @@ export function generateSMCSignal(
     entryZone: { low: zone.low, high: zone.high },
     premiumDiscount: result.premiumDiscount,
   };
+  return isConfirmedSMCSignal(signal) ? signal : null;
 }
 
 export function isConfirmedSMCSignal(signal: SMCSignal | null): signal is SMCSignal {
   if (!signal || signal.status !== "ACTIVE") return false;
   if (!finite(signal.entry) || !finite(signal.stop) || signal.entry <= 0 || signal.stop <= 0) return false;
+  if (!Number.isInteger(signal.asOf) || signal.asOf < 0) return false;
+  if (
+    !Number.isInteger(signal.sweepIndex) ||
+    !Number.isInteger(signal.structureIndex) ||
+    !Number.isInteger(signal.zoneIndex) ||
+    signal.sweepIndex < 0 ||
+    signal.structureIndex < 0 ||
+    signal.zoneIndex < 0 ||
+    signal.sweepIndex > signal.asOf ||
+    signal.structureIndex > signal.asOf ||
+    signal.zoneIndex > signal.asOf
+  ) return false;
+  if (
+    !finite(signal.entryZone.low) ||
+    !finite(signal.entryZone.high) ||
+    signal.entryZone.low <= 0 ||
+    signal.entryZone.low >= signal.entryZone.high ||
+    signal.entry < signal.entryZone.low ||
+    signal.entry > signal.entryZone.high
+  ) return false;
+  if (
+    signal.zoneType !== "FVG" &&
+    signal.zoneType !== "OB" &&
+    signal.zoneType !== "BREAKER"
+  ) return false;
+  if (!finite(signal.confidence) || signal.confidence < 0 || signal.confidence > 100) return false;
+  if (!finite(signal.rr) || signal.rr < 1.5) return false;
 
   const validDirection =
     signal.direction === "BUY" ? signal.stop < signal.entry : signal.stop > signal.entry;
   if (!validDirection || signal.targets.length < 2) return false;
+
+  const geometryRR = Math.abs(signal.targets[0] - signal.entry) / Math.abs(signal.entry - signal.stop);
+  if (!finite(geometryRR) || Math.abs(geometryRR - signal.rr) > Math.max(1e-9, signal.rr * 1e-6)) return false;
 
   return isValidTradeGeometry(signal.direction, signal.entry, signal.stop, signal.targets, 1.5);
 }
