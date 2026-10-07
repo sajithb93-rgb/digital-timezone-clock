@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateSMCSignal, isConfirmedSMCSignal } from "./smcSignalEngine";
-import type { Candle } from "./engine";
+import { analyzeSMC, type Candle } from "./engine";
 
 function candles(rows: Array<[number, number, number, number]>): Candle[] {
   return rows.map(([open, high, low, close], time) => ({
@@ -46,6 +46,40 @@ describe("SMC signal engine", () => {
       premiumDiscount: "Discount" as const,
     };
     expect(isConfirmedSMCSignal(invalid)).toBe(false);
+  });
+
+  it("keeps causal indices stable when the latest open candle is excluded", () => {
+    const c = candles(Array.from({ length: 100 }, (_, i) => [
+      100 + Math.sin(i / 5),
+      101 + Math.sin(i / 5),
+      99 + Math.sin(i / 5),
+      100 + Math.sin(i / 5),
+    ]));
+    c[c.length - 1].closed = false;
+
+    const prefix = c.slice(0, -1);
+    const result = analyzeSMC(prefix);
+    expect(result.asOf).toBe(prefix.length - 1);
+
+    const direct = generateSMCSignal(c, c.length - 2, "5m");
+    expect(direct === null || direct.asOf <= c.length - 2).toBe(true);
+    if (direct) {
+      expect(direct.sweepIndex).toBeLessThanOrEqual(direct.asOf);
+      expect(direct.structureIndex).toBeLessThanOrEqual(direct.asOf);
+      expect(direct.zoneIndex).toBeLessThanOrEqual(direct.asOf);
+    }
+  });
+
+  it("never accepts an earlier open candle as confirmed history", () => {
+    const c = candles(Array.from({ length: 80 }, (_, i) => [
+      100 + i * 0.1,
+      101 + i * 0.1,
+      99 + i * 0.1,
+      100 + i * 0.1,
+    ]));
+    c[60].closed = false;
+    const result = analyzeSMC(c);
+    expect(result.asOf).toBeLessThan(60);
   });
 
   it("rejects targets that do not meet minimum RR", () => {
