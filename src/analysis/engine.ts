@@ -137,11 +137,22 @@ export function isOrderBlockCausal(zoneOrigin:number,displacementIndex:number,st
  return zoneOrigin<displacementIndex&&structureIndex>=displacementIndex&&structureIndex-zoneOrigin<=maxGap;
 }
 export function isEntryZoneCausal(zoneOrigin:number,sweepIndex:number,structureIndex:number,kind:"OB"|"FVG"|"BREAKER",maxGap=12):boolean{
+ if(!Number.isInteger(zoneOrigin)||!Number.isInteger(sweepIndex)||!Number.isInteger(structureIndex)||sweepIndex<0)return false;
+ if(structureIndex<=sweepIndex||structureIndex-sweepIndex>maxGap)return false;
  if(kind==="BREAKER"){
-  return sweepIndex>=0&&structureIndex>sweepIndex&&structureIndex-sweepIndex<=maxGap
-   &&zoneOrigin>=structureIndex&&zoneOrigin-structureIndex<=maxGap;
+  // A breaker exists only after the original OB has been broken and the
+  // polarity-flipped zone is created on/after that structural event.
+  return zoneOrigin>=structureIndex&&zoneOrigin-structureIndex<=maxGap;
  }
- return isPostSweepZoneCausal(zoneOrigin,sweepIndex,structureIndex,maxGap);
+ if(kind==="OB"){
+  // The OB is the opposing candle/base that precedes the displacement/structure
+  // break, but it must belong to the same post-sweep leg.
+  return zoneOrigin>=sweepIndex&&zoneOrigin<structureIndex&&structureIndex-zoneOrigin<=maxGap;
+ }
+ // FVGs can be created by the displacement candle itself or immediately after
+ // the BOS/CHOCH. Requiring them to predate the structure break rejects valid
+ // post-break retracement zones.
+ return zoneOrigin>=sweepIndex&&zoneOrigin<=structureIndex+maxGap;
 }
 function range(c:Candle[],asOf=c.length-1){
  const end=Math.min(asOf,c.length-1);
@@ -700,7 +711,8 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   &&isValidTradeGeometry(direction as "BUY"|"SELL",entry,stop,targets,MIN_SETUP_RR);
  const usable=geometryValid&&risk>0&&rr!==null&&rr>=MIN_SETUP_RR;
  const hasSwing=confirmations.includes("Swing structure aligned");
- const hasConfirmedBOS=latestDirectionalEvent?.type==="BOS"&&latestDirectionalEvent.direction===rawDirection;
+ const hasConfirmedStructureBreak=(latestDirectionalEvent?.type==="BOS"||latestDirectionalEvent?.type==="CHOCH")
+  &&latestDirectionalEvent.direction===rawDirection;
  const hasInternal=confirmations.includes("Internal structure aligned"); const hasSweep=confirmations.includes("Liquidity sweep + displacement");
  const hasPD=confirmations.includes("Premium/discount aligned");
  const hasQualifiedZone=confirmations.includes("Qualified unmitigated order block")||confirmations.includes("Qualified unfilled fair value gap")||confirmations.includes("Qualified active breaker"); // "ACTIVE" is now a genuine multi-confirmation gate rather than merely
@@ -708,7 +720,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const confirmedGate=last.closed!==false
   &&rawDirection!==null
   &&hasSwing
-  &&hasConfirmedBOS
+  &&hasConfirmedStructureBreak
   &&hasInternal
   &&hasSweep
   &&hasPD
