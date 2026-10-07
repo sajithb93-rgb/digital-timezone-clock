@@ -732,7 +732,6 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const liquidityLows=uniquePivots([...equalLows,...lows.slice(-6)],tol).slice(-8);
  const sweeps:Sweep[]=[];
  for(const p of [...liquidityHighs,...liquidityLows]){
-  if(asOf-p.index>windows.sweepLookbackBars)continue;
   const sweepType=p.type==="H"?"high":"low";
   const latest=findLatestValidLiquiditySweep(data,p.price,sweepType,p.index+1,asOf);
   if(latest){
