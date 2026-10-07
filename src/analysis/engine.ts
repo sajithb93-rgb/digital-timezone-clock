@@ -538,7 +538,7 @@ function chooseEntryZone(
   if(o.type!==direction||!isCurrentRetestEligible("OB",asOf,o))continue;
   const age=asOf-o.index;
   if(age<0||age>windows.obAgeBars)continue;
-  if(!isEntryZoneCausal(o.index,sweepIndex,latestEvent.index,"OB",12))continue;
+  if(!isEntryZoneCausal(o.index,sweepIndex,latestEvent.index,"OB",windows.structureGapBars))continue;
   const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
   if(distance>atrValue*3.5)continue;
   candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked:true,distance});
@@ -547,7 +547,7 @@ function chooseEntryZone(
   if(f.type!==direction||!isCurrentRetestEligible("FVG",asOf,f))continue;
   const origin=f.to,age=asOf-origin;
   if(age<0||age>windows.zoneAgeBars)continue;
-  if(!isEntryZoneCausal(origin,sweepIndex,latestEvent.index,"FVG",12))continue;
+  if(!isEntryZoneCausal(origin,sweepIndex,latestEvent.index,"FVG",windows.structureGapBars))continue;
   const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
   if(distance>atrValue*3.5)continue;
   candidates.push({low:f.low,high:f.high,origin,kind:"FVG",strength:f.size??0,linked:true,distance});
@@ -555,8 +555,8 @@ function chooseEntryZone(
  for(const b of breakers){
   if(!b.active||b.type!==direction)continue;
   const age=asOf-b.index;
-  if(age<0||age>40)continue;
-  if(!isEntryZoneCausal(b.index,sweepIndex,latestEvent.index,"BREAKER",12))continue;
+  if(age<0||age>windows.zoneAgeBars)continue;
+  if(!isEntryZoneCausal(b.index,sweepIndex,latestEvent.index,"BREAKER",windows.structureGapBars))continue;
   const distance=last.close<b.low?b.low-last.close:last.close>b.high?last.close-b.high:0;
   if(distance>atrValue*3.5)continue;
   candidates.push({low:b.low,high:b.high,origin:b.index,kind:"BREAKER",strength:0.8,linked:true,distance});
@@ -676,7 +676,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const sweep=rawDirection==="bullish"
   ?sweeps.slice().reverse().find(x=>x.type==="low"&&asOf-x.index<=windows.sweepLookbackBars)
   :rawDirection==="bearish"
-   ?sweeps.slice().reverse().find(x=>x.type==="high"&&asOf-x.index<=20)
+   ?sweeps.slice().reverse().find(x=>x.type==="high"&&asOf-x.index<=windows.sweepLookbackBars)
    :undefined;
  const latestDirectionalEvent=rawDirection
   ?events.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
