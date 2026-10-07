@@ -518,7 +518,7 @@ export function isCurrentRetestEligible(
  return true;
 }
 
-function chooseAnalyticalEntryZone(
+export function chooseAnalyticalEntryZone(
  direction:"bullish"|"bearish"|null,
  obs:OB[],
  fvgs:FVG[],
