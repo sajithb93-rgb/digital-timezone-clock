@@ -147,8 +147,8 @@ describe("SMC signal engine", () => {
 
   it("selects the freshest compatible sweep for the latest swing event", () => {
     const sweeps: Sweep[] = [
-      { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
-      { index: 20, price: 98, type: "low", confirmed: true, displacement: true },
+      { index: 5, price: 99, type: "low", confirmed: true, displacement: true, displacementIndex: 6 },
+      { index: 20, price: 98, type: "low", confirmed: true, displacement: true, displacementIndex: 21 },
     ];
     const events: StructureEvent[] = [
       { index: 17, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
@@ -167,7 +167,7 @@ describe("SMC signal engine", () => {
 
   it("rejects an older bullish chain after a newer opposite swing event", () => {
     const sweeps: Sweep[] = [
-      { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
+      { index: 5, price: 99, type: "low", confirmed: true, displacement: true, displacementIndex: 6 },
     ];
     const events: StructureEvent[] = [
       { index: 15, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
@@ -200,7 +200,7 @@ describe("SMC signal engine", () => {
 
   it("does not accept same-candle swing and internal confirmation as a causal chain", () => {
     const sweeps: Sweep[] = [
-      { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
+      { index: 5, price: 99, type: "low", confirmed: true, displacement: true, displacementIndex: 6 },
     ];
     const events: StructureEvent[] = [
       { index: 10, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
