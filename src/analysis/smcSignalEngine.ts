@@ -83,14 +83,16 @@ export function generateSMCSignal(
   }
 
   const direction: SMCSignalDirection = setup.direction;
-  const event = result.events
-    .slice()
-    .reverse()
-    .find(e => (direction === "BUY" ? e.direction === "bullish" : e.direction === "bearish"));
-  const sweep = result.sweeps
-    .slice()
-    .reverse()
-    .find(s => direction === "BUY" ? s.type === "low" : s.type === "high");
+  const causal = result.causalSequence;
+  if (
+    !causal ||
+    causal.direction !== (direction === "BUY" ? "bullish" : "bearish") ||
+    causal.sweepIndex < 0 ||
+    causal.structureIndex < 0 ||
+    causal.internalIndex < 0
+  ) {
+    return null;
+  }
 
   const zone = result.entryZone;
   if (zone?.type !== "entry") return null;
@@ -117,9 +119,9 @@ export function generateSMCSignal(
     timeframe,
     asOf: result.asOf,
     confirmations: [...setup.confirmations],
-    sweepIndex: sweep?.index ?? -1,
-    structureIndex: event?.index ?? -1,
-    zoneIndex: zoneIndex ?? event?.index ?? result.asOf,
+    sweepIndex: causal.sweepIndex,
+    structureIndex: causal.structureIndex,
+    zoneIndex: zoneIndex ?? result.asOf,
     zoneType,
     entryZone: { low: zone.low, high: zone.high },
     premiumDiscount: result.premiumDiscount,
