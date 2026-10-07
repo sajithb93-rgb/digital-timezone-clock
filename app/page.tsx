@@ -297,8 +297,7 @@ export default function Home(){
     const deepWorkers=Math.min(3,deepLimit);
     const scanOne=async(c:{candidate:(typeof candidates)[number];score:number;candles:Candle[]})=>{
       try{
-        const pair=c.candidate.pair;
-        const tfMs=intervalMs(orderFlowScanTf);
+        const pair=c.candidate.pair;        const tfMs=intervalMs(orderFlowScanTf);
         const lookback=Math.max(tfMs*14,60*60*1000);
         const trades=await fetchScannerAggTrades(pair.symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
         const book=new FootprintBook(tfMs,pair.tickSize,36);
@@ -597,8 +596,7 @@ export default function Home(){
    historyLoading=false;
    if(!stop){
     setFootprintHistoryReady(true);
-    setFootprintVersion(v=>v+1);
-    if(lastError) setError(lastError instanceof Error?lastError.message:"Order Flow history backfill unavailable; live footprint will continue");
+    setFootprintVersion(v=>v+1);    if(lastError) setError(lastError instanceof Error?lastError.message:"Order Flow history backfill unavailable; live footprint will continue");
    }
   };
   void loadHistory();connect();
@@ -770,7 +768,7 @@ export default function Home(){
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef} aria-label="Live Binance candlestick chart" role="img"/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers} autoFib={autoFib}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef} aria-label="Live Binance candlestick chart" role="img"/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers} autoFib={autoFib} account={account} riskPercent={riskPercent}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span>{mode==="orderflow"&&<span><i className="legend-dot liq-dot"/> Order Flow</span>}{layers.fibonacci&&autoFib.length>0&&<span><i className="legend-dot fib-dot"/> Auto Fibonacci</span>}<span className="chart-tip">Live Binance {marketConfig[marketType].label.toLowerCase()} data · analysis uses closed candles</span></div>
    </div>
 
@@ -897,8 +895,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     &&orderFlow.entry!=null&&orderFlow.stop!=null&&orderFlow.targets?.length===3
     &&orderFlow.diagnostics.some(d=>d.key==="trade_geometry"&&d.passed)
     &&orderFlow.diagnostics.some(d=>d.key==="target_quality"&&d.passed)
-    &&orderFlow.source==="BINANCE_FOOTPRINT"
-    &&isValidAutoTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
+    &&orderFlow.source==="BINANCE_FOOTPRINT"    &&isValidAutoTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
     direction=orderFlow.direction;
     entry=orderFlow.entry;
     stop=orderFlow.stop;
