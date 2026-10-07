@@ -26,6 +26,7 @@ const ALLOWED_QUERY_KEYS = new Set([
 type Market = keyof typeof BASES;
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const market = request.nextUrl.searchParams.get("market") as Market | null;
@@ -70,6 +71,12 @@ export async function GET(request: NextRequest) {
       headers: { Accept: "application/json" },
     });
     const body = await upstream.text();
+    if (upstream.status === 451) {
+      return NextResponse.json(
+        { error: "Binance blocked the Vercel function region (HTTP 451)", region: process.env.VERCEL_REGION ?? "unknown" },
+        { status: 451, headers: { "cache-control": "no-store, max-age=0" } },
+      );
+    }
     return new NextResponse(body, {
       status: upstream.status,
       headers: {
