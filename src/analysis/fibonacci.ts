@@ -1,4 +1,4 @@
-import type { Candle, SMCResult } from "./engine";
+import { inferCandleIntervalMs, type Candle, type SMCResult } from "./engine";
 import type { AdvancedElliottResult } from "./elliott";
 import type { OrderFlowResult } from "./orderflow";
 
@@ -24,14 +24,7 @@ export type AutoFibonacciSet = {
 const RETRACEMENTS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
 
 function inferFibLookbackBars(candles: Candle[]): number {
-  const deltas: number[] = [];
-  for (let i = 1; i < candles.length; i += 1) {
-    const d = candles[i].time - candles[i - 1].time;
-    if (Number.isFinite(d) && d > 0) deltas.push(d);
-  }
-  if (!deltas.length) return 12;
-  deltas.sort((a, b) => a - b);
-  const intervalMs = deltas[Math.floor(deltas.length / 2)];
+  const intervalMs = inferCandleIntervalMs(candles);
   const target = Math.round((12 * 5 * 60 * 1000) / Math.max(intervalMs, 1));
   return Math.max(1, Math.min(60, target));
 }
