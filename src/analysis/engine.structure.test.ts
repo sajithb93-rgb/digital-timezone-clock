@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeSMC, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, pivots, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
+import { analyzeSMC, chooseAnalyticalEntryZone, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, pivots, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
 
 describe("protected SMC structure breaks", () => {
   it("does not classify a newer unprotected low as CHOCH", () => {
@@ -69,18 +69,21 @@ describe("protected SMC structure breaks", () => {
 
 
 describe("Setup Levels analytical display path", () => {
-  it("exposes a valid analytical entry zone even when no confirmed causal setup exists", () => {
-    const candles: Candle[] = Array.from({ length: 36 }, (_, i) => {
-      if (i === 20) return { time:i, open:120, high:121, low:119, close:120.5, volume:100, closed:true };
-      if (i === 21) return { time:i, open:121.5, high:122.2, low:121.4, close:122, volume:100, closed:true };
-      if (i === 22) return { time:i, open:124, high:125, low:123.9, close:124.5, volume:100, closed:true };
-      const base = i > 22 ? 102 + i : 100 + i;
-      return { time:i, open:base, high:base+1, low:base-1, close:base+0.5, volume:100, closed:true };
-    });
-    const result = analyzeSMC(candles);
-    expect(result.trend).toBe("Bullish");
-    expect(result.entryZone).not.toBeNull();
-    expect(result.entryZone!.high).toBeGreaterThan(result.entryZone!.low);
+  it("selects a fresh unmitigated analytical order block without requiring ACTIVE confirmation", () => {
+    const zone = chooseAnalyticalEntryZone(
+      "bullish",
+      [{index:20,low:100,high:102,type:"bullish",mitigated:false,strength:1}] as any,
+      [],
+      [],
+      {time:30,open:101,high:103,low:100.5,close:102,volume:100,closed:true},
+      1,
+      30,
+      {intervalMs:300000,sweepLookbackBars:20,structureGapBars:12,obAgeBars:50,zoneAgeBars:40}
+    );
+    expect(zone).not.toBeNull();
+    expect(zone?.kind).toBe("OB");
+    expect(zone?.linked).toBe(false);
+    expect(zone!.high).toBeGreaterThan(zone!.low);
   });
 });
 
