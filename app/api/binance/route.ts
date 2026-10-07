@@ -140,4 +140,10 @@ export async function GET(request: NextRequest) {
       { error: "Binance upstream unavailable" },
       { status: 502, headers: { "cache-control": "no-store" } },
     );
+  } catch {
+    return NextResponse.json(
+      { error: "Binance upstream unavailable" },
+      { status: 502, headers: { "cache-control": "no-store" } },
+    );
   }
+}
