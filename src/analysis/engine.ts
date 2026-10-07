@@ -5,7 +5,7 @@ export { normalizeCandleSeries };
 
 export type Pivot={index:number;price:number;type:"H"|"L";label?:string;strength?:number;confirmedAt?:number};
 export type FVG={from:number;to:number;low:number;high:number;type:"bullish"|"bearish";filled:boolean;fillIndex?:number;partial?:boolean;partialFillIndex?:number;size?:number};
-export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mitigated:boolean;mitigationIndex?:number;strength?:number};
+export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mitigated:boolean;mitigationIndex?:number;strength?:number;breakIndex?:number};
 export type Breaker={index:number;low:number;high:number;type:"bullish"|"bearish";active:boolean};
 export type StructureEvent={index:number;price:number;type:"BOS"|"CHOCH";direction:"bullish"|"bearish";strength:"normal"|"displacement"};
 export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean;displacement?:boolean};
@@ -504,7 +504,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
      if(c[j].close<c[i].low){invalid=j;break}
     }
     if(invalid===undefined||(m!==undefined&&m<invalid)){
-     out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength});
+     out.push({index:i,low:c[i].low,high:c[i].open,type:"bullish",mitigated:m!==undefined,mitigationIndex:m,strength:bullStrength,breakIndex:bullBreak});
     }
    }
   }
@@ -518,7 +518,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
      if(c[j].close>c[i].high){invalid=j;break}
     }
     if(invalid===undefined||(m!==undefined&&m<invalid)){
-     out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength});
+     out.push({index:i,low:c[i].open,high:c[i].high,type:"bearish",mitigated:m!==undefined,mitigationIndex:m,strength:bearStrength,breakIndex:bearBreak});
     }
    }
   }
@@ -652,6 +652,8 @@ function chooseEntryZone(
   if(o.type!==direction||!isCurrentRetestEligible("OB",asOf,o))continue;
   const age=asOf-o.index;
   if(age<0||age>windows.obAgeBars)continue;
+  if(o.breakIndex===undefined||asOf<=o.breakIndex)continue;
+  if(!isOrderBlockCausal(o.index,o.breakIndex,latestEvent.index,windows.structureGapBars))continue;
   if(!isEntryZoneCausal(o.index,sweepIndex,latestEvent.index,"OB",windows.structureGapBars))continue;
   const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
   if(distance>atrValue*3.5)continue;
@@ -661,6 +663,7 @@ function chooseEntryZone(
   if(f.type!==direction||!isCurrentRetestEligible("FVG",asOf,f))continue;
   const origin=f.to,age=asOf-origin;
   if(age<0||age>windows.zoneAgeBars)continue;
+  if(origin>=asOf)continue;
   if(!isEntryZoneCausal(origin,sweepIndex,latestEvent.index,"FVG",windows.structureGapBars))continue;
   const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
   if(distance>atrValue*3.5)continue;
@@ -670,6 +673,7 @@ function chooseEntryZone(
   if(!b.active||b.type!==direction)continue;
   const age=asOf-b.index;
   if(age<0||age>windows.zoneAgeBars)continue;
+  if(b.index>=asOf)continue;
   if(!isEntryZoneCausal(b.index,sweepIndex,latestEvent.index,"BREAKER",windows.structureGapBars))continue;
   const distance=last.close<b.low?b.low-last.close:last.close>b.high?last.close-b.high:0;
   if(distance>atrValue*3.5)continue;
