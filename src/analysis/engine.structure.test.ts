@@ -66,3 +66,25 @@ describe("protected SMC structure breaks", () => {
     expect(levels[0].index).toBe(13);
   });
 });
+
+
+describe("Setup Levels analytical display path", () => {
+  it("exposes a valid analytical entry zone even when no confirmed causal setup exists", () => {
+    const candles: Candle[] = Array.from({ length: 36 }, (_, i) => {
+      const base = 100 + i;
+      return {
+        time: i,
+        open: base,
+        high: base + 1,
+        low: base - 1,
+        close: base + 0.5,
+        volume: 100,
+        closed: true,
+      };
+    });
+    const result = analyzeSMC(candles);
+    expect(result.trend).toBe("Bullish");
+    expect(result.entryZone).not.toBeNull();
+    expect(result.entryZone!.high).toBeGreaterThan(result.entryZone!.low);
+  });
+});
