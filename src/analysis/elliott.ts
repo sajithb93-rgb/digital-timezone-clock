@@ -634,7 +634,6 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   // Normalize the exchange feed before assigning pivot indices. Then stop at
   // the first forming candle so later bars cannot leak into an earlier count.
   const data=normalizeCandleSeries(c,true);
-  const primaryIntervalMs=inferCandleIntervalMs(data);
   const maxPrimaryAgeBars=elliottRecentAgeBars(data);
   const ps=alternatePivots(swingPivots(data,2));
   const corrections=correctionCandidates(data);
