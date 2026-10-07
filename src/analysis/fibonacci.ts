@@ -33,7 +33,7 @@ function inferFibLookbackBars(candles: Candle[]): number {
   deltas.sort((a, b) => a - b);
   const intervalMs = deltas[Math.floor(deltas.length / 2)];
   const target = Math.round((12 * 5 * 60 * 1000) / Math.max(intervalMs, 1));
-  return Math.max(3, Math.min(60, target));
+  return Math.max(1, Math.min(60, target));
 }
 
 function finite(n: unknown): n is number {
