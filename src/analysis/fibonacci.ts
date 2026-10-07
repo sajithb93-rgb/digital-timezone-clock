@@ -89,14 +89,14 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
     if (event.direction === "bullish") {
       const highPivot =
         smc.pivots
-          .filter((p) => p.type === "H" && p.index < event.index && p.confirmedAt <= event.index)
+          .filter((p) => p.type === "H" && p.index < event.index && (p.confirmedAt ?? p.index) <= event.index)
           .find((p) => Math.abs(p.price - event.price) <= Math.max(Math.abs(event.price) * 1e-10, 1e-12)) ??
         smc.pivots
-          .filter((p) => p.type === "H" && p.index < event.index && p.confirmedAt <= event.index)
+          .filter((p) => p.type === "H" && p.index < event.index && (p.confirmedAt ?? p.index) <= event.index)
           .at(-1);
       const lowPivot = highPivot
         ? smc.pivots
-            .filter((p) => p.type === "L" && p.index < highPivot.index && p.confirmedAt <= highPivot.index)
+            .filter((p) => p.type === "L" && p.index < highPivot.index && (p.confirmedAt ?? p.index) <= highPivot.index)
             .at(-1)
         : undefined;
       if (highPivot && lowPivot) {
@@ -112,14 +112,14 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
     } else {
       const lowPivot =
         smc.pivots
-          .filter((p) => p.type === "L" && p.index < event.index && p.confirmedAt <= event.index)
+          .filter((p) => p.type === "L" && p.index < event.index && (p.confirmedAt ?? p.index) <= event.index)
           .find((p) => Math.abs(p.price - event.price) <= Math.max(Math.abs(event.price) * 1e-10, 1e-12)) ??
         smc.pivots
-          .filter((p) => p.type === "L" && p.index < event.index && p.confirmedAt <= event.index)
+          .filter((p) => p.type === "L" && p.index < event.index && (p.confirmedAt ?? p.index) <= event.index)
           .at(-1);
       const highPivot = lowPivot
         ? smc.pivots
-            .filter((p) => p.type === "H" && p.index < lowPivot.index && p.confirmedAt <= lowPivot.index)
+            .filter((p) => p.type === "H" && p.index < lowPivot.index && (p.confirmedAt ?? p.index) <= lowPivot.index)
             .at(-1)
         : undefined;
       if (highPivot && lowPivot) {
@@ -137,7 +137,7 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
 
   // Safe fallback: use the latest confirmed alternating swing pair, never the
   // current forming candle. This keeps the tool useful before a fresh BOS/CHOCH.
-  const pivots = smc.pivots.filter((p) => p.index <= lastClosed && p.confirmedAt <= lastClosed);
+  const pivots = smc.pivots.filter((p) => p.index <= lastClosed && (p.confirmedAt ?? p.index) <= lastClosed);
   for (let i = pivots.length - 1; i > 0; i -= 1) {
     const a = pivots[i - 1];
     const b = pivots[i];
