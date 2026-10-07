@@ -527,7 +527,8 @@ function chooseEntryZone(
  last:Candle,
  atrValue:number,
  asOf:number,
- sweepIndex:number|null
+ sweepIndex:number|null,
+ windows=setupWindowProfile([])
 ):ZoneCandidate|null{
  if(!direction||sweepIndex===null||sweepIndex<0)return null;
  const latestEvent=[...events].reverse().find(e=>e.direction===direction&&e.index<=asOf);
@@ -536,7 +537,7 @@ function chooseEntryZone(
  for(const o of obs){
   if(o.type!==direction||!isCurrentRetestEligible("OB",asOf,o))continue;
   const age=asOf-o.index;
-  if(age<0||age>50)continue;
+  if(age<0||age>windows.obAgeBars)continue;
   if(!isEntryZoneCausal(o.index,sweepIndex,latestEvent.index,"OB",12))continue;
   const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
   if(distance>atrValue*3.5)continue;
@@ -545,7 +546,7 @@ function chooseEntryZone(
  for(const f of fvgs){
   if(f.type!==direction||!isCurrentRetestEligible("FVG",asOf,f))continue;
   const origin=f.to,age=asOf-origin;
-  if(age<0||age>40)continue;
+  if(age<0||age>windows.zoneAgeBars)continue;
   if(!isEntryZoneCausal(origin,sweepIndex,latestEvent.index,"FVG",12))continue;
   const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
   if(distance>atrValue*3.5)continue;
@@ -571,17 +572,17 @@ function chooseEntryZone(
  });
  return candidates[0];
 }
-function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:Candle,obs:OB[],fvgs:FVG[],asOf:number,atrValue:number){
+function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:Candle,obs:OB[],fvgs:FVG[],asOf:number,atrValue:number,windows=setupWindowProfile([])){
  const levels:number[]=[];
  const opposite=direction==="bullish"?"bearish":"bullish";
  for(const o of obs){
-  if(o.type!==opposite||o.mitigated||asOf-o.index>50)continue;
+  if(o.type!==opposite||o.mitigated||asOf-o.index>windows.obAgeBars)continue;
   const mid=(o.low+o.high)/2;
   if(direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8)levels.push(mid);
   if(direction==="bearish"&&mid<Math.min(entry,last.low)&&mid>=last.low-atrValue*8)levels.push(mid);
  }
  for(const f of fvgs){
-  if(f.type!==opposite||f.filled||asOf-f.to>40)continue;
+  if(f.type!==opposite||f.filled||asOf-f.to>windows.zoneAgeBars)continue;
   const mid=(f.low+f.high)/2;
   // A target already touched by the latest signal candle is not a future objective.
   if(direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8)levels.push(mid);
@@ -590,6 +591,39 @@ function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:C
  return levels;
 }
 
+
+export type SMCSetupWindowProfile={
+ intervalMs:number;
+ sweepLookbackBars:number;
+ structureGapBars:number;
+ obAgeBars:number;
+ zoneAgeBars:number;
+};
+
+export function inferCandleIntervalMs(c:Candle[]):number{
+ const deltas:number[]=[];
+ for(let i=1;i<c.length;i++){
+  const d=c[i].time-c[i-1].time;
+  if(Number.isFinite(d)&&d>0)deltas.push(d);
+ }
+ if(!deltas.length)return 5*60_000;
+ deltas.sort((a,b)=>a-b);
+ return deltas[Math.floor(deltas.length/2)];
+}
+
+export function setupWindowProfile(c:Candle[]):SMCSetupWindowProfile{
+ const intervalMs=inferCandleIntervalMs(c);
+ const base=5*60_000;
+ const scale=base/Math.max(intervalMs,1);
+ const scaleBars=(baseBars:number,minBars:number,maxBars:number)=>Math.max(minBars,Math.min(maxBars,Math.round(baseBars*scale)));
+ return{
+  intervalMs,
+  sweepLookbackBars:scaleBars(20,5,20),
+  structureGapBars:scaleBars(12,3,12),
+  obAgeBars:scaleBars(50,10,50),
+  zoneAgeBars:scaleBars(40,8,40)
+ };
+}
 
 export function analyzeSMC(c:Candle[]):SMCResult{
  const empty:SMCResult={trend:"Neutral",asOf:-1,asOfTime:0,pivots:[],internalPivots:[],events:[],fvgs:[],orderBlocks:[],breakers:[],liquidityHighs:[],liquidityLows:[],equalHighs:[],equalLows:[],sweeps:[],premiumDiscount:"Equilibrium",premiumDiscountRange:{high:0,low:0,mid:0},vwap:0,volumeRatio:0,displacement:0,entryZone:null,stop:null,targets:[],score:0,setup:{direction:"WAIT",status:"WAIT",entry:null,stop:null,targets:[],rr:null,confidence:0,confirmations:[]}};
@@ -604,13 +638,14 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const events=detectStructureEvents(data,ps);
  const internalEvents=detectStructureEvents(data,internal);
  const asOf=data.length-1;
+ const windows=setupWindowProfile(data);
  const fvgs=findFvgs(data,a,asOf),obs=findOrderBlocks(data,a,asOf,events),breakers=makeBreakers(obs,data,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.15,.0000001);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
  const liquidityHighs=uniquePivots([...equalHighs,...highs.slice(-6)],tol).slice(-8);
  const liquidityLows=uniquePivots([...equalLows,...lows.slice(-6)],tol).slice(-8);
  const sweeps:Sweep[]=[];
  for(const p of [...liquidityHighs,...liquidityLows]){
-  if(asOf-p.index>40)continue;
+  if(asOf-p.index>windows.obAgeBars)continue;
   const sweepType=p.type==="H"?"high":"low";
   const latest=findLatestValidLiquiditySweep(data,p.price,sweepType,p.index+1,asOf);
   if(latest){
@@ -639,7 +674,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const pd=classifyPremiumDiscount(last.close,r.hi,r.lo);
  const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
  const sweep=rawDirection==="bullish"
-  ?sweeps.slice().reverse().find(x=>x.type==="low"&&asOf-x.index<=20)
+  ?sweeps.slice().reverse().find(x=>x.type==="low"&&asOf-x.index<=windows.sweepLookbackBars)
   :rawDirection==="bearish"
    ?sweeps.slice().reverse().find(x=>x.type==="high"&&asOf-x.index<=20)
    :undefined;
@@ -652,7 +687,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   &&latestDirectionalEvent.direction===rawDirection
   &&sweep.index<latestDirectionalEvent.index
   &&latestDirectionalEvent.index<=asOf
-  &&latestDirectionalEvent.index-sweep.index<=12;
+  &&latestDirectionalEvent.index-sweep.index<=windows.structureGapBars;
  const latestInternalDirectionalEvent=rawDirection
   ?internalEvents.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
   :undefined;
@@ -660,11 +695,11 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   sweep?.index??-1,
   latestDirectionalEvent?.index??-1,
   latestInternalDirectionalEvent?.index??null,
-  12
+  windows.structureGapBars
 ) && !!latestInternalDirectionalEvent && latestInternalDirectionalEvent.direction===rawDirection;
- const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,breakers,events,last,a,asOf,sweep?.index??null);
+ const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,breakers,events,last,a,asOf,sweep?.index??null,windows);
  const zoneCausal=!!selectedZone&&!!sweep&&!!latestDirectionalEvent
-  &&isEntryZoneCausal(selectedZone.origin,sweep.index,latestDirectionalEvent.index,selectedZone.kind,12);
+  &&isEntryZoneCausal(selectedZone.origin,sweep.index,latestDirectionalEvent.index,selectedZone.kind,windows.structureGapBars);
  const zone=selectedZone&&selectedZone.linked&&causalSequence&&zoneCausal
   ?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
  const direction=zone?rawDirection:null;
@@ -687,7 +722,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   :direction==="bearish"
    ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<Math.min(entry,last.low)).sort((a,b)=>b-a)
    :[];
- const opposingTargets=direction&&entry!==null?recentOpposingTargets(direction,entry,last,obs,fvgs,asOf,a):[];
+ const opposingTargets=direction&&entry!==null?recentOpposingTargets(direction,entry,last,obs,fvgs,asOf,a,windows):[];
  const uniqueTargets=[...structuralTargets,...opposingTargets].sort((x,y)=>direction==="bullish"?x-y:y-x)
   .filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*0.0005,.0000001));
  const targets=entry!==null&&risk
