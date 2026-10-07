@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BASES = {
-  spot: "https://api.binance.com/api/v3",
-  usdm: "https://fapi.binance.com/fapi/v1",
-  coinm: "https://dapi.binance.com/dapi/v1",
+  spot: ["https://api.binance.com/api/v3"],
+  // Binance documents multiple Futures REST entry points. Try the primary
+  // endpoint first, then the numbered official endpoints if the upstream
+  // edge is unavailable/geo-blocked. No third-party market-data source is used.
+  usdm: [
+    "https://fapi.binance.com/fapi/v1",
+    "https://fapi1.binance.com/fapi/v1",
+    "https://fapi2.binance.com/fapi/v1",
+    "https://fapi3.binance.com/fapi/v1",
+    "https://fapi4.binance.com/fapi/v1",
+  ],
+  coinm: [
+    "https://dapi.binance.com/dapi/v1",
+    "https://dapi1.binance.com/dapi/v1",
+    "https://dapi2.binance.com/dapi/v1",
+    "https://dapi3.binance.com/dapi/v1",
+    "https://dapi4.binance.com/dapi/v1",
+  ],
 } as const;
 
 const ALLOWED_ENDPOINTS = new Set([
@@ -64,27 +79,67 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid Binance interval" }, { status: 400 });
   }
 
-  const target = BASES[market] + path + (query.size ? "?" + query.toString() : "");
+  const suffix = path + (query.size ? "?" + query.toString() : "");
+  const targets = BASES[market].map((base) => base + suffix);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+
   try {
-    const upstream = await fetch(target, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    const body = await upstream.text();
-    if (upstream.status === 451) {
+    let lastStatus: number | null = null;
+    let lastBody = "";
+
+    for (const target of targets) {
+      try {
+        const upstream = await fetch(target, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
+        const body = await upstream.text();
+        lastStatus = upstream.status;
+        lastBody = body;
+
+        // A 451 can be specific to an upstream edge. Try the next official
+        // Binance endpoint before declaring the server region blocked.
+        if (upstream.status === 451) continue;
+
+        return new NextResponse(body, {
+          status: upstream.status,
+          headers: {
+            "content-type": upstream.headers.get("content-type") ?? "application/json",
+            "cache-control": "no-store, max-age=0",
+          },
+        });
+      } catch {
+        // Try the next official Binance endpoint.
+      }
+    }
+
+    if (lastStatus === 451) {
       return NextResponse.json(
-        { error: "Binance blocked this server region (HTTP 451)", region: process.env.VERCEL_REGION ?? "unknown" },
+        {
+          error: "Binance blocked all official Futures endpoints from this server region (HTTP 451)",
+          region: process.env.VERCEL_REGION ?? "unknown",
+        },
         { status: 451, headers: { "cache-control": "no-store, max-age=0" } },
       );
     }
-    return new NextResponse(body, {
-      status: upstream.status,
-      headers: {
-        "content-type": upstream.headers.get("content-type") ?? "application/json",
-        "cache-control": "no-store, max-age=0",
-      },
-    });
-  } catch {
-    return NextResponse.json({ error: "Binance upstream unavailable" }, { status: 502, headers: { "cache-control": "no-store" } });
+
+    if (lastStatus !== null) {
+      return new NextResponse(lastBody, {
+        status: lastStatus,
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store, max-age=0",
+        },
+      });
+    }
+
+    return NextResponse.json(
+      { error: "Binance upstream unavailable" },
+      { status: 502, headers: { "cache-control": "no-store" } },
+    );
+  } finally {
+    clearTimeout(timeout);
   }
 }
