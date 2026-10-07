@@ -531,7 +531,7 @@ export function chooseAnalyticalEntryZone(
  if(!direction)return null;
  const candidates:ZoneCandidate[]=[];
  for(const o of obs){
-  if(o.type!==direction||o.mitigated)continue;
+  if(o.type!==direction||!isCurrentRetestEligible("OB",asOf,o))continue;
   const age=asOf-o.index;
   if(age<0||age>windows.obAgeBars)continue;
   const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
@@ -539,7 +539,7 @@ export function chooseAnalyticalEntryZone(
   candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked:false,distance});
  }
  for(const f of fvgs){
-  if(f.type!==direction||f.filled||f.partial)continue;
+  if(f.type!==direction||!isCurrentRetestEligible("FVG",asOf,f))continue;
   const origin=f.to,age=asOf-origin;
   if(age<0||age>windows.zoneAgeBars)continue;
   const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
