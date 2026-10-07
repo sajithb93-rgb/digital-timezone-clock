@@ -203,18 +203,19 @@ export function isEntryZoneCausal(zoneOrigin:number,sweepIndex:number,structureI
  if(structureIndex<=sweepIndex||structureIndex-sweepIndex>maxGap)return false;
  if(kind==="BREAKER"){
   // A breaker exists only after the original OB has been broken and the
-  // polarity-flipped zone is created on/after that structural event.
-  return zoneOrigin>=structureIndex&&zoneOrigin-structureIndex<=maxGap;
+  // polarity-flipped zone is created shortly after that structural event.
+  // A wide post-event window can accidentally attach an unrelated later zone.
+  return zoneOrigin>=structureIndex&&zoneOrigin-structureIndex<=Math.min(maxGap,3);
  }
  if(kind==="OB"){
   // The OB is the opposing candle/base that precedes the displacement/structure
   // break, but it must belong to the same post-sweep leg.
   return zoneOrigin>=sweepIndex&&zoneOrigin<structureIndex&&structureIndex-zoneOrigin<=maxGap;
  }
- // FVGs can be created by the displacement candle itself or immediately after
- // the BOS/CHOCH. Requiring them to predate the structure break rejects valid
- // post-break retracement zones.
- return zoneOrigin>=sweepIndex&&zoneOrigin<=structureIndex+maxGap;
+ // The FVG should belong to the displacement/early continuation leg. Keeping
+ // the post-structure window tight prevents an unrelated later FVG becoming
+ // the confirmation POI for an older BOS/CHOCH.
+ return zoneOrigin>=sweepIndex&&zoneOrigin<=structureIndex+Math.min(maxGap,3);
 }
 function range(c:Candle[],asOf=c.length-1){
  const end=Math.min(asOf,c.length-1);
