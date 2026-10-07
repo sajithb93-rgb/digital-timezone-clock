@@ -147,6 +147,29 @@ describe("strategy-aware auto Fibonacci", () => {
     expect(set).toBeUndefined();
   });
 
+
+
+  it("uses the full timeframe-scaled lookback for bearish order-flow Fibonacci", () => {
+    const candles = Array.from({ length: 20 }, (_, i) => ({
+      time: i * 60 * 60 * 1000,
+      open: 100 + i,
+      high: 101 + i,
+      low: 99 + i,
+      close: 100.5 + i,
+      volume: 10,
+      closed: true,
+    }));
+    const orderFlow = {
+      recentBars: [
+        { index:10, time:10 * 60 * 60 * 1000, liquiditySweep:"NONE", sweepPrice:null, microStructure:"BEARISH" },
+      ],
+    } as any;
+    const sets = buildAutoFibonacci(candles as any, baseSMC(), baseElliott(), orderFlow, "orderflow");
+    expect(sets[0]?.source).toBe("ORDER_FLOW");
+    expect(sets[0]?.startIndex).toBe(7);
+    expect(sets[0]?.endIndex).toBe(10);
+  });
+
   it("uses a timeframe-scaled order-flow swing lookback", () => {
     const shortTf = candles.map((x,i)=>({...x,time:i*60_000}));
     const longTf = candles.map((x,i)=>({...x,time:i*15*60_000}));
