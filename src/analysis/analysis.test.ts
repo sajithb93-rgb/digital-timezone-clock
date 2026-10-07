@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak, isCurrentRetestEligible } from "./engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, setupWindowProfile, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak, isCurrentRetestEligible } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { normalizeCandleSeries } from "./candles";
 import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateStandardImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
@@ -21,6 +21,42 @@ function candles(count:number, start=100):Candle[]{
 }
 
 describe("analysis regression",()=>{
+  it("uses timeframe-scaled SMC setup windows across supported timeframes",()=>{
+    const base=[...Array(160)].map((_,i)=>({time:i*5*60_000,open:100+i*.1,high:100+i*.1+.2,low:100+i*.1-.2,close:100+i*.1,volume:100,closed:true}));
+    const profiles={
+      "1m":setupWindowProfile(base.map((x,i)=>({...x,time:i*60_000}))),
+      "5m":setupWindowProfile(base),
+      "15m":setupWindowProfile(base.map((x,i)=>({...x,time:i*15*60_000}))),
+      "1h":setupWindowProfile(base.map((x,i)=>({...x,time:i*60*60_000}))),
+      "4h":setupWindowProfile(base.map((x,i)=>({...x,time:i*4*60*60_000}))),
+      "1d":setupWindowProfile(base.map((x,i)=>({...x,time:i*24*60*60_000})))
+    };
+    expect(profiles["1m"].intervalMs).toBe(60_000);
+    expect(profiles["5m"].intervalMs).toBe(5*60_000);
+    expect(profiles["15m"].intervalMs).toBe(15*60_000);
+    expect(profiles["1h"].intervalMs).toBe(60*60_000);
+    expect(profiles["4h"].intervalMs).toBe(4*60*60_000);
+    expect(profiles["1d"].intervalMs).toBe(24*60*60_000);
+    expect(profiles["1m"].sweepLookbackBars).toBe(20);
+    expect(profiles["5m"].sweepLookbackBars).toBe(20);
+    expect(profiles["15m"].sweepLookbackBars).toBe(7);
+    expect(profiles["1h"].sweepLookbackBars).toBe(5);
+    expect(profiles["4h"].sweepLookbackBars).toBe(5);
+    expect(profiles["1d"].sweepLookbackBars).toBe(5);
+    expect(profiles["1m"].structureGapBars).toBe(12);
+    expect(profiles["5m"].structureGapBars).toBe(12);
+    expect(profiles["15m"].structureGapBars).toBe(4);
+    expect(profiles["1h"].structureGapBars).toBe(3);
+    expect(profiles["4h"].structureGapBars).toBe(3);
+    expect(profiles["1d"].structureGapBars).toBe(3);
+    expect(profiles["1m"].obAgeBars).toBe(50);
+    expect(profiles["5m"].obAgeBars).toBe(50);
+    expect(profiles["15m"].obAgeBars).toBe(17);
+    expect(profiles["1h"].obAgeBars).toBe(10);
+    expect(profiles["4h"].obAgeBars).toBe(10);
+    expect(profiles["1d"].obAgeBars).toBe(10);
+  });
+
   it("rejects an impulse when Wave 3 ties both Wave 1 and Wave 5",()=>{
     const prices=[100,110,105,115,110,120];
     const v=validateImpulseWave(prices,true);
