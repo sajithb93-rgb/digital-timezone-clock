@@ -655,12 +655,12 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
       const ageA=(data.length-1)-(a.points.at(-1)?.index??-1);
       const ageB=(data.length-1)-(b.points.at(-1)?.index??-1);
       const recentA=ageA<=maxPrimaryAgeBars?8*(1-ageA/maxPrimaryAgeBars):0;
-      const recentB=ageB<=MAX_PRIMARY_AGE_BARS?8*(1-ageB/MAX_PRIMARY_AGE_BARS):0;
+      const recentB=ageB<=maxPrimaryAgeBars?8*(1-ageB/maxPrimaryAgeBars):0;
       return (b.quality+recentB)-(a.quality+recentA)
         ||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1));
     })
     .filter((x,i,a)=>i===a.findIndex(y=>y.points.map(p=>p.index).join(",")===x.points.map(p=>p.index).join(",")));
-  const recentRanked=ranked.filter(x=>((data.length-1)-(x.points.at(-1)?.index??-1))<=MAX_PRIMARY_AGE_BARS);
+  const recentRanked=ranked.filter(x=>((data.length-1)-(x.points.at(-1)?.index??-1))<=maxPrimaryAgeBars);
   const validRecentRanked=recentRanked.filter(x=>!isCompletedWaveCountInvalidated(data,x));
   // Prefer a recent candidate that has a valid post-completion ABC continuation.
   // A stronger but stale historical count must not hide a currently actionable count,
@@ -678,7 +678,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   const alternative=ranked.find(x=>x!==primary&&x.quality>=55&&!isCompletedWaveCountInvalidated(data,x))??null;
   const correction=corrections.find(x=>{
     const end=x.points.at(-1)?.index??-1;
-    return end>=0&&((data.length-1)-end)<=MAX_PRIMARY_AGE_BARS;
+    return end>=0&&((data.length-1)-end)<=maxPrimaryAgeBars;
   })??corrections[0]??null;
 
   if(!primary){
