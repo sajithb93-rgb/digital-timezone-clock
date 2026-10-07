@@ -257,9 +257,7 @@ export default function Home(){
     const scanOne=async(c:{pair:BinanceSymbol;rank:number;volume:number})=>{
       try{
        const tfMs=intervalMs(orderFlowScanTf);
-       const supportedTf=orderFlowScanTf==="1m"||orderFlowScanTf==="5m"||orderFlowScanTf==="15m";
-       if(!supportedTf) throw new Error("Confirmed footprint scanner supports 1m / 5m / 15m only");
-       const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType,controller.signal)).filter(x=>x.closed!==false);
+const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType,controller.signal)).filter(x=>x.closed!==false);
        const lookback=Math.max(tfMs*14,60*60*1000);
        const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
        const book=new FootprintBook(tfMs,c.pair.tickSize,36);
@@ -774,7 +772,7 @@ export default function Home(){
         <button type="button" className="scanner-start-btn" onClick={()=>{setOrderFlowScanError("");setOrderFlowScanner([]);setOrderFlowScanProgress("");setOrderFlowScannerEnabled(true)}} disabled={orderFlowScannerEnabled}>START</button>
         <button type="button" className="scanner-stop-btn" onClick={()=>{setOrderFlowScannerEnabled(false);setOrderFlowScanBusy(false);setOrderFlowScanner([]);setOrderFlowScanProgress("Stopped");setOrderFlowScanError("")}} disabled={!orderFlowScannerEnabled&&!orderFlowScanBusy}>STOP</button>
       </div>
-      <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)}>{(["1m","5m","15m"] as const).map(tf=><option key={tf}>{tf}</option>)}</select>
+      <select value={orderFlowScanTf} onChange={e=>setOrderFlowScanTf(e.target.value)}>{(["1m","5m","15m","1h","4h","1d"] as const).map(tf=><option key={tf}>{tf}</option>)}</select>
       <small>{orderFlowScanBusy?"Scanning "+(orderFlowScanProgress||"…"):orderFlowScanProgress||"Ready"} · ALL eligible pairs · closed candles only · Binance footprint</small><div className="scanner-diagnostic"><b>{symbol} {orderFlowScanTf}</b><span>{orderFlow.rejectionReason}</span></div>
     </div>
     {!orderFlowScannerEnabled&&<div className="setup-empty">Scanner STOPPED — press START to scan all eligible pairs.</div>}
