@@ -1,4 +1,4 @@
-import type { SMCResult, ElliottResult } from "./engine";
+import { setupWindowProfile, type SMCResult, type ElliottResult } from "./engine";
 
 export type EntryScanState="CONFIRMED"|"SETUP"|"WATCH"|"WAIT";
 export type EntryScanRow={symbol:string;timeframe:string;state:EntryScanState;direction:"BUY"|"SELL"|"NONE";score:number;price:number|null;entry:number|null;stop:number|null;target:number|null;rr:number|null;reason:string};
@@ -11,7 +11,10 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  const latestEvent=r.events.slice().reverse().find(e=>e.direction===(direction==="BUY"?"bullish":direction==="SELL"?"bearish":"none"));
  const latestSweep=r.sweeps.slice().reverse().find(sw=>sw.type===(direction==="BUY"?"low":direction==="SELL"?"high":"none"));
  const asOf=r.asOf??0;
- const sweepRecent=!!latestSweep && latestSweep.index>=Math.max(0,asOf-20);
+ const sweepWindow=setupWindowProfile([]); // SMCResult indices are already normalized; use the timeframe from the scan row below.
+ const intervalHint=timeframe.trim().toLowerCase();
+ const timeframeMs:Record<string,number>={"1m":60_000,"5m":5*60_000,"15m":15*60_000,"1h":60*60_000,"4h":4*60*60_000,"1d":24*60*60_000};
+ const sweepRecent=!!latestSweep && latestSweep.index>=Math.max(0,asOf-Math.max(5,Math.min(20,Math.round(20*(5*60_000)/Math.max(timeframeMs[intervalHint]??sweepWindow.intervalMs,1)))));
  const sweepAligned=direction==="BUY" ? latestSweep?.type==="low" : direction==="SELL" ? latestSweep?.type==="high" : false;
  const causalSequence=!!latestEvent&&!!latestSweep&&latestSweep.index<latestEvent.index&&sweepRecent&&sweepAligned;
  const activeCausal=causalSequence&&(latestEvent?.type==="BOS"||latestEvent?.type==="CHOCH");
