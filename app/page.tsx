@@ -3,7 +3,7 @@
 // Build repair: ensure Vercel deploys the valid EliteWave source.
 
 import { memo, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, isValidTradeGeometry } from "../src/analysis/engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 import { analyzeOrderFlow, type OrderFlowResult } from "../src/analysis/orderflow";
@@ -20,6 +20,15 @@ type BinanceSymbol={symbol:string;baseAsset:string;quoteAsset:string;minQty:numb
 type Derivatives={openInterest:string;fundingRate:string;change24h:string}|null;
 type Ticker={symbol:string,priceChangePercent:number,quoteVolume:number};
 const intervals=["1m","5m","15m","1h","4h","1d"] as const;
+const isValidAutoTradeGeometry=(direction:"BUY"|"SELL",entry:number,stop:number,targets:number[],minRR=1.5):boolean=>{
+ if(!Number.isFinite(entry)||!Number.isFinite(stop)||entry<=0||stop<=0||entry===stop)return false;
+ const risk=Math.abs(entry-stop);
+ if(direction==="BUY"&&stop>=entry)return false;
+ if(direction==="SELL"&&stop<=entry)return false;
+ if(!Array.isArray(targets)||targets.length===0||!targets.every(Number.isFinite))return false;
+ return targets.every(t=>(direction==="BUY"?t>entry:t<entry)&&Math.abs(t-entry)/risk>=minRR);
+};
+
 const mtfIntervals=["4h","1h","15m","5m"];
 const marketConfig:Record<MarketKind,{label:string;rest:string;ws:string;aggRest:string}>={
  spot:{label:"SPOT",rest:"https://api.binance.com/api/v3",ws:"wss://stream.binance.com:9443/ws/",aggRest:"https://api.binance.com/api/v3/aggTrades"},
@@ -878,7 +887,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   if(showSMC&&smc.setup.status==="ACTIVE"&&smc.setup.direction!=="WAIT"
     &&smc.setup.entry!=null&&smc.stop!=null&&smc.targets?.[0]!=null
     &&smc.setup.rr!=null&&smc.setup.rr>=1.5
-    &&isValidTradeGeometry(smc.setup.direction,smc.setup.entry,smc.stop,smc.setup.targets,1.5)){
+    &&isValidAutoTradeGeometry(smc.setup.direction,smc.setup.entry,smc.stop,smc.setup.targets,1.5)){
     direction=smc.setup.direction;
     entry=smc.setup.entry;
     stop=smc.stop;
@@ -889,7 +898,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     &&orderFlow.diagnostics.some(d=>d.key==="trade_geometry"&&d.passed)
     &&orderFlow.diagnostics.some(d=>d.key==="target_quality"&&d.passed)
     &&orderFlow.source==="BINANCE_FOOTPRINT"
-    &&isValidTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
+    &&isValidAutoTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
     direction=orderFlow.direction;
     entry=orderFlow.entry;
     stop=orderFlow.stop;
@@ -908,7 +917,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     );
     const rr=rewardPerUnit/riskPerUnit;
     const ewDirection=bullish?"BUY":"SELL";
-    const geometry=isValidTradeGeometry(ewDirection,liveElite.entry,liveElite.invalidation,liveElite.targets,1.5);
+    const geometry=isValidAutoTradeGeometry(ewDirection,liveElite.entry,liveElite.invalidation,liveElite.targets,1.5);
     if(triggered&&Number.isFinite(rr)&&rr>=1.5&&geometry){
       direction=ewDirection;
       entry=liveElite.entry;
@@ -921,7 +930,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   if(!direction||entry==null||stop==null||target==null)return null;
   const riskPerUnit=Math.abs(entry-stop),rewardPerUnit=Math.abs(target-entry);
   if(!(riskPerUnit>0&&rewardPerUnit>0))return null;
-  if(!isValidTradeGeometry(direction,entry,stop,[target],1.5))return null;
+  if(!isValidAutoTradeGeometry(direction,entry,stop,[target],1.5))return null;
   const riskAmount=Math.max(0,account)*Math.max(0,riskPercent)/100;
   return {
     direction,entry,stop,target,source,
