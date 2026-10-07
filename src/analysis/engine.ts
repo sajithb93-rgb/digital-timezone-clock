@@ -680,7 +680,7 @@ function buildSetupWindowProfile(intervalMs:number):SMCSetupWindowProfile{
  // All setup windows are time-based first, then converted to bars. This keeps
  // the same elapsed-market-time logic across 1m/5m/15m/1h/4h/1d while still
  // enforcing a small minimum sample for structural confirmation.
- const barsFor=(windowMs:number,minBars=1,maxBars=240)=>Math.max(
+ const barsFor=(windowMs:number,minBars=1,maxBars=400)=>Math.max(
   minBars,
   Math.min(maxBars,Math.ceil(windowMs/safeInterval))
  );
