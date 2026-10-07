@@ -3,6 +3,7 @@ import { generateSMCSignal, isConfirmedSMCSignal } from "./smcSignalEngine";
 import {
   analyzeSMC,
   findLatestSMCCausalSequence,
+  isEntryZoneCausal,
   isSetupActive,
   isZoneRetestAfterFormation,
   isValidTradeGeometry,
@@ -177,6 +178,15 @@ describe("SMC signal engine", () => {
     ];
 
     expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 20, 12)).toBeNull();
+  });
+
+  it("does not attach distant post-structure FVG or breaker zones", () => {
+    expect(isEntryZoneCausal(15, 10, 15, "FVG", 12)).toBe(true);
+    expect(isEntryZoneCausal(18, 10, 15, "FVG", 12)).toBe(true);
+    expect(isEntryZoneCausal(19, 10, 15, "FVG", 12)).toBe(false);
+    expect(isEntryZoneCausal(15, 10, 15, "BREAKER", 12)).toBe(true);
+    expect(isEntryZoneCausal(18, 10, 15, "BREAKER", 12)).toBe(true);
+    expect(isEntryZoneCausal(19, 10, 15, "BREAKER", 12)).toBe(false);
   });
 
   it("requires a completed zone before allowing a retest", () => {
