@@ -8,7 +8,7 @@ import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 import { analyzeOrderFlow, type OrderFlowResult } from "../src/analysis/orderflow";
 import { classifySMCEntry, classifyElliottEntry, type EntryScanRow } from "../src/analysis/entryScanner";
-import { classifyOrderFlowSetup, type OrderFlowScanRow } from "../src/analysis/orderflowScanner";
+import { classifyOrderFlowSetup, orderFlowPrefilterScore, type OrderFlowScanRow } from "../src/analysis/orderflowScanner";
 import { FootprintBook, normalizeAggTrade, type AggTrade, type FootprintSnapshot } from "../src/analysis/footprint";
 import { analyzeReversal, analyzeReversalMTF, type ReversalEngineResult } from "../src/analysis/reversal";
 import { normalizeCandleSeries } from "../src/analysis/candles";
@@ -250,56 +250,80 @@ export default function Home(){
       .filter(p=>quoteFilter==="ALL"||p.quoteAsset===quoteFilter)
       .map(pair=>({pair,rank:scanner.findIndex(x=>x.symbol===pair.symbol),volume:scannerRef.current.find(x=>x.symbol===pair.symbol)?.quoteVolume??0}))
       .sort((a,b)=>b.volume-a.volume||a.pair.symbol.localeCompare(b.pair.symbol));
-    const rows:OrderFlowScanRow[]=[];
     const total=candidates.length;
-    setOrderFlowScanProgress(`0/${total} · ALL PAIRS`);
+    setOrderFlowScanProgress(`0/${total} · ALL PAIRS · PREFILTER`);
     setOrderFlowScanError("");
     if(!total){setOrderFlowScanner([]);setOrderFlowScanProgress("DONE · 0 eligible pairs");return}
-    // Scan every eligible Binance trading pair, but keep the REST queue bounded.
-    const workerCount=Math.min(2,total);
-    let cursor=0;
-    let doneCount=0;
-    const scanOne=async(c:{pair:BinanceSymbol;rank:number;volume:number})=>{
+
+    const prefiltered:{candidate:(typeof candidates)[number];score:number;candles:Candle[]}[]=[];
+    let preCursor=0,preDone=0;
+    const preWorkers=Math.min(6,total);
+    const prefilterOne=async(c:(typeof candidates)[number])=>{
       try{
-       const tfMs=intervalMs(orderFlowScanTf);
-const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType,controller.signal)).filter(x=>x.closed!==false);
-       const lookback=Math.max(tfMs*14,60*60*1000);
-       const trades=await fetchScannerAggTrades(c.pair.symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
-       const book=new FootprintBook(tfMs,c.pair.tickSize,36);
-       book.load(trades);
-       const fps=book.snapshots(candles,Date.now());
-       const result=analyzeOrderFlow(candles,fps);
-       return classifyOrderFlowSetup(c.pair.symbol,orderFlowScanTf,result);
-      }catch(e){
-       return {symbol:c.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:e instanceof Error?e.message:"Scanner data unavailable"} as OrderFlowScanRow;
-      }
+        const candles=(await fetchKlines(c.pair.symbol,orderFlowScanTf,36,marketType,controller.signal)).filter(x=>x.closed!==false);
+        const context=analyzeOrderFlow(candles,[]);
+        const score=orderFlowPrefilterScore(context);
+        if(score>=2)prefiltered.push({candidate:c,score,candles});
+      }catch{}
+      preDone+=1;
+      if(isCurrent())setOrderFlowScanProgress(`${preDone}/${total} · PREFILTER · ${c.pair.symbol}`);
     };
-    const worker=async()=>{
+    const preWorker=async()=>{
       while(isCurrent()){
-       const i=cursor++;
-       if(i>=total)break;
-       const row=await scanOne(candidates[i]);
-       if(!isCurrent())break;
-       rows[i]=row;
-       doneCount+=1;
-       if(row.state==="CONFIRMED"){
-        setOrderFlowScanner(prev=>{
-         if(orderFlowScanRunRef.current!==runId)return prev;
-         const next=[...prev.filter(x=>x.symbol!==row.symbol),row];
-         return next.sort((a,b)=>b.score-a.score||a.symbol.localeCompare(b.symbol));
-        });
-       }
-       setOrderFlowScanProgress(`${doneCount}/${total} · ${candidates[i].pair.symbol}`);
+        const i=preCursor++;
+        if(i>=total)break;
+        await prefilterOne(candidates[i]);
       }
     };
-    await Promise.all(Array.from({length:workerCount},()=>worker()));
+    await Promise.all(Array.from({length:preWorkers},()=>preWorker()));
+    if(!isCurrent())return;
+
+    prefiltered.sort((a,b)=>b.score-a.score||b.candidate.volume-a.candidate.volume||a.candidate.pair.symbol.localeCompare(b.candidate.pair.symbol));
+    const deepLimit=Math.min(24,prefiltered.length);
+    const deepCandidates=prefiltered.slice(0,deepLimit);
+    setOrderFlowScanProgress(`PREFILTER DONE · ${total} pairs · ${deepLimit} footprint candidates`);
+
+    const rows:OrderFlowScanRow[]=[];
+    let deepCursor=0,deepDone=0;
+    const deepWorkers=Math.min(3,deepLimit);
+    const scanOne=async(c:{candidate:(typeof candidates)[number];score:number;candles:Candle[]})=>{
+      try{
+        const pair=c.candidate.pair;
+        const tfMs=intervalMs(orderFlowScanTf);
+        const lookback=Math.max(tfMs*14,60*60*1000);
+        const trades=await fetchScannerAggTrades(pair.symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
+        const book=new FootprintBook(tfMs,pair.tickSize,36);
+        book.load(trades);
+        const fps=book.snapshots(c.candles,Date.now());
+        return classifyOrderFlowSetup(pair.symbol,orderFlowScanTf,analyzeOrderFlow(c.candles,fps));
+      }catch(e){
+        return {symbol:c.candidate.pair.symbol,timeframe:orderFlowScanTf,state:"WAIT",direction:"NONE",score:0,price:null,deltaRatio:0,pressure:"BALANCED",liquiditySweep:"NONE",absorption:"NONE",footprintBars:0,reason:e instanceof Error?e.message:"Scanner data unavailable"} as OrderFlowScanRow;
+      }
+    };
+    const deepWorker=async()=>{
+      while(isCurrent()){
+        const i=deepCursor++;
+        if(i>=deepLimit)break;
+        const row=await scanOne(deepCandidates[i]);
+        if(!isCurrent())break;
+        rows.push(row);
+        deepDone+=1;
+        if(row.state==="CONFIRMED"){
+          setOrderFlowScanner(prev=>{
+            if(orderFlowScanRunRef.current!==runId)return prev;
+            return [...prev.filter(x=>x.symbol!==row.symbol),row].sort((a,b)=>b.score-a.score||a.symbol.localeCompare(b.symbol));
+          });
+        }
+        if(isCurrent())setOrderFlowScanProgress(`FOOTPRINT ${deepDone}/${deepLimit} · ${row.symbol}`);
+      }
+    };
+    await Promise.all(Array.from({length:deepWorkers},()=>deepWorker()));
     if(isCurrent()){
-      const confirmed=rows.filter(Boolean).filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);
+      const confirmed=rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);
       setOrderFlowScanner(confirmed);
       setOrderFlowScanUpdated(Date.now());
-      setOrderFlowScanProgress(`DONE · ${total} pairs · ${confirmed.length} confirmed`);
-    }
-   }catch(e){if(isCurrent())setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
+      setOrderFlowScanProgress(`DONE · ${total} pairs scanned · ${deepLimit} footprint confirmed · ${confirmed.length} confirmed`);
+    }   }catch(e){if(isCurrent())setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
    finally{orderFlowScanInFlightRef.current=false;if(isCurrent())setOrderFlowScanBusy(false)}
   };
   scan();
