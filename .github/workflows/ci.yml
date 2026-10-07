@@ -4,12 +4,14 @@ on:
     branches: [trading-analysis-dashboard, feature/elitewave-autodraw, feature/smc-signal-engine]
   pull_request:
     branches: [trading-analysis-dashboard]
+  workflow_dispatch:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
