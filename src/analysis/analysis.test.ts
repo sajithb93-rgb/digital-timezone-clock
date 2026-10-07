@@ -149,6 +149,12 @@ describe("analysis regression",()=>{
     expect(isPostSweepZoneCausal(20,19,30)).toBe(true);
     expect(isPostSweepZoneCausal(10,1,30,12)).toBe(false);
   });
+  it("allows an FVG created by the displacement leg after BOS/CHOCH",()=>{
+    expect(isEntryZoneCausal(31,25,30,"FVG")).toBe(true);
+    expect(isEntryZoneCausal(42,25,30,"FVG")).toBe(false);
+    expect(isEntryZoneCausal(31,25,30,"OB")).toBe(false);
+    expect(isEntryZoneCausal(27,25,30,"OB")).toBe(true);
+  });
 
   it("tracks bullish FVG lifecycle from creation through full fill",()=>{
     const base=[
