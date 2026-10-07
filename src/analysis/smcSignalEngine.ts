@@ -169,3 +169,4 @@ export function isConfirmedSMCSignal(signal: SMCSignal | null): signal is SMCSig
 
   return isValidTradeGeometry(signal.direction, signal.entry, signal.stop, signal.targets, 1.5);
 }
+
