@@ -660,7 +660,10 @@ export function inferCandleIntervalMs(c:Candle[]):number{
  const deltas:number[]=[];
  for(let i=1;i<c.length;i++){
   const d=c[i].time-c[i-1].time;
-  if(Number.isFinite(d)&&d>0)deltas.push(d);
+  // Binance kline intervals supported by this tool are 1 minute or longer.
+  // Ignore malformed/synthetic sub-minute timestamps so one bad feed does
+  // not expand every timeframe-dependent freshness window.
+  if(Number.isFinite(d)&&d>=60_000)deltas.push(d);
  }
  if(!deltas.length)return 5*60_000;
  deltas.sort((a,b)=>a-b);
