@@ -2,7 +2,8 @@ import { chromium } from "playwright";
 
 const baseUrl = process.env.APP_URL || "http://127.0.0.1:3000";
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const context = await browser.newContext({ locale: "en-US", viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const page = await context.newPage();
 
 const consoleErrors = [];
 const pageErrors = [];
@@ -76,5 +77,6 @@ try {
   await page.screenshot({ path: "artifacts/browser-smoke.png", fullPage: true });
   console.log(JSON.stringify({ pass: true, ...result, consoleErrors, pageErrors, requestFailures, badResponses }, null, 2));
 } finally {
+  await context.close();
   await browser.close();
 }
