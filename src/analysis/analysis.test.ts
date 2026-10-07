@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak, isCurrentRetestEligible } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { normalizeCandleSeries } from "./candles";
-import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
+import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateStandardImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
   return Array.from({length:count},(_,i)=>{
@@ -24,6 +24,12 @@ describe("analysis regression",()=>{
   it("rejects an impulse when Wave 3 ties both Wave 1 and Wave 5",()=>{
     const prices=[100,110,105,115,110,120];
     const v=validateImpulseWave(prices,true);
+    expect(v.w3NotShortest).toBe(false);
+    expect(v.valid).toBe(false);
+  });
+  it("keeps the Elliott standard-impulse validator consistent on a tied Wave 3",()=>{
+    const prices=[100,110,105,115,110,120];
+    const v=validateStandardImpulse(prices,true);
     expect(v.w3NotShortest).toBe(false);
     expect(v.valid).toBe(false);
   });
