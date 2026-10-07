@@ -12,6 +12,7 @@ import { classifyOrderFlowSetup, type OrderFlowScanRow } from "../src/analysis/o
 import { FootprintBook, normalizeAggTrade, type AggTrade, type FootprintSnapshot } from "../src/analysis/footprint";
 import { analyzeReversal, analyzeReversalMTF, type ReversalEngineResult } from "../src/analysis/reversal";
 import { normalizeCandleSeries } from "../src/analysis/candles";
+import { buildAutoFibonacci, type AutoFibonacciSet } from "../src/analysis/fibonacci";
 
 type Mode="smc"|"elliott"|"combined"|"orderflow";
 type MarketKind="spot"|"usdm"|"coinm";
@@ -192,7 +193,7 @@ export default function Home(){
  const [candles,setCandles]=useState<Candle[]>([]),[analysisCandles,setAnalysisCandles]=useState<Candle[]>([]),[pairs,setPairs]=useState<BinanceSymbol[]>([]);
  const [pairSearch,setPairSearch]=useState(""),[quoteFilter,setQuoteFilter]=useState("USDT"),[mtfCandles,setMtfCandles]=useState<{interval:string;candles:Candle[]}[]>([]);
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[footprintHistoryReady,setFootprintHistoryReady]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
- const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true});
+ const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,reversal:true,fibonacci:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState(""),[smcEntryScanner,setSmcEntryScanner]=useState<EntryScanRow[]>([]),[elliottEntryScanner,setElliottEntryScanner]=useState<EntryScanRow[]>([]),[smcEntryTf,setSmcEntryTf]=useState("5m"),[elliottEntryTf,setElliottEntryTf]=useState("5m"),[smcEntryEnabled,setSmcEntryEnabled]=useState(false),[elliottEntryEnabled,setElliottEntryEnabled]=useState(false),[smcEntryBusy,setSmcEntryBusy]=useState(false),[elliottEntryBusy,setElliottEntryBusy]=useState(false),[smcEntryProgress,setSmcEntryProgress]=useState(""),[elliottEntryProgress,setElliottEntryProgress]=useState(""),[smcEntryUpdated,setSmcEntryUpdated]=useState(0),[elliottEntryUpdated,setElliottEntryUpdated]=useState(0),[smcEntryError,setSmcEntryError]=useState(""),[elliottEntryError,setElliottEntryError]=useState("");
  const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);
  const orderFlowScanInFlightRef=useRef(false);
@@ -205,6 +206,7 @@ export default function Home(){
  const footprintSnapshots=useMemo<FootprintSnapshot[]>(()=>!footprintHistoryReady?[]:(footprintBookRef.current?.snapshots(analysisCandles,Date.now())??[]),[analysisCandles,footprintVersion,footprintHistoryReady]);
  const orderFlow=useMemo(()=>analyzeOrderFlow(analysisCandles,footprintSnapshots),[analysisCandles,footprintSnapshots]);
  const reversal=useMemo<ReversalEngineResult>(()=>analyzeReversal(analysisCandles,smc,orderFlow),[analysisCandles,smc,orderFlow]);
+ const autoFib=useMemo<AutoFibonacciSet[]>(()=>buildAutoFibonacci(analysisCandles,smc,elliott,orderFlow,mode),[analysisCandles,smc,elliott,orderFlow,mode]);
  const mtfReversal=useMemo(()=>analyzeReversalMTF(mtfCandles),[mtfCandles]);
  const regime=useMemo(()=>detectRegime(analysisCandles),[analysisCandles]);
  const conf=useMemo(()=>confluence(smc,flow,regime),[smc,flow,regime]);
@@ -715,13 +717,13 @@ export default function Home(){
    <div className={`analysis-tabs${isModePending?" pending":""}`} aria-busy={isModePending}>{([["smc","SMC"],["elliott","ELLIOTT WAVE"],["combined","COMBINED"],["orderflow","ORDER FLOW"]] as const).map(([k,l])=><button className={mode===k?"active":""} onClick={()=>startModeTransition(()=>setMode(k))} key={k}>{l}</button>)}</div>
   </section>
 
-  <section className="toolbar"><div className="toolbar-title">CHART</div>{([["structure","STRUCTURE"],["zones","FVG / OB"],["liquidity","LIQUIDITY"],["trade","SETUP LEVELS"],["reversal","REVERSAL"]] as const).map(([k,l])=><button className={layers[k]?"layer-on":""} onClick={()=>toggle(k)} key={k}><i/>{l}</button>)}<button onClick={reset}>RESET VIEW</button><span className="toolbar-note">Closed-candle analysis only</span></section>
+  <section className="toolbar"><div className="toolbar-title">CHART</div>{([["structure","STRUCTURE"],["zones","FVG / OB"],["liquidity","LIQUIDITY"],["trade","SETUP LEVELS"],["reversal","REVERSAL"],["fibonacci","FIBONACCI"]] as const).map(([k,l])=><button className={layers[k]?"layer-on":""} onClick={()=>toggle(k)} key={k}><i/>{l}</button>)}<button onClick={reset}>RESET VIEW</button><span className="toolbar-note">Closed-candle analysis only</span></section>
   {error&&<div className="alert">{error}</div>}
   <div className={`news-filter news-${newsRisk.level.toLowerCase()}`}><div><span className="news-kicker">NEWS FILTER</span><strong>{newsRisk.level}</strong><span className="news-message">{newsLoading?"Checking calendar…":newsRisk.message}</span></div><b>{newsRisk.blocked?"TRADING BLOCKED":"TRADING ALLOWED"}</b></div>
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef} aria-label="Live Binance candlestick chart" role="img"/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef} aria-label="Live Binance candlestick chart" role="img"/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers} autoFib={autoFib}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span>{mode==="orderflow"&&<span><i className="legend-dot liq-dot"/> Order Flow</span>}<span className="chart-tip">Live Binance {marketConfig[marketType].label.toLowerCase()} data · analysis uses closed candles</span></div>
    </div>
 
@@ -799,7 +801,7 @@ export default function Home(){
  </main>;
 }
 
-function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mtfReversal,mode,tick,layers}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mtfReversal:any;mode:Mode;tick:number;layers:any}){
+function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mtfReversal,mode,tick,layers,autoFib}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mtfReversal:any;mode:Mode;tick:number;layers:any;autoFib:AutoFibonacciSet[]}){
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
  const ts=chart.timeScale(),lastIndex=candles.length-1,xCache=new Map<number,number|null>(),yCache=new Map<number,number|null>();
@@ -909,7 +911,10 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
    {fp.poc!=null&&(()=>{const y=yOf(fp.poc);return y==null?null:<g><line x1={Math.max(0,xBase-38)} x2={Math.min(width,xBase+62)} y1={y} y2={y} className="footprint-poc"/>{text(xBase+3,y,"POC","footprint-poc-label")}</g>})()}
   </g>;
  })() : null;
- const fib=showElliott&&elliott.fibLevels?.length?<>{elliott.fibLevels.slice(0,10).map((f:any,i:number)=>{const y=yOf(f.price);const isExtension=/161\.8%|261\.8%/.test(String(f.label??""));return y==null?null:<g key={"f"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className={isExtension?"fib-ext-line":"fib-line"}/>{text(xLast-72,y,f.label,"fib-label")}</g>})}</>:null;
+ const fib=layers.fibonacci&&autoFib.length?<>{autoFib.map((set,si)=>{const sourceLabel=set.source==="ORDER_FLOW"?"OF":set.source==="ELLIOTT"?"EW":"SMC";const colorClass=set.source==="ORDER_FLOW"?"fib-of":set.source==="ELLIOTT"?"fib-ew":"fib-smc";return <g key={"auto-fib-"+set.source+"-"+si} className={"auto-fib-set "+colorClass}>
+   {set.levels.map((f,i)=>{const y=yOf(f.price);if(y==null)return null;const edge=f.ratio===0||f.ratio===1;return <g key={sourceLabel+"-"+f.label}><line x1={x0} x2={xLast} y1={y} y2={y} className={edge?"auto-fib-edge-line":"auto-fib-line"}/>{text(Math.max(8,xLast-84),y,sourceLabel+" "+f.label,"auto-fib-label")}</g>})}
+   {(()=>{const sx=xOf(set.startIndex),sy=yOf(set.startPrice),ex=xOf(set.endIndex),ey=yOf(set.endPrice);if(sx==null||sy==null||ex==null||ey==null)return null;return <g><line x1={sx} y1={sy} x2={ex} y2={ey} className="auto-fib-anchor-line"/><circle cx={sx} cy={sy} r="4" className="auto-fib-anchor"/><circle cx={ex} cy={ey} r="4" className="auto-fib-anchor"/>{text(Math.max(8,Math.min(width-130,sx+5)),Math.max(18,sy-12),sourceLabel+" FIB START","auto-fib-anchor-label")}{text(Math.max(8,Math.min(width-130,ex+5)),Math.max(18,ey-12),sourceLabel+" FIB END","auto-fib-anchor-label")}</g>})()}
+  </g>})}</>:null;
  const wave=showElliott?[
   elliott.primary?drawWave(elliott.primary.points,"impulse-"):null,
   liveElite?drawWave(liveElite.points,"live-","wave-abc-label"):elliott.correction?drawWave(elliott.correction.points,"abc-","wave-abc-label"):null
@@ -953,7 +958,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  return (
   <div className="chart-overlay-wrap">
    <div className="analysis-debug">
-    ANALYSIS · {candles.length} CLOSED CANDLES · SMC {smc.events.length} BOS/CHOCH · FVG {smc.fvgs.length} · OB {smc.orderBlocks.length} · LIQ {smc.liquidityHighs.length+smc.liquidityLows.length} · REVERSAL {reversal.state} {reversal.direction} {reversal.score}/100 · MTF {mtfReversal.state} {mtfReversal.direction} {mtfReversal.score}/100 · FOOTPRINT {orderFlow.footprintHistoryCount}/12 · ELLIOTT {elliott.primary?(elliott.pattern+" "+elliott.degree):elliott.correction?(elliott.correctionPattern+" CANDIDATE"):"—"}
+    ANALYSIS · {candles.length} CLOSED CANDLES · SMC {smc.events.length} BOS/CHOCH · FVG {smc.fvgs.length} · OB {smc.orderBlocks.length} · LIQ {smc.liquidityHighs.length+smc.liquidityLows.length} · AUTO FIB {autoFib.length} · REVERSAL {reversal.state} {reversal.direction} {reversal.score}/100 · MTF {mtfReversal.state} {mtfReversal.direction} {mtfReversal.score}/100 · FOOTPRINT {orderFlow.footprintHistoryCount}/12 · ELLIOTT {elliott.primary?(elliott.pattern+" "+elliott.degree):elliott.correction?(elliott.correctionPattern+" CANDIDATE"):"—"}
    </div>
    <svg className="chart-overlay" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
     {showSMC&&<>{zones}{structure}{liquidity}{trade}</>}
