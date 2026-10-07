@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyOrderFlowSetup } from "./orderflowScanner";
+import { classifyOrderFlowSetup, orderFlowPrefilterScore } from "./orderflowScanner";
 import type { OrderFlowResult } from "./orderflow";
 
 const base: OrderFlowResult = {
