@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateSMCSignal, isConfirmedSMCSignal } from "./smcSignalEngine";
-import { analyzeSMC, type Candle } from "./engine";
+import { analyzeSMC, isSetupActive, isValidTradeGeometry, type Candle } from "./engine";
 
 function candles(rows: Array<[number, number, number, number]>): Candle[] {
   return rows.map(([open, high, low, close], time) => ({
@@ -103,3 +103,16 @@ describe("SMC signal engine", () => {
     expect(isConfirmedSMCSignal(invalid)).toBe(false);
   });
 });
+  it("rejects reversed or duplicate target ordering", () => {
+    expect(isValidTradeGeometry("BUY", 100, 95, [110, 108], 1.5)).toBe(false);
+    expect(isValidTradeGeometry("SELL", 100, 105, [90, 90], 1.5)).toBe(false);
+  });
+
+  it("requires an executable zone to be valid and touched by a closed candle", () => {
+    const zone = { low: 99, high: 101, type: "entry" as const };
+    expect(isSetupActive(zone, { time: 1, open: 100, high: 100.5, low: 99.5, close: 100, volume: 1, closed: true })).toBe(true);
+    expect(isSetupActive(zone, { time: 2, open: 102, high: 103, low: 102, close: 102.5, volume: 1, closed: true })).toBe(false);
+    expect(isSetupActive(zone, { time: 3, open: 100, high: 100.5, low: 99.5, close: 100, volume: 1, closed: false })).toBe(false);
+    expect(isSetupActive({ low: 101, high: 99, type: "entry" }, { time: 4, open: 100, high: 102, low: 98, close: 100, volume: 1, closed: true })).toBe(false);
+  });
+\n
