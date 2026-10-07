@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { analyzeElliott, analyzeMTF, analyzeSMC, Candle, buildImpulseFibLevels, impulseMetrics, classifyStructureBreak, isOrderBlockCausal, isPostSweepZoneCausal, isSetupActive, isSMCCausalSequence, isValidLiquiditySweep, findFvgs, makeBreakers, isEntryZoneCausal, isValidTradeGeometry, classifyPremiumDiscount, findLatestValidLiquiditySweep, mtfFrameWeight, setupWindowProfile, validateDiagonalWave, validateImpulseWave, classifyProtectedStructureBreak, isCurrentRetestEligible } from "./engine";
 import { flowSnapshot, riskPlan, runSMCBacktest } from "./advanced";
 import { normalizeCandleSeries } from "./candles";
-import { analyzeElliottAdvanced, buildLiveContinuationSetup, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateStandardImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
+import { analyzeElliottAdvanced, buildLiveContinuationSetup, elliottRecentAgeBars, validateDoubleZigzag, validateFlat, validateNestedImpulse, validateStandardImpulse, validateTriangle, validateZigzag, isCompletedWaveCountInvalidated } from "./elliott";
 
 function candles(count:number, start=100):Candle[]{
   return Array.from({length:count},(_,i)=>{
@@ -451,6 +451,15 @@ describe("analysis regression",()=>{
     const ordered=analyzeMTF([{interval:"5m",candles:base}]);
     const conflicted=analyzeMTF([{interval:"5m",candles:[...base,duplicate]}]);
     expect(conflicted.frames[0]).toEqual(ordered.frames[0]);
+  });
+
+  it("scales Elliott recent-count age by timeframe",()=>{
+    const fiveMinute=Array.from({length:4},(_,i)=>({time:i*5*60_000,open:100+i,high:101+i,low:99+i,close:100.5+i,volume:10,closed:true}));
+    const oneHour=fiveMinute.map((c,i)=>({...c,time:i*60*60_000}));
+    const oneDay=fiveMinute.map((c,i)=>({...c,time:i*24*60*60_000}));
+    expect(elliottRecentAgeBars(fiveMinute)).toBe(144);
+    expect(elliottRecentAgeBars(oneHour)).toBe(12);
+    expect(elliottRecentAgeBars(oneDay)).toBe(1);
   });
 
   it("exposes Elliott evidence separately for available MTF frames",()=>{
