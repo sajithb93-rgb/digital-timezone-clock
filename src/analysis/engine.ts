@@ -518,6 +518,54 @@ export function isCurrentRetestEligible(
  return true;
 }
 
+function chooseAnalyticalEntryZone(
+ direction:"bullish"|"bearish"|null,
+ obs:OB[],
+ fvgs:FVG[],
+ breakers:Breaker[],
+ last:Candle,
+ atrValue:number,
+ asOf:number,
+ windows=setupWindowProfile([])
+):ZoneCandidate|null{
+ if(!direction)return null;
+ const candidates:ZoneCandidate[]=[];
+ for(const o of obs){
+  if(o.type!==direction||o.mitigated)continue;
+  const age=asOf-o.index;
+  if(age<0||age>windows.obAgeBars)continue;
+  const distance=last.close<o.low?o.low-last.close:last.close>o.high?last.close-o.high:0;
+  if(distance>atrValue*3.5)continue;
+  candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked:false,distance});
+ }
+ for(const f of fvgs){
+  if(f.type!==direction||f.filled)continue;
+  const origin=f.to,age=asOf-origin;
+  if(age<0||age>windows.zoneAgeBars)continue;
+  const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
+  if(distance>atrValue*3.5)continue;
+  candidates.push({low:f.low,high:f.high,origin,kind:"FVG",strength:f.size??0,linked:false,distance});
+ }
+ for(const b of breakers){
+  if(!b.active||b.type!==direction)continue;
+  const age=asOf-b.index;
+  if(age<0||age>windows.zoneAgeBars)continue;
+  const distance=last.close<b.low?b.low-last.close:last.close>b.high?last.close-b.high:0;
+  if(distance>atrValue*3.5)continue;
+  candidates.push({low:b.low,high:b.high,origin:b.index,kind:"BREAKER",strength:0.8,linked:false,distance});
+ }
+ if(!candidates.length)return null;
+ candidates.sort((x,y)=>{
+  const score=(z:ZoneCandidate)=>
+   (z.kind==="OB"?20000:z.kind==="BREAKER"?18000:10000)
+   +Math.max(0,5000-(asOf-z.origin)*100)
+   +Math.min(2000,z.strength*250)
+   -Math.min(5000,z.distance/Math.max(atrValue,.0000001)*1000);
+  return score(y)-score(x);
+ });
+ return candidates[0];
+}
+
 function chooseEntryZone(
  direction:"bullish"|"bearish"|null,
  obs:OB[],
@@ -697,23 +745,26 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   latestInternalDirectionalEvent?.index??null,
   windows.structureGapBars
 ) && !!latestInternalDirectionalEvent && latestInternalDirectionalEvent.direction===rawDirection;
- const selectedZone=chooseEntryZone(rawDirection,obs,fvgs,breakers,events,last,a,asOf,sweep?.index??null,windows);
- const zoneCausal=!!selectedZone&&!!sweep&&!!latestDirectionalEvent
-  &&isEntryZoneCausal(selectedZone.origin,sweep.index,latestDirectionalEvent.index,selectedZone.kind,windows.structureGapBars);
- const zone=selectedZone&&selectedZone.linked&&causalSequence&&zoneCausal
-  ?{low:selectedZone.low,high:selectedZone.high,type:"entry" as const}:null;
- const direction=zone?rawDirection:null;
- const entry=zone?(zone.low+zone.high)/2:null;
- const zoneOrigin=selectedZone?.origin??asOf;
+ const confirmedZone=chooseEntryZone(rawDirection,obs,fvgs,breakers,events,last,a,asOf,sweep?.index??null,windows);
+ const analyticalZone=chooseAnalyticalEntryZone(rawDirection,obs,fvgs,breakers,last,a,asOf,windows);
+ const selectedZone=confirmedZone??analyticalZone;
+ const zoneCausal=!!confirmedZone&&!!sweep&&!!latestDirectionalEvent
+  &&isEntryZoneCausal(confirmedZone.origin,sweep.index,latestDirectionalEvent.index,confirmedZone.kind,windows.structureGapBars);
+ const zone=confirmedZone&&confirmedZone.linked&&causalSequence&&zoneCausal
+  ?{low:confirmedZone.low,high:confirmedZone.high,type:"entry" as const}:null;
+ const levelZone=zone??(analyticalZone?{low:analyticalZone.low,high:analyticalZone.high,type:"entry" as const}:null);
+ const direction=levelZone?rawDirection:null;
+ const entry=levelZone?(levelZone.low+levelZone.high)/2:null;
+ const zoneOrigin=levelZone?analyticalZone?.origin??confirmedZone?.origin??asOf:asOf;
  const priorLow=zone?[...lows].reverse().find(p=>p.index<zoneOrigin):undefined;
  const priorHigh=zone?[...highs].reverse().find(p=>p.index<zoneOrigin):undefined;
  const structuralLow=zone?(priorLow&&zone.low-priorLow.price<=a*1.8?priorLow.price:zone.low):null;
  const structuralHigh=zone?(priorHigh&&priorHigh.price-zone.high<=a*1.8?priorHigh.price:zone.high):null;
- const stop=zone
+ const stop=levelZone
   ?direction==="bullish"
-   ?Math.min(structuralLow??zone.low,zone.low)-a*.15
+   ?Math.min(structuralLow??levelZone.low,levelZone.low)-a*.15
    :direction==="bearish"
-    ?Math.max(structuralHigh??zone.high,zone.high)+a*.15
+    ?Math.max(structuralHigh??levelZone.high,levelZone.high)+a*.15
     :null
   :null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
