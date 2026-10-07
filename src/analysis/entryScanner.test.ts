@@ -16,9 +16,10 @@ describe("entry scanners",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,confirmations:["Custom structured evidence"]}});
    expect(r.state).toBe("CONFIRMED");
  });
- it("does not confirm an ACTIVE SMC setup on CHOCH alone",()=>{
+ it("confirms an ACTIVE SMC reversal setup when the confirmed structure event is CHOCH",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,events:[{index:10,direction:"bullish",type:"CHOCH"}]});
-   expect(r.state).not.toBe("CONFIRMED");
+   expect(r.state).toBe("CONFIRMED");
+   expect(r.direction).toBe("BUY");
  });
  it("rejects an ACTIVE SMC setup when sweep occurs after the structure break",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,events:[{index:8,direction:"bullish",type:"BOS"}],sweeps:[{index:10,type:"low"}]});
