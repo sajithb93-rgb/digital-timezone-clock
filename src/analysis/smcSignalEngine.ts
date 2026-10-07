@@ -95,21 +95,12 @@ export function generateSMCSignal(
   const zone = result.entryZone;
   if (zone?.type !== "entry") return null;
 
-  // Identify the actual source zone from the engine's confirmed-zone price
-  // rather than defaulting every unknown zone to OB.
-  const zoneType: SMCSignal["zoneType"] =
-    result.setup.confirmations.some(x => /fair value gap/i.test(x))
-      ? "FVG"
-      : result.setup.confirmations.some(x => /breaker/i.test(x))
-        ? "BREAKER"
-        : "OB";
-
-  const zoneIndex =
-    zoneType === "OB"
-      ? result.orderBlocks.find(o => o.low === zone.low && o.high === zone.high)?.index
-      : zoneType === "FVG"
-        ? result.fvgs.find(f => f.low === zone.low && f.high === zone.high)?.to
-        : result.breakers.find(b => b.low === zone.low && b.high === zone.high)?.index;
+  // The core SMC engine now exposes the exact source kind/origin. Never
+  // infer this from human-readable confirmation strings because a setup can
+  // contain multiple confirmations at once.
+  const zoneType = zone.sourceKind;
+  if (!zoneType) return null;
+  const zoneIndex = zone.originIndex;
 
   const risk = Math.abs(entry - stop);
   const rr = Math.abs(targets[0] - entry) / risk;
