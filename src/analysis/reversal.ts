@@ -1,4 +1,4 @@
-import { analyzeSMC, type Candle, type SMCResult } from "./engine";
+import { analyzeSMC, inferCandleIntervalMs, type Candle, type SMCResult } from "./engine";
 import type { OrderFlowResult } from "./orderflow";
 import { normalizeCandleSeries } from "./candles";
 
@@ -58,6 +58,18 @@ const EMPTY: ReversalEngineResult = {
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+export function reversalWindowProfile(candles: Candle[]) {
+  const intervalMs = inferCandleIntervalMs(candles);
+  const barsFor = (windowMs: number) => Math.max(1, Math.ceil(windowMs / Math.max(intervalMs, 1)));
+  return {
+    intervalMs,
+    sweepLookbackBars: barsFor(100 * 60_000),
+    structureGapBars: barsFor(60 * 60_000),
+    fvgGapBars: barsFor(60 * 60_000),
+    orderBlockGapBars: barsFor(100 * 60_000),
+  };
 }
 
 function body(c: Candle): number {
@@ -124,14 +136,14 @@ function findDeltaDivergence(candles: Candle[], flow: OrderFlowResult, direction
   return false;
 }
 
-function chooseZone(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, triggerIndex: number, lastClose: number): { low: number; high: number } | null {
+function chooseZone(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, triggerIndex: number, lastClose: number, windows = reversalWindowProfile([])): { low: number; high: number } | null {
   if (direction === "NONE" || sweepIndex < 0 || triggerIndex < sweepIndex) return null;
   const wanted = direction === "BUY" ? "bullish" : "bearish";
   // Reversal zones must belong to the post-sweep leg. A pre-sweep OB/FVG can
   // be valid SMC structure but cannot be used as causal reversal confirmation.
   const zones = [
-    ...smc.fvgs.filter(x => x.type === wanted && !x.filled && !x.partial && x.to >= sweepIndex && x.to <= triggerIndex && triggerIndex - x.to <= 12).map(x => ({ low: x.low, high: x.high, index: x.to })),
-    ...smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index >= sweepIndex && x.index <= triggerIndex && triggerIndex - x.index <= 20).map(x => ({ low: x.low, high: x.high, index: x.index })),
+    ...smc.fvgs.filter(x => x.type === wanted && !x.filled && !x.partial && x.to >= sweepIndex && x.to <= triggerIndex && triggerIndex - x.to <= windows.fvgGapBars).map(x => ({ low: x.low, high: x.high, index: x.to })),
+    ...smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index >= sweepIndex && x.index <= triggerIndex && triggerIndex - x.index <= windows.orderBlockGapBars).map(x => ({ low: x.low, high: x.high, index: x.index })),
   ];
   if (!zones.length) return null;
   zones.sort((a, b) => {
@@ -142,15 +154,15 @@ function chooseZone(smc: SMCResult, direction: ReversalDirection, sweepIndex: nu
   return { low: zones[0].low, high: zones[0].high };
 }
 
-function findRelevantFvg(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, anchorIndex: number): ReversalEngineResult["fvg"] {
+function findRelevantFvg(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, anchorIndex: number, windows = reversalWindowProfile([])): ReversalEngineResult["fvg"] {
   const wanted = direction === "BUY" ? "bullish" : "bearish";
-  const item = smc.fvgs.filter(x => x.type === wanted && !x.filled && !x.partial && x.to >= sweepIndex && x.to <= anchorIndex && anchorIndex - x.to <= 12).at(-1);
+  const item = smc.fvgs.filter(x => x.type === wanted && !x.filled && !x.partial && x.to >= sweepIndex && x.to <= anchorIndex && anchorIndex - x.to <= windows.fvgGapBars).at(-1);
   return item ? { low: item.low, high: item.high, index: item.to } : null;
 }
 
-function findRelevantOb(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, anchorIndex: number): ReversalEngineResult["orderBlock"] {
+function findRelevantOb(smc: SMCResult, direction: ReversalDirection, sweepIndex: number, anchorIndex: number, windows = reversalWindowProfile([])): ReversalEngineResult["orderBlock"] {
   const wanted = direction === "BUY" ? "bullish" : "bearish";
-  const item = smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index >= sweepIndex && x.index <= anchorIndex && anchorIndex - x.index <= 20).at(-1);
+  const item = smc.orderBlocks.filter(x => x.type === wanted && !x.mitigated && x.index >= sweepIndex && x.index <= anchorIndex && anchorIndex - x.index <= windows.orderBlockGapBars).at(-1);
   return item ? { low: item.low, high: item.high, index: item.index } : null;
 }
 
@@ -213,7 +225,8 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
   if (smc.asOf !== asOf || !last || !Number.isFinite(smc.asOfTime) || smc.asOfTime !== last.time) {
     return { ...EMPTY, asOf, reason: "SMC context is out of sync with the reversal candle series" };
   }
-  const lookbackStart = Math.max(0, asOf - 20);
+  const windows = reversalWindowProfile(closed);
+  const lookbackStart = Math.max(0, asOf - windows.sweepLookbackBars);
   let best: ReversalEngineResult | null = null;
 
   for (const direction of ["BUY", "SELL"] as const) {
@@ -234,7 +247,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
         && e.direction === structureDirection
         && e.index > sweep.index
         && e.index <= asOf
-        && e.index - sweep.index <= 12
+        && e.index - sweep.index <= windows.structureGapBars
       )
       .sort((a, b) => b.index - a.index)[0] ?? null;
     const priorEvent = choch ? smc.events.filter(e => e.index < choch.index).at(-1) ?? null : null;
@@ -244,7 +257,7 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     let bestDisplacement = 0;
     let bestDisplacementIndex = anchor;
     const displacementStart = choch ? choch.index + 1 : anchor;
-    for (let i = Math.max(0, displacementStart); i <= asOf && i - anchor <= 12; i += 1) {
+    for (let i = Math.max(0, displacementStart); i <= asOf && i - anchor <= windows.structureGapBars; i += 1) {
       const candidate = closed[i];
       if (!candidate) continue;
       const directionAligned = direction === "BUY"
@@ -260,9 +273,9 @@ export function analyzeReversal(candles: Candle[], smc: SMCResult, orderFlow: Or
     const displacementOk = bestDisplacement >= 0.7;
     const triggerIndex = Math.max(anchor, bestDisplacementIndex);
 
-    const fvg = findRelevantFvg(smc, direction, sweep.index, triggerIndex);
-    const orderBlock = findRelevantOb(smc, direction, sweep.index, triggerIndex);
-    const zone = chooseZone(smc, direction, sweep.index, triggerIndex, last.close);
+    const fvg = findRelevantFvg(smc, direction, sweep.index, triggerIndex, windows);
+    const orderBlock = findRelevantOb(smc, direction, sweep.index, triggerIndex, windows);
+    const zone = chooseZone(smc, direction, sweep.index, triggerIndex, last.close, windows);
 
     // When Order Flow is required, only the Order Flow engine's own
     // confirmed directional state may satisfy the gate. Pressure + absorption
