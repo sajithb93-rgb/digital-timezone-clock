@@ -215,8 +215,10 @@ export function validateStandardImpulse(prices:number[],bull:boolean):StandardIm
   const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
   // Wave 3 must make a new extreme beyond Wave 1.
   const w3BeyondW1=bull?p3>p1:p3<p1;
-  // Wave 3 may tie another actionary wave, but can never be the shortest.
-  const w3NotShortest=w3>=Math.min(w1,w5);
+  // Wave 3 must be strictly longer than at least one of Waves 1 or 5;
+  // if Wave 3 ties the shortest actionary wave, the count is ambiguous and
+  // should not be certified as a strict impulse.
+  const w3NotShortest=w3>Math.min(w1,w5);
   // In a standard impulse Wave 4 must remain outside Wave-1 price
   // territory and move counter to Wave 3.
   const w4Valid=bull?p4>p1&&p4<p3:p4<p1&&p4>p3;
