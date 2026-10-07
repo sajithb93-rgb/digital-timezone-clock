@@ -139,24 +139,32 @@ export function findLatestSMCCausalSequence(
  maxGap=12
 ):SMCCausalSequence|null{
  if(!Number.isInteger(asOf)||asOf<0||!Number.isFinite(maxGap)||maxGap<=0)return null;
+
+ // A setup must belong to the latest confirmed swing event. Otherwise a
+ // previously valid chain could survive after a newer BOS/CHOCH changes the
+ // market-state direction.
+ const latestStructure=events
+  .filter(e=>Number.isInteger(e.index)&&e.index>=0&&e.index<=asOf)
+  .reduce<StructureEvent|null>((latest,e)=>!latest||e.index>latest.index?e:latest,null);
+ if(!latestStructure)return null;
+
+ const sweepType=latestStructure.direction==="bullish"?"low":"high";
  const candidates:SMCCausalSequence[]=[];
- for(const structure of events){
-  if(structure.index<0||structure.index>asOf)continue;
-  const sweepType=structure.direction==="bullish"?"low":"high";
-  for(const sweep of sweeps){
-   if(!sweep.confirmed||sweep.index<0||sweep.index>asOf||sweep.type!==sweepType)continue;
-   if(sweep.index>=structure.index||structure.index-sweep.index>maxGap)continue;
-   for(const internal of internalEvents){
-    if(internal.index<=structure.index||internal.index>asOf)continue;
-    if(internal.direction!==structure.direction||internal.index-structure.index>maxGap)continue;
-    candidates.push({direction:structure.direction,sweep,structure,internal});
-   }
+ for(const sweep of sweeps){
+  if(!sweep.confirmed||sweep.index<0||sweep.index>asOf||sweep.type!==sweepType)continue;
+  if(sweep.index>=latestStructure.index||latestStructure.index-sweep.index>maxGap)continue;
+  for(const internal of internalEvents){
+   if(internal.index<=latestStructure.index||internal.index>asOf)continue;
+   if(internal.direction!==latestStructure.direction||internal.index-latestStructure.index>maxGap)continue;
+   candidates.push({direction:latestStructure.direction,sweep,structure:latestStructure,internal});
   }
  }
  if(!candidates.length)return null;
+
+ // Prefer the freshest compatible internal confirmation, then the freshest
+ // sweep for the same latest swing event.
  candidates.sort((a,b)=>
   b.internal.index-a.internal.index
-  ||b.structure.index-a.structure.index
   ||b.sweep.index-a.sweep.index
  );
  return candidates[0];
