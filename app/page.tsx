@@ -64,7 +64,11 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
    const target=proxyBinanceUrl(url);
    const requestInit:RequestInit={...(init??{}),cache:"no-store"};
    const r=await fetch(target,requestInit);
-   if(r.ok)return r.json();
+   const raw=await r.text();
+   if(r.ok){
+    if(!raw.trim())throw new Error("Binance returned an empty response");
+    try{return JSON.parse(raw)}catch{throw new Error("Binance returned invalid JSON")};
+   }
    if(r.status===429||r.status===418){
     const retryAfter=Number(r.headers.get("Retry-After")||0);
     const backoff=Math.max(1000,retryAfter*1000||Math.min(15000,1500*Math.pow(2,attempt)));
@@ -73,7 +77,9 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
     throw new Error(`Binance rate limit ${r.status}. Retried safely; REST temporarily throttled.`);
    }
    let detail="";
-   try{const body=await r.json();detail=typeof body?.error==="string"?body.error:""}catch{}
+   if(raw.trim()){
+    try{const body=JSON.parse(raw);detail=typeof body?.error==="string"?body.error:""}catch{}
+   }
    throw new Error(detail||`Binance request failed ${r.status}`);
   }
   throw new Error("Binance request failed");
