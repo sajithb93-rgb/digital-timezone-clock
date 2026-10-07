@@ -50,8 +50,11 @@ export function generateSMCSignal(
   const end = lastClosedIndex(candles, asOf);
   if (end < 24) return null;
 
-  const closed = candles.slice(0, end + 1).filter(c => c.closed !== false);
-  if (closed.length < 25) return null;
+  // Preserve candle positions exactly. Filtering individual candles here can
+  // shift causal sweep/BOS/zone indices; analyzeSMC already normalizes the
+  // series and stops at the first open candle.
+  const closed = candles.slice(0, end + 1);
+  if (closed.length < 25 || closed.some(c => c.closed === false)) return null;
 
   const result = analyzeSMC(closed);
   const setup = result.setup;
@@ -90,14 +93,23 @@ export function generateSMCSignal(
     .find(s => direction === "BUY" ? s.type === "low" : s.type === "high");
 
   const zone = result.entryZone;
-  const zoneType =
-    zone.type === "entry"
-      ? result.setup.confirmations.some(x => /fair value gap/i.test(x))
-        ? "FVG"
-        : result.setup.confirmations.some(x => /breaker/i.test(x))
-          ? "BREAKER"
-          : "OB"
-      : "OB";
+  if (zone?.type !== "entry") return null;
+
+  // Identify the actual source zone from the engine's confirmed-zone price
+  // rather than defaulting every unknown zone to OB.
+  const zoneType: SMCSignal["zoneType"] =
+    result.setup.confirmations.some(x => /fair value gap/i.test(x))
+      ? "FVG"
+      : result.setup.confirmations.some(x => /breaker/i.test(x))
+        ? "BREAKER"
+        : "OB";
+
+  const zoneIndex =
+    zoneType === "OB"
+      ? result.orderBlocks.find(o => o.low === zone.low && o.high === zone.high)?.index
+      : zoneType === "FVG"
+        ? result.fvgs.find(f => f.low === zone.low && f.high === zone.high)?.to
+        : result.breakers.find(b => b.low === zone.low && b.high === zone.high)?.index;
 
   const risk = Math.abs(entry - stop);
   const rr = Math.abs(targets[0] - entry) / risk;
@@ -112,11 +124,11 @@ export function generateSMCSignal(
     rr,
     confidence: Math.max(0, Math.min(100, Math.round(setup.confidence))),
     timeframe,
-    asOf: end,
+    asOf: result.asOf,
     confirmations: [...setup.confirmations],
     sweepIndex: sweep?.index ?? -1,
     structureIndex: event?.index ?? -1,
-    zoneIndex: event?.index ?? end,
+    zoneIndex: zoneIndex ?? event?.index ?? result.asOf,
     zoneType,
     entryZone: { low: zone.low, high: zone.high },
     premiumDiscount: result.premiumDiscount,
