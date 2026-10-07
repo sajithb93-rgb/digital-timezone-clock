@@ -118,6 +118,44 @@ export function isSMCCausalSequence(sweepIndex:number,swingBreakIndex:number,int
   &&internalBreakIndex>swingBreakIndex
   &&internalBreakIndex-swingBreakIndex<=maxGap;
 }
+
+export type SMCCausalSequence={
+ direction:"bullish"|"bearish";
+ sweep:Sweep;
+ structure:StructureEvent;
+ internal:StructureEvent;
+};
+
+export function findLatestSMCCausalSequence(
+ sweeps:Sweep[],
+ events:StructureEvent[],
+ internalEvents:StructureEvent[],
+ asOf:number,
+ maxGap=12
+):SMCCausalSequence|null{
+ if(!Number.isInteger(asOf)||asOf<0||!Number.isFinite(maxGap)||maxGap<=0)return null;
+ const candidates:SMCCausalSequence[]=[];
+ for(const structure of events){
+  if(structure.index<0||structure.index>asOf)continue;
+  const sweepType=structure.direction==="bullish"?"low":"high";
+  for(const sweep of sweeps){
+   if(!sweep.confirmed||sweep.index<0||sweep.index>asOf||sweep.type!==sweepType)continue;
+   if(sweep.index>=structure.index||structure.index-sweep.index>maxGap)continue;
+   for(const internal of internalEvents){
+    if(internal.index<=structure.index||internal.index>asOf)continue;
+    if(internal.direction!==structure.direction||internal.index-structure.index>maxGap)continue;
+    candidates.push({direction:structure.direction,sweep,structure,internal});
+   }
+  }
+ }
+ if(!candidates.length)return null;
+ candidates.sort((a,b)=>
+  b.internal.index-a.internal.index
+  ||b.structure.index-a.structure.index
+  ||b.sweep.index-a.sweep.index
+ );
+ return candidates[0];
+}
 export function isValidLiquiditySweep(c:Candle[],sweepIndex:number,level:number,type:"high"|"low",asOf=c.length-1):boolean{
  if(!Number.isFinite(level)||!Number.isFinite(asOf)||asOf<0)return false;
  let closedEnd=Math.min(Math.floor(asOf),c.length-1);
@@ -603,10 +641,11 @@ function chooseEntryZone(
  atrValue:number,
  asOf:number,
  sweepIndex:number|null,
- windows=setupWindowProfile([])
+ windows=setupWindowProfile([]),
+ structureIndex:number|null
 ):ZoneCandidate|null{
- if(!direction||sweepIndex===null||sweepIndex<0)return null;
- const latestEvent=[...events].reverse().find(e=>e.direction===direction&&e.index<=asOf);
+ if(!direction||sweepIndex===null||sweepIndex<0||structureIndex===null||structureIndex<0)return null;
+ const latestEvent=events.find(e=>e.direction===direction&&e.index===structureIndex&&e.index<=asOf);
  if(!latestEvent)return null;
  const candidates:ZoneCandidate[]=[];
  for(const o of obs){
@@ -772,33 +811,26 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const vwap=recentCandles.reduce((sum,x)=>sum+((x.high+x.low+x.close)/3)*x.volume,0)/Math.max(totalVolume,.0000001);
  const structureDirection=events.at(-1)?.direction??null;
  const trend=structureDirection==="bullish"?"Bullish":structureDirection==="bearish"?"Bearish":last.close>mid?"Bullish":last.close<mid?"Bearish":"Neutral";
- const pd=classifyPremiumDiscount(last.close,r.hi,r.lo);
- const rawDirection=structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
- const sweep=rawDirection==="bullish"
-  ?sweeps.slice().reverse().find(x=>x.type==="low"&&asOf-x.index<=windows.sweepLookbackBars)
-  :rawDirection==="bearish"
-   ?sweeps.slice().reverse().find(x=>x.type==="high"&&asOf-x.index<=windows.sweepLookbackBars)
-   :undefined;
- const latestDirectionalEvent=rawDirection
-  ?events.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
-  :undefined;
- const causalSequence=!!rawDirection
-  &&!!latestDirectionalEvent
-  &&!!sweep
-  &&latestDirectionalEvent.direction===rawDirection
-  &&sweep.index<latestDirectionalEvent.index
-  &&latestDirectionalEvent.index<=asOf
-  &&latestDirectionalEvent.index-sweep.index<=windows.structureGapBars;
- const latestInternalDirectionalEvent=rawDirection
-  ?internalEvents.slice().reverse().find(x=>x.direction===rawDirection&&x.index<=asOf)
-  :undefined;
- const internalCausal=isSMCCausalSequence(
-  sweep?.index??-1,
-  latestDirectionalEvent?.index??-1,
-  latestInternalDirectionalEvent?.index??null,
-  windows.structureGapBars
-) && !!latestInternalDirectionalEvent && latestInternalDirectionalEvent.direction===rawDirection;
- const confirmedZone=chooseEntryZone(rawDirection,obs,fvgs,breakers,events,last,a,asOf,sweep?.index??null,windows);
+ const causal=findLatestSMCCausalSequence(sweeps,events,internalEvents,asOf,windows.structureGapBars);
+ const rawDirection=causal?.direction??structureDirection??(trend==="Bullish"?"bullish":trend==="Bearish"?"bearish":null);
+ const sweep=causal?.sweep;
+ const latestDirectionalEvent=causal?.structure;
+ const latestInternalDirectionalEvent=causal?.internal;
+ const causalSequence=!!causal;
+ const internalCausal=!!causal;
+ const confirmedZone=chooseEntryZone(
+  rawDirection,
+  obs,
+  fvgs,
+  breakers,
+  events,
+  last,
+  a,
+  asOf,
+  sweep?.index??null,
+  windows,
+  latestDirectionalEvent?.index??null
+ );
  const analyticalZone=chooseAnalyticalEntryZone(rawDirection,obs,fvgs,breakers,last,a,asOf,windows);
  const selectedZone=confirmedZone??analyticalZone;
  const zoneCausal=!!confirmedZone&&!!sweep&&!!latestDirectionalEvent
@@ -822,6 +854,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
   :null);
  const direction=levelZone?rawDirection:null;
  const entry=levelZone?(levelZone.low+levelZone.high)/2:null;
+ const pd=classifyPremiumDiscount(entry??last.close,r.hi,r.lo);
  const zoneOrigin=levelZone
   ?(zone?confirmedZone?.origin??asOf:analyticalZone?.origin??asOf)
   :asOf;
