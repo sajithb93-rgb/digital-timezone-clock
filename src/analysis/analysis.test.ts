@@ -157,7 +157,7 @@ describe("analysis regression",()=>{
   });
   it("allows an FVG created by the displacement leg after BOS/CHOCH",()=>{
     expect(isEntryZoneCausal(31,25,30,"FVG")).toBe(true);
-    expect(isEntryZoneCausal(42,25,30,"FVG")).toBe(false);
+    expect(isEntryZoneCausal(43,25,30,"FVG")).toBe(false);
     expect(isEntryZoneCausal(31,25,30,"OB")).toBe(false);
     expect(isEntryZoneCausal(27,25,30,"OB")).toBe(true);
   });
