@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateSMCSignal, isConfirmedSMCSignal } from "./smcSignalEngine";
-import { analyzeSMC, isSetupActive, isValidTradeGeometry, type Candle } from "./engine";
+import { analyzeSMC, findLatestSMCCausalSequence, isSetupActive, isValidTradeGeometry, type Candle, type StructureEvent, type Sweep } from "./engine";
 
 function candles(rows: Array<[number, number, number, number]>): Candle[] {
   return rows.map(([open, high, low, close], time) => ({
@@ -102,8 +102,47 @@ describe("SMC signal engine", () => {
     };
     expect(isConfirmedSMCSignal(invalid)).toBe(false);
   });
-});
   it("rejects reversed or duplicate target ordering", () => {
+    expect(isValidTradeGeometry("BUY", 100, 95, [110, 108], 1.5)).toBe(false);
+    expect(isValidTradeGeometry("SELL", 100, 105, [90, 90], 1.5)).toBe(false);
+  });
+
+  it("selects the freshest fully compatible causal chain instead of incompatible latest events", () => {
+    const sweeps: Sweep[] = [
+      { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
+      { index: 20, price: 98, type: "low", confirmed: true, displacement: true },
+    ];
+    const events: StructureEvent[] = [
+      { index: 17, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
+      { index: 22, price: 104, type: "BOS", direction: "bullish", strength: "displacement" },
+    ];
+    const internalEvents: StructureEvent[] = [
+      { index: 19, price: 102.5, type: "BOS", direction: "bullish", strength: "normal" },
+      { index: 40, price: 105, type: "BOS", direction: "bullish", strength: "normal" },
+    ];
+
+    const chain = findLatestSMCCausalSequence(sweeps, events, internalEvents, 40, 12);
+    expect(chain).not.toBeNull();
+    expect(chain?.sweep.index).toBe(5);
+    expect(chain?.structure.index).toBe(17);
+    expect(chain?.internal.index).toBe(19);
+  });
+
+  it("does not accept same-candle swing and internal confirmation as a causal chain", () => {
+    const sweeps: Sweep[] = [
+      { index: 5, price: 99, type: "low", confirmed: true, displacement: true },
+    ];
+    const events: StructureEvent[] = [
+      { index: 10, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
+    ];
+    const internalEvents: StructureEvent[] = [
+      { index: 10, price: 103, type: "BOS", direction: "bullish", strength: "normal" },
+    ];
+
+    expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 20, 12)).toBeNull();
+  });
+
+  it("requires an executable zone to be valid and touched by a closed candle", () => {
     expect(isValidTradeGeometry("BUY", 100, 95, [110, 108], 1.5)).toBe(false);
     expect(isValidTradeGeometry("SELL", 100, 105, [90, 90], 1.5)).toBe(false);
   });
@@ -115,4 +154,5 @@ describe("SMC signal engine", () => {
     expect(isSetupActive(zone, { time: 3, open: 100, high: 100.5, low: 99.5, close: 100, volume: 1, closed: false })).toBe(false);
     expect(isSetupActive({ low: 101, high: 99, type: "entry" }, { time: 4, open: 100, high: 102, low: 98, close: 100, volume: 1, closed: true })).toBe(false);
   });
+});
 \n
