@@ -29,6 +29,11 @@ describe("entry scanners",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,asOf:30,events:[{index:24,direction:"bullish",type:"BOS"}],sweeps:[{index:8,type:"low"}]});
    expect(r.state).not.toBe("CONFIRMED");
  });
+ it("uses the selected timeframe's sweep recency window",()=>{
+   const recent={...baseSMC,asOf:20,events:[{index:19,direction:"bullish",type:"BOS"}],sweeps:[{index:14,type:"low"}]};
+   expect(classifySMCEntry("BTCUSDT","5m",recent).state).toBe("CONFIRMED");
+   expect(classifySMCEntry("BTCUSDT","1h",recent).state).not.toBe("CONFIRMED");
+ });
  it("does not confirm SMC when the engine is not ACTIVE",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT"}});expect(r.state).not.toBe("CONFIRMED") });
  it("does not confirm SMC when active entry is missing",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT",entry:null,stop:null,targets:[],rr:null}});expect(r.state).not.toBe("CONFIRMED")});
  it("rejects Elliott setup with invalid target geometry",()=>{const r=classifyElliottEntry("BTCUSDT","5m",{...baseEW,liveSetup:{...baseEW.liveSetup,targets:[99]}},102);expect(r.state).toBe("WAIT")});
