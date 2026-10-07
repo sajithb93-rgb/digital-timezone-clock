@@ -1,4 +1,4 @@
-import { isValidTradeGeometry, type Candle } from "./engine";
+import { inferCandleIntervalMs, isValidTradeGeometry, type Candle } from "./engine";
 import { normalizeCandleSeries } from "./candles";
 import type { FootprintSnapshot } from "./footprint";
 
@@ -316,7 +316,12 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   const entryChaseSellValid=entryChaseSell==null||entryChaseSell<=1;
 
   const recentBars=bars.slice(-12);
-  const maxSweepAge=5;
+  // Keep sweep/absorption freshness tied to elapsed market time rather than a
+  // fixed number of candles. The reference is five 5-minute bars (25 minutes),
+  // then rounded up to at least one bar for higher timeframes.
+  const intervalMs = inferCandleIntervalMs(closed);
+  const maxSweepAge = Math.max(1, Math.ceil((5 * 5 * 60_000) / Math.max(intervalMs, 1)));
+  const maxCausalGap = maxSweepAge;
   // Use the latest qualifying event, not the oldest one in the lookback window.
   const sweepLow=recentBars.filter(b=>b.liquiditySweep==="LOW").at(-1);
   const sweepHigh=recentBars.filter(b=>b.liquiditySweep==="HIGH").at(-1);
@@ -345,8 +350,8 @@ export function analyzeOrderFlow(candles:Candle[],footprints:FootprintSnapshot[]
   // A confirmation must form in causal order: liquidity event -> absorption -> current closed-bar break.
   // Strict causal sequence: sweep -> candle absorption -> latest footprint absorption/imbalance -> pressure/delta -> current-bar structure break.
   // The sweep must be recent and the candle absorption cannot precede it.
-  const longContext=!!sweepLow&&buyerAbsorptionIndex>=0&&buyerAbsorptionIndex>sweepLow.index&&buyerAbsorptionIndex<=last.index&&last.index-buyerAbsorptionIndex<=5;
-  const shortContext=!!sweepHigh&&sellerAbsorptionIndex>=0&&sellerAbsorptionIndex>sweepHigh.index&&sellerAbsorptionIndex<=last.index&&last.index-sellerAbsorptionIndex<=5;
+  const longContext=!!sweepLow&&buyerAbsorptionIndex>=0&&buyerAbsorptionIndex>sweepLow.index&&buyerAbsorptionIndex<=last.index&&last.index-buyerAbsorptionIndex<=maxCausalGap;
+  const shortContext=!!sweepHigh&&sellerAbsorptionIndex>=0&&sellerAbsorptionIndex>sweepHigh.index&&sellerAbsorptionIndex<=last.index&&last.index-sellerAbsorptionIndex<=maxCausalGap;
 
   // The 12-bar pressure filter must actually have 12 closed bars behind it.
   // Otherwise a short initial dataset could be mislabeled as a "12-bar" setup.
