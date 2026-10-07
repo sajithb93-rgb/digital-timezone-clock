@@ -228,6 +228,21 @@ describe("SMC signal engine", () => {
     expect(isZoneRetestAfterFormation(10, -1)).toBe(false);
   });
 
+  it("does not use the current retest candle as internal confirmation", () => {
+    const sweeps: Sweep[] = [
+      { index: 5, price: 99, type: "low", confirmed: true, displacement: true, displacementIndex: 6 },
+    ];
+    const events: StructureEvent[] = [
+      { index: 10, price: 103, type: "BOS", direction: "bullish", strength: "displacement" },
+    ];
+    const internalEvents: StructureEvent[] = [
+      { index: 20, price: 104, type: "BOS", direction: "bullish", strength: "normal" },
+    ];
+
+    expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 20, 12)).toBeNull();
+    expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 21, 12)).not.toBeNull();
+  });
+
   it("requires an executable zone to be valid and touched by a closed candle", () => {
     const zone = { low: 99, high: 101, type: "entry" as const };
     expect(
