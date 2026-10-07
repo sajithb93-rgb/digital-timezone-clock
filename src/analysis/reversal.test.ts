@@ -9,7 +9,7 @@ function candle(i:number, open:number, high:number, low:number, close:number, vo
 
 function smc(overrides: Partial<SMCResult> = {}): SMCResult {
   const base: SMCResult = {
-    trend:"Bearish", asOf:34, asOfTime:34, pivots:[], internalPivots:[], events:[],
+    trend:"Bearish", asOf:34, asOfTime:34, pivots:[], internalPivots:[], events:[], causalSequence:null,
     fvgs:[], orderBlocks:[], breakers:[], liquidityHighs:[], liquidityLows:[],
     equalHighs:[], equalLows:[], sweeps:[], premiumDiscount:"Discount",
     premiumDiscountRange:{high:120,low:80,mid:100}, vwap:100, volumeRatio:1,
