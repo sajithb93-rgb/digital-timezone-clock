@@ -60,6 +60,29 @@ describe("SMC signal engine", () => {
     expect(isConfirmedSMCSignal(invalid)).toBe(false);
   });
 
+  it("requires direction-consistent premium or discount classification", () => {
+    const buy = {
+      status: "ACTIVE" as const,
+      direction: "BUY" as const,
+      entry: 100,
+      stop: 95,
+      targets: [110, 120],
+      rr: 2,
+      confidence: 90,
+      asOf: 50,
+      confirmations: ["confirmed"],
+      sweepIndex: 10,
+      structureIndex: 12,
+      zoneIndex: 14,
+      zoneType: "FVG" as const,
+      entryZone: { low: 99, high: 101 },
+      premiumDiscount: "Premium" as const,
+    };
+    const sell = { ...buy, direction: "SELL" as const, stop: 105, targets: [90, 80], rr: 2, premiumDiscount: "Discount" as const };
+    expect(isConfirmedSMCSignal(buy)).toBe(false);
+    expect(isConfirmedSMCSignal(sell)).toBe(false);
+  });
+
   it("rejects malformed confirmed-signal metadata", () => {
     const invalid = {
       status: "ACTIVE" as const,
