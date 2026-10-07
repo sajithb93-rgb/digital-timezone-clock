@@ -743,7 +743,7 @@ describe("analysis regression",()=>{
       points:[0,2,4,6,8,10].map((index,i)=>({index,price:[100,120,110,150,135,165][i],label:String(i)})),
       kind:"Impulse" as const,direction:"bullish" as const,invalidation:100,entry:110,targets:[150,165],quality:80,rules:[],strict:true
     };
-    const values=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,145,146,147,148,149];
+    const values=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,145,146,147,148,149,160];
     const pre=[100,105,110,120,130,140,150,155,160,164,165];
     const c=[...pre,...values].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
     const live=buildLiveContinuationSetup(c,primary);
