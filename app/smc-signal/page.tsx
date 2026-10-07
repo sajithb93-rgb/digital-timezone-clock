@@ -13,15 +13,18 @@ const refreshIntervals: Record<(typeof intervals)[number], number> = {
 };
 
 function toCandles(rows: unknown[]): Candle[] {
+  const lastIndex = rows.length - 1;
   return rows
-    .map((r: any) => ({
+    .map((r: any, index) => ({
       time: Number(r[0]),
       open: Number(r[1]),
       high: Number(r[2]),
       low: Number(r[3]),
       close: Number(r[4]),
       volume: Number(r[5]),
-      closed: true,
+      // Binance's final kline is the currently forming candle. Keep that
+      // state explicit so the engine cannot accidentally treat it as closed.
+      closed: index !== lastIndex,
     }))
     .filter(c => [c.time, c.open, c.high, c.low, c.close, c.volume].every(Number.isFinite));
 }
@@ -58,10 +61,11 @@ export default function SMCSignalPage() {
       const candles = toCandles(data);
       if (candles.length < 60) throw new Error("Not enough Binance Futures candle history");
 
-      // Binance returns the currently forming candle last. The engine itself
-      // also enforces closed-candle causality, but we explicitly anchor the
-      // signal to the latest confirmed candle here.
-      const end = candles.length - 2;
+      // Binance returns the currently forming candle last. The converter
+      // marks it closed=false, and the engine finds the latest confirmed
+      // candle. Passing the final row as the endpoint is therefore safe and
+      // avoids accidentally skipping one confirmed candle.
+      const end = candles.length - 1;
       if (end < 0) throw new Error("Binance returned no confirmed candle");
 
       const confirmed = generateSMCSignal(candles, end, interval);
