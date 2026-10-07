@@ -566,20 +566,30 @@ export default function Home(){
   };
   const loadHistory=async()=>{
    if(!symbol||!selectedPair?.tickSize){historyLoading=false;if(!stop)setFootprintHistoryReady(true);return}
-   try{
-    const lookback=Math.max(tfMs*14,60*60*1000);
-    const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
-    if(stop)return;
-    book.load(trades);
-    pendingRevision+=1;
+   const lookback=Math.max(tfMs*14,60*60*1000);
+   let lastError:unknown=null;
+   for(let attempt=0;attempt<3;attempt+=1){
+    if(stop||controller.signal.aborted)return;
+    try{
+     const trades=await fetchScannerAggTrades(symbol,marketType,Date.now()-lookback,Date.now(),tfMs,controller.signal,12);
+     if(stop)return;
+     book.load(trades);
+     pendingRevision+=1;
+     setFootprintVersion(v=>v+1);
+     lastError=null;
+     break;
+    }catch(e){
+     lastError=e;
+     if(attempt<2){
+      await sleep(1500*(attempt+1));
+     }
+    }
+   }
+   historyLoading=false;
+   if(!stop){
+    setFootprintHistoryReady(true);
     setFootprintVersion(v=>v+1);
-   }catch{
-    // History backfill failure is distinct from the live aggTrade socket state.
-    // Do not mark the socket offline here; only the WebSocket open/error/close
-    // handlers own the live connectivity flag.
-   }finally{
-    historyLoading=false;
-    if(!stop){setFootprintHistoryReady(true);setFootprintVersion(v=>v+1);}
+    if(lastError) setError(lastError instanceof Error?lastError.message:"Order Flow history backfill unavailable; live footprint will continue");
    }
   };
   void loadHistory();connect();
