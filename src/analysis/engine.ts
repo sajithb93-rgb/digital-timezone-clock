@@ -9,7 +9,15 @@ export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mit
 export type Breaker={index:number;low:number;high:number;type:"bullish"|"bearish";active:boolean};
 export type StructureEvent={index:number;price:number;type:"BOS"|"CHOCH";direction:"bullish"|"bearish";strength:"normal"|"displacement"};
 export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean;displacement?:boolean};
-export type Zone={low:number;high:number;type:"entry"|"stop"|"target"};
+export type Zone={
+ low:number;
+ high:number;
+ type:"entry"|"stop"|"target";
+ // For executable entry zones, retain the exact causal source so downstream
+ // signal/chart code never has to infer OB/FVG/Breaker from display text.
+ sourceKind?:"OB"|"FVG"|"BREAKER";
+ originIndex?:number;
+};
 export type Setup={direction:"BUY"|"SELL"|"WAIT";status:"WAIT"|"ACTIVE";entry:number|null;stop:number|null;targets:number[];rr:number|null;confidence:number;confirmations:string[]};
 export function isValidTradeGeometry(direction:"BUY"|"SELL",entry:number,stop:number,targets:number[],minRR=1.5):boolean{
  if(!Number.isFinite(entry)||!Number.isFinite(stop)||entry<=0||stop<=0||entry===stop)return false;
@@ -782,8 +790,22 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const zoneCausal=!!confirmedZone&&!!sweep&&!!latestDirectionalEvent
   &&isEntryZoneCausal(confirmedZone.origin,sweep.index,latestDirectionalEvent.index,confirmedZone.kind,windows.structureGapBars);
  const zone=confirmedZone&&confirmedZone.linked&&causalSequence&&zoneCausal
-  ?{low:confirmedZone.low,high:confirmedZone.high,type:"entry" as const}:null;
- const levelZone=zone??(analyticalZone?{low:analyticalZone.low,high:analyticalZone.high,type:"entry" as const}:null);
+  ?{
+     low:confirmedZone.low,
+     high:confirmedZone.high,
+     type:"entry" as const,
+     sourceKind:confirmedZone.kind,
+     originIndex:confirmedZone.origin
+   }:null;
+ const levelZone=zone??(analyticalZone
+  ?{
+     low:analyticalZone.low,
+     high:analyticalZone.high,
+     type:"entry" as const,
+     sourceKind:analyticalZone.kind,
+     originIndex:analyticalZone.origin
+   }
+  :null);
  const direction=levelZone?rawDirection:null;
  const entry=levelZone?(levelZone.low+levelZone.high)/2:null;
  const zoneOrigin=levelZone
