@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
         // between Binance's official endpoints. Keep deterministic 4xx
         // validation errors on the first response, but fail over on 451,
         // rate-limit, and server-error responses.
-        if (upstream.status === 451 || upstream.status === 429 || upstream.status >= 500) continue;
+        // Do not fan a single 429 into five more Binance requests. The caller\n        // has bounded retry/backoff logic and can safely retry this response.\n        if (upstream.status === 429) {\n          return new NextResponse(body, {\n            status: 429,\n            headers: {\n              "content-type": upstream.headers.get("content-type") ?? "application/json",\n              "cache-control": "no-store, max-age=0",\n              "retry-after": upstream.headers.get("retry-after") ?? "1",\n            },\n          });\n        }\n        if (upstream.status === 451 || upstream.status >= 500) continue;
 
         return new NextResponse(body, {
           status: upstream.status,
