@@ -111,3 +111,18 @@ export function classifyOrderFlowSetup(symbol: string, timeframe: string, result
     reason,
   };
 }
+
+
+export function orderFlowPrefilterScore(result: OrderFlowResult): number {
+  const bars = result.recentBars.slice(-6);
+  if (!bars.length) return 0;
+  const latest = bars.at(-1)!;
+  let score = 0;
+  if (result.pressure !== "BALANCED") score += 1;
+  if (Math.abs(result.deltaRatio) >= 0.05) score += 1;
+  if (bars.some(b => b.liquiditySweep !== "NONE")) score += 2;
+  if (bars.some(b => b.absorption !== "NONE")) score += 2;
+  if (latest.microStructure !== "NEUTRAL") score += 2;
+  if (bars.some(b => b.imbalance !== "NONE")) score += 1;
+  return score;
+}
