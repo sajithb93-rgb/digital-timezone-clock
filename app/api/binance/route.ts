@@ -81,14 +81,13 @@ export async function GET(request: NextRequest) {
 
   const suffix = path + (query.size ? "?" + query.toString() : "");
   const targets = BASES[market].map((base) => base + suffix);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
-
   try {
     let lastStatus: number | null = null;
     let lastBody = "";
 
     for (const target of targets) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5_000);
       try {
         const upstream = await fetch(target, {
           cache: "no-store",
@@ -112,6 +111,8 @@ export async function GET(request: NextRequest) {
         });
       } catch {
         // Try the next official Binance endpoint.
+      } finally {
+        clearTimeout(timeout);
       }
     }
 
@@ -139,7 +140,4 @@ export async function GET(request: NextRequest) {
       { error: "Binance upstream unavailable" },
       { status: 502, headers: { "cache-control": "no-store" } },
     );
-  } finally {
-    clearTimeout(timeout);
   }
-}
