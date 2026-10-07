@@ -1064,6 +1064,8 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     {footprintOverlay}
     {reversalMarker}
     {mtfSignalMarker}
+    {autoPosition}
+    {forecast}
    </svg>
    {smcPanel}
    {elitewavePanel}
