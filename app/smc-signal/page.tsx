@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { generateSMCSignal, type SMCSignal } from "../../src/analysis/smcSignalEngine";
 import type { Candle } from "../../src/analysis/engine";
 
 const intervals = ["5m", "15m", "1h", "4h"] as const;
-const markets = [{ value: "usdm", label: "Binance USDⓈ-M Futures" }] as const;
+const refreshIntervals: Record<(typeof intervals)[number], number> = {
+  "5m": 30_000,
+  "15m": 45_000,
+  "1h": 60_000,
+  "4h": 120_000,
+};
 
 function toCandles(rows: unknown[]): Candle[] {
   return rows
@@ -30,7 +35,11 @@ export default function SMCSignalPage() {
   const [error, setError] = useState("");
   const [scannedAt, setScannedAt] = useState("");
 
-  async function load() {
+  const requestInFlight = useRef(false);
+
+  const load = useCallback(async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
     setLoading(true);
     setError("");
     try {
@@ -53,8 +62,9 @@ export default function SMCSignalPage() {
       // also enforces closed-candle causality, but we explicitly anchor the
       // signal to the latest confirmed candle here.
       const end = candles.length - 2;
-      const confirmed = generateSMCSignal(candles, end, interval);
+      if (end < 0) throw new Error("Binance returned no confirmed candle");
 
+      const confirmed = generateSMCSignal(candles, end, interval);
       setSignal(confirmed);
       setPrice(candles[end]?.close ?? null);
       setScannedAt(new Date().toLocaleTimeString());
@@ -63,13 +73,18 @@ export default function SMCSignalPage() {
       setPrice(null);
       setError(e instanceof Error ? e.message : "Failed to load market data");
     } finally {
+      requestInFlight.current = false;
       setLoading(false);
     }
-  }
+  }, [symbol, interval]);
 
   useEffect(() => {
     void load();
-  }, [symbol, interval]);
+    const timer = window.setInterval(() => {
+      void load();
+    }, refreshIntervals[interval]);
+    return () => window.clearInterval(timer);
+  }, [load, interval]);
 
   return (
     <main style={{ minHeight: "100vh", padding: 24, fontFamily: "system-ui", background: "#0b0d10", color: "#f5f7fa" }}>
@@ -91,6 +106,9 @@ export default function SMCSignalPage() {
           <button onClick={() => void load()} disabled={loading} style={{ padding: "12px 18px", borderRadius: 8, border: 0, cursor: "pointer" }}>
             {loading ? "Scanning…" : "Scan Now"}
           </button>
+          <span style={{ alignSelf: "center", opacity: 0.6, fontSize: 13 }}>
+            Auto-refresh: {Math.round(refreshIntervals[interval] / 1000)}s
+          </span>
         </section>
 
         {error && <div style={{ padding: 14, borderRadius: 10, background: "#351719", marginBottom: 16 }}>⚠ {error}</div>}
