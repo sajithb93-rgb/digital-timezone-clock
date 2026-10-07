@@ -96,7 +96,7 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
           .at(-1);
       const lowPivot = highPivot
         ? smc.pivots
-            .filter((p) => p.type === "L" && p.index < highPivot.index && (p.confirmedAt ?? p.index) <= highPivot.index)
+            .filter((p) => p.type === "L" && p.index < highPivot.index && (p.confirmedAt ?? p.index) <= event.index)
             .at(-1)
         : undefined;
       if (highPivot && lowPivot) {
@@ -119,7 +119,7 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
           .at(-1);
       const highPivot = lowPivot
         ? smc.pivots
-            .filter((p) => p.type === "H" && p.index < lowPivot.index && (p.confirmedAt ?? p.index) <= lowPivot.index)
+            .filter((p) => p.type === "H" && p.index < lowPivot.index && (p.confirmedAt ?? p.index) <= event.index)
             .at(-1)
         : undefined;
       if (highPivot && lowPivot) {
@@ -156,20 +156,47 @@ function smcFib(candles: Candle[], smc: SMCResult): AutoFibonacciSet | null {
 
 function elliottFib(elliott: AdvancedElliottResult): AutoFibonacciSet | null {
   const primary = elliott.primary;
-  if (primary && Array.isArray(primary.points) && primary.points.length >= 4) {
-    // Wave 3 is the strongest completed impulse leg in the validated count.
-    // Retracing that leg is the correct Wave-4 Fibonacci context.
+  if (primary && Array.isArray(primary.points) && primary.points.length >= 6) {
     const p2 = primary.points[2];
     const p3 = primary.points[3];
-    const set = makeSet(
+    const p4 = primary.points[4];
+    const p5 = primary.points[5];
+
+    // Wave 3 is the correct retracement anchor while the validated count is
+    // in the Wave-4 context. Once Wave 5 is complete and the engine is working
+    // on its ABC continuation, the current actionary leg is Wave 5 instead.
+    if (elliott.activeWave === "Wave 4") {
+      return makeSet(
+        "ELLIOTT",
+        p2.index,
+        p2.price,
+        p3.index,
+        p3.price,
+        "Validated Elliott Wave-3 leg · Wave-4 retracement context",
+      );
+    }
+
+    if (elliott.liveSetup || elliott.activeWave === "A" || elliott.activeWave === "B" || elliott.activeWave === "C") {
+      return makeSet(
+        "ELLIOTT",
+        p4.index,
+        p4.price,
+        p5.index,
+        p5.price,
+        "Completed Elliott Wave-5 leg · post-impulse retracement context",
+      );
+    }
+
+    // Historical completed counts should still use their latest completed
+    // actionary leg rather than displaying a stale Wave-3 retracement.
+    return makeSet(
       "ELLIOTT",
-      p2.index,
-      p2.price,
-      p3.index,
-      p3.price,
-      "Validated Elliott Wave-3 leg · Wave-4 retracement context",
+      p4.index,
+      p4.price,
+      p5.index,
+      p5.price,
+      "Completed Elliott Wave-5 leg · latest validated actionary swing",
     );
-    if (set) return set;
   }
 
   const correction = elliott.correction;
@@ -182,18 +209,17 @@ function elliottFib(elliott: AdvancedElliottResult): AutoFibonacciSet | null {
       a.price,
       b.index,
       b.price,
-      "Latest validated Elliott correction leg",
+      "Validated Elliott correction leg",
     );
   }
 
   return null;
 }
-
 function orderFlowFib(candles: Candle[], orderFlow: OrderFlowResult): AutoFibonacciSet | null {
   const lastClosed = candles.reduce((last, c, i) => (c.closed === false ? last : i), -1);
   if (lastClosed < 0) return null;
 
-  const bars = orderFlow.recentBars.filter((b) => b.index >= 0 && b.index <= lastClosed);
+  const bars = orderFlow.recentBars.filter((b) => b.index >= 0 && b.index <= lastClosed && candles[b.index]?.closed !== false);
   const latestBuySweep = bars.filter((b) => b.liquiditySweep === "LOW" && finite(b.sweepPrice)).at(-1);
   const latestSellSweep = bars.filter((b) => b.liquiditySweep === "HIGH" && finite(b.sweepPrice)).at(-1);
 
