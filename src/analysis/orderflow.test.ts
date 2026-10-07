@@ -304,6 +304,14 @@ describe("order flow strategy",()=>{
     expect(r.diagnostics.find(d=>d.key==="sweep_recent_buy")?.passed).toBe(false);
   });
 
+  it("scales sweep confirmation age by timeframe",()=>{
+    const hourly=fullLongCandles().map(c=>({...c,time:c.time*60*60*1000}));
+    const hourlyFp=confirmedFootprints("BUY").map((f,i)=>({...f,candleTime:i*60*60*1000,intervalMs:60*60*1000}));
+    const r=analyzeOrderFlow(hourly,hourlyFp);
+    expect(r.direction).toBe("WAIT");
+    expect(r.diagnostics.find(d=>d.key==="sweep_recent_buy")?.passed).toBe(false);
+  });
+
   it("blocks a BUY when the latest three footprint bars lose directional flow",()=>{
     const candles=fullLongCandles();
     const footprint=confirmedFootprints("BUY");
