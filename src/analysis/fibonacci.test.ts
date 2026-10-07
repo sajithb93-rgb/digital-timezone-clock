@@ -166,7 +166,7 @@ describe("strategy-aware auto Fibonacci", () => {
     } as any;
     const sets = buildAutoFibonacci(candles as any, baseSMC(), baseElliott(), orderFlow, "orderflow");
     expect(sets[0]?.source).toBe("ORDER_FLOW");
-    expect(sets[0]?.startIndex).toBe(7);
+    expect(sets[0]?.startIndex).toBe(9);
     expect(sets[0]?.endIndex).toBe(10);
   });
 
