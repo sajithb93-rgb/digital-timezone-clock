@@ -38,7 +38,7 @@ describe("Elliott structural validators", () => {
   it("distinguishes regular, expanded and running flats", () => {
     expect(validateFlat([100, 90, 99, 91], false).subtype).toBe("Regular Flat");
     expect(validateFlat([100, 90, 102, 84], false).subtype).toBe("Expanded Flat");
-    expect(validateFlat([100, 90, 101, 89], false).subtype).toBe("Running Flat");
+    expect(validateFlat([100, 90, 101, 92], false).subtype).toBe("Running Flat");
   });
 
   it("requires all five triangle waves A-B-C-D-E", () => {
