@@ -115,4 +115,49 @@ describe("strategy-aware auto Fibonacci", () => {
     expect(sets.length).toBe(0);
   });
 
+  it("selects the latest SMC event by causal candle index, not array order", () => {
+    const smc = {
+      pivots: [
+        {index:1,price:103,type:"H",confirmedAt:2},
+        {index:2,price:101,type:"L",confirmedAt:3},
+        {index:4,price:110,type:"H",confirmedAt:5},
+        {index:5,price:112,type:"H",confirmedAt:6},
+        {index:6,price:105,type:"L",confirmedAt:7},
+      ],
+      events: [
+        {index:5,price:110,type:"BOS",direction:"bullish",strength:"normal"},
+        {index:3,price:101,type:"CHOCH",direction:"bullish",strength:"normal"},
+      ],
+    } as any;
+    const [set] = buildAutoFibonacci(candles as any, smc, baseElliott(), baseOrderFlow(), "smc");
+    expect(set.endIndex).toBe(4);
+    expect(set.endPrice).toBe(110);
+  });
+
+  it("does not use an unconfirmed SMC pivot after the structural event", () => {
+    const smc = {
+      pivots: [
+        {index:1,price:103,type:"H",confirmedAt:2},
+        {index:2,price:101,type:"L",confirmedAt:6},
+        {index:4,price:110,type:"H",confirmedAt:5},
+      ],
+      events:[{index:5,price:110,type:"BOS",direction:"bullish",strength:"normal"}],
+    } as any;
+    const [set] = buildAutoFibonacci(candles as any, smc, baseElliott(), baseOrderFlow(), "smc");
+    expect(set).toBeUndefined();
+  });
+
+  it("uses a timeframe-scaled order-flow swing lookback", () => {
+    const shortTf = candles.map((x,i)=>({...x,time:i*60_000}));
+    const longTf = candles.map((x,i)=>({...x,time:i*15*60_000}));
+    const orderFlow = {
+      recentBars:[
+        {index:2,time:2,liquiditySweep:"NONE",sweepPrice:null,microStructure:"BULLISH"},
+      ],
+    } as any;
+    const short = buildAutoFibonacci(shortTf as any, baseSMC(), baseElliott(), orderFlow, "orderflow");
+    const long = buildAutoFibonacci(longTf as any, baseSMC(), baseElliott(), orderFlow, "orderflow");
+    expect(short[0]?.startIndex).toBe(0);
+    expect(long[0]?.startIndex).toBe(0);
+  });
 });
