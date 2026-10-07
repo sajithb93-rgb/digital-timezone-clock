@@ -296,7 +296,7 @@ function orderFlowFib(candles: Candle[], orderFlow: OrderFlowResult): AutoFibona
         if (low) return makeSet("ORDER_FLOW", low.index, low.price, micro.index, c.high, "Latest confirmed bullish micro-structure leg");
       } else {
         const high = lookback.reduce<{index:number;price:number}|null>((best, x, offset) => {
-          const index = Math.max(0, micro.index - 12) + offset;
+          const index = lookbackStart + offset;
           return !best || x.high > best.price ? {index, price:x.high} : best;
         }, null);
         if (high) return makeSet("ORDER_FLOW", high.index, high.price, micro.index, c.low, "Latest confirmed bearish micro-structure leg");
