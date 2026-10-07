@@ -63,12 +63,6 @@ async function binanceFetchJson(url:string,init?:RequestInit,retries=2):Promise<
    const target=proxyBinanceUrl(url);
    const requestInit:RequestInit={...(init??{}),cache:"no-store"};
    let r=await fetch(target,requestInit);
-   // Binance can return 451/403 from a server-region IP even when the user
-   // can access the public API directly. In a browser, fall back to the
-   // original Binance URL so the user's network/region can provide live data.
-   if(!r.ok && target!==url && (r.status===451 || r.status===403)){
-    r=await fetch(url,requestInit);
-   }
    if(r.ok)return r.json();
    if(r.status===429||r.status===418){
     const retryAfter=Number(r.headers.get("Retry-After")||0);
@@ -95,12 +89,16 @@ async function fetchKlines(symbol:string,interval:string,limit=300,marketType:Ma
  const rows=await binanceFetchJson(cfg.rest+"/klines?symbol="+encodeURIComponent(normalizedSymbol)+"&interval="+interval+"&limit="+limit,init);
  if(!Array.isArray(rows))throw new Error("Binance kline response is invalid");
  const parsed:Candle[]=[];
- for(const x of rows){
+ for(const [index,x] of rows.entries()){
    if(!Array.isArray(x)||x.length<10)continue;
    const time=Number(x[0]),open=Number(x[1]),high=Number(x[2]),low=Number(x[3]),close=Number(x[4]),volume=Number(x[5]),takerBuyVolume=Number(x[9]),closeTime=Number(x[6]);
    if(![time,open,high,low,close,volume,closeTime].every(Number.isFinite))continue;
    if(time<0||volume<0||high<low||high<Math.max(open,close)||low>Math.min(open,close)||closeTime<time)continue;
-   // Keep a small safety margin against client-clock skew. A fast local clock\n   // must not prematurely promote the still-forming Binance candle to closed.\n   const closed=closeTime<=Date.now()-3000;\n   parsed.push({time,open,high,low,close,volume,takerBuyVolume:Number.isFinite(takerBuyVolume)?takerBuyVolume:undefined,closed});
+   // All Binance REST rows before the newest row are closed. This prevents a
+   // slow client clock from turning the whole historical dataset into an
+   // "open" series and leaving the chart with only the live WebSocket candle.
+   const closed=index<rows.length-1 || closeTime<=Date.now()-3000;
+   parsed.push({time,open,high,low,close,volume,takerBuyVolume:Number.isFinite(takerBuyVolume)?takerBuyVolume:undefined,closed});
  }
  parsed.sort((a,b)=>a.time-b.time);
  if(rows.length>0&&parsed.length===0)throw new Error("Binance kline response contained no valid candles");
