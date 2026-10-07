@@ -539,7 +539,7 @@ function chooseAnalyticalEntryZone(
   candidates.push({low:o.low,high:o.high,origin:o.index,kind:"OB",strength:o.strength??0,linked:false,distance});
  }
  for(const f of fvgs){
-  if(f.type!==direction||f.filled)continue;
+  if(f.type!==direction||f.filled||f.partial)continue;
   const origin=f.to,age=asOf-origin;
   if(age<0||age>windows.zoneAgeBars)continue;
   const distance=last.close<f.low?f.low-last.close:last.close>f.high?last.close-f.high:0;
