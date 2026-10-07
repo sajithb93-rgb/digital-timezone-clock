@@ -69,6 +69,22 @@ describe("protected SMC structure breaks", () => {
 
 
 describe("Setup Levels analytical display path", () => {
+  it("keeps a current-bar OB retest visible for analytical Setup Levels", () => {
+    const zone = chooseAnalyticalEntryZone(
+      "bullish",
+      [{index:20,low:100,high:102,type:"bullish",mitigated:true,mitigationIndex:30,strength:1}] as any,
+      [],
+      [],
+      {time:30,open:101,high:103,low:100.5,close:102,volume:100,closed:true},
+      1,
+      30,
+      {intervalMs:300000,sweepLookbackBars:20,structureGapBars:12,obAgeBars:50,zoneAgeBars:40}
+    );
+    expect(zone?.kind).toBe("OB");
+    expect(zone?.low).toBe(100);
+    expect(zone?.high).toBe(102);
+  });
+
   it("selects a fresh unmitigated analytical order block without requiring ACTIVE confirmation", () => {
     const zone = chooseAnalyticalEntryZone(
       "bullish",
