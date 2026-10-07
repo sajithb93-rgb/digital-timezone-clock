@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeSMC, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, pivots, type Candle, type Pivot } from "./engine";
+import { analyzeSMC, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, pivots, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
 
 describe("protected SMC structure breaks", () => {
   it("does not classify a newer unprotected low as CHOCH", () => {
@@ -81,5 +81,23 @@ describe("Setup Levels analytical display path", () => {
     expect(result.trend).toBe("Bullish");
     expect(result.entryZone).not.toBeNull();
     expect(result.entryZone!.high).toBeGreaterThan(result.entryZone!.low);
+  });
+});
+
+
+describe("timeframe-consistent SMC setup windows", () => {
+  it("keeps setup windows tied to elapsed market time", () => {
+    const oneMinute = setupWindowProfileForInterval("1m");
+    const fiveMinute = setupWindowProfileForInterval("5m");
+    const fifteenMinute = setupWindowProfileForInterval("15m");
+    expect(oneMinute.sweepLookbackBars).toBe(100);
+    expect(fiveMinute.sweepLookbackBars).toBe(20);
+    expect(fifteenMinute.sweepLookbackBars).toBe(7);
+    expect(oneMinute.structureGapBars).toBe(60);
+    expect(fiveMinute.structureGapBars).toBe(12);
+    expect(oneMinute.obAgeBars).toBe(250);
+    expect(fiveMinute.obAgeBars).toBe(50);
+    expect(oneMinute.zoneAgeBars).toBe(200);
+    expect(fiveMinute.zoneAgeBars).toBe(40);
   });
 });
