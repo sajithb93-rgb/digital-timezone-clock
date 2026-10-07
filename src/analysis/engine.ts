@@ -417,7 +417,7 @@ export function findFvgs(c:Candle[],a:number,asOf=c.length-1):FVG[]{
  }
  return out;
 }
-function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEvent[]=[]):OB[]{
+function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEvent[]=[],windows=setupWindowProfile(c)):OB[]{
  const out:OB[]=[];
  const end=Math.min(asOf,c.length-1);
  for(let i=1;i<=end-1;i++){
@@ -438,7 +438,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    if(bearishBase&&c[j].close<c[i].low&&d>=.55){bearBreak=j;bearStrength=d;break}
   }
   if(bullBreak>0&&!bullPreInvalid){
-   const linked=events.some(e=>e.direction==="bullish"&&isOrderBlockCausal(i,bullBreak,e.index,12));
+   const linked=events.some(e=>e.direction==="bullish"&&isOrderBlockCausal(i,bullBreak,e.index,windows.structureGapBars));
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bullBreak+1;j<=end;j++){
@@ -452,7 +452,7 @@ function findOrderBlocks(c:Candle[],a:number,asOf=c.length-1,events:StructureEve
    }
   }
   if(bearBreak>0&&!bearPreInvalid){
-   const linked=events.some(e=>e.direction==="bearish"&&isOrderBlockCausal(i,bearBreak,e.index,12));
+   const linked=events.some(e=>e.direction==="bearish"&&isOrderBlockCausal(i,bearBreak,e.index,windows.structureGapBars));
    if(linked){
     let m:number|undefined,invalid:number|undefined;
     for(let j=bearBreak+1;j<=end;j++){
@@ -639,7 +639,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const internalEvents=detectStructureEvents(data,internal);
  const asOf=data.length-1;
  const windows=setupWindowProfile(data);
- const fvgs=findFvgs(data,a,asOf),obs=findOrderBlocks(data,a,asOf,events),breakers=makeBreakers(obs,data,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.15,.0000001);
+ const fvgs=findFvgs(data,a,asOf),obs=findOrderBlocks(data,a,asOf,events,windows),breakers=makeBreakers(obs,data,asOf),highs=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="H"),lows=ps.filter(p=>(p.confirmedAt??p.index)<=asOf&&p.type==="L"),tol=Math.max(a*.15,.0000001);
  const equalHighs=equalLevels(highs,tol),equalLows=equalLevels(lows,tol);
  const liquidityHighs=uniquePivots([...equalHighs,...highs.slice(-6)],tol).slice(-8);
  const liquidityLows=uniquePivots([...equalLows,...lows.slice(-6)],tol).slice(-8);
