@@ -37,24 +37,24 @@ describe("analysis regression",()=>{
     expect(profiles["1h"].intervalMs).toBe(60*60_000);
     expect(profiles["4h"].intervalMs).toBe(4*60*60_000);
     expect(profiles["1d"].intervalMs).toBe(24*60*60_000);
-    expect(profiles["1m"].sweepLookbackBars).toBe(20);
+    expect(profiles["1m"].sweepLookbackBars).toBe(100);
     expect(profiles["5m"].sweepLookbackBars).toBe(20);
     expect(profiles["15m"].sweepLookbackBars).toBe(7);
-    expect(profiles["1h"].sweepLookbackBars).toBe(5);
-    expect(profiles["4h"].sweepLookbackBars).toBe(5);
-    expect(profiles["1d"].sweepLookbackBars).toBe(5);
-    expect(profiles["1m"].structureGapBars).toBe(12);
+    expect(profiles["1h"].sweepLookbackBars).toBe(2);
+    expect(profiles["4h"].sweepLookbackBars).toBe(1);
+    expect(profiles["1d"].sweepLookbackBars).toBe(1);
+    expect(profiles["1m"].structureGapBars).toBe(60);
     expect(profiles["5m"].structureGapBars).toBe(12);
     expect(profiles["15m"].structureGapBars).toBe(4);
-    expect(profiles["1h"].structureGapBars).toBe(3);
-    expect(profiles["4h"].structureGapBars).toBe(3);
-    expect(profiles["1d"].structureGapBars).toBe(3);
-    expect(profiles["1m"].obAgeBars).toBe(50);
+    expect(profiles["1h"].structureGapBars).toBe(1);
+    expect(profiles["4h"].structureGapBars).toBe(1);
+    expect(profiles["1d"].structureGapBars).toBe(1);
+    expect(profiles["1m"].obAgeBars).toBe(250);
     expect(profiles["5m"].obAgeBars).toBe(50);
     expect(profiles["15m"].obAgeBars).toBe(17);
-    expect(profiles["1h"].obAgeBars).toBe(10);
-    expect(profiles["4h"].obAgeBars).toBe(10);
-    expect(profiles["1d"].obAgeBars).toBe(10);
+    expect(profiles["1h"].obAgeBars).toBe(5);
+    expect(profiles["4h"].obAgeBars).toBe(2);
+    expect(profiles["1d"].obAgeBars).toBe(1);
   });
 
   it("rejects an impulse when Wave 3 ties both Wave 1 and Wave 5",()=>{
