@@ -814,10 +814,11 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  if(direction&&causalSequence)confirmations.push("Liquidity sweep → structure break sequence aligned");
  if(direction&&internalCausal)confirmations.push("Internal structure aligned");
  if(sweep?.confirmed&&sweep.displacement)confirmations.push("Liquidity sweep + displacement");
- if(selectedZone?.kind==="OB")confirmations.push("Qualified unmitigated order block");
- if(selectedZone?.kind==="FVG")confirmations.push("Qualified unfilled fair value gap");
- if(selectedZone?.kind==="BREAKER")confirmations.push("Qualified active breaker");
- if(selectedZone?.linked&&zoneCausal)confirmations.push("Zone linked to current post-sweep structure leg");
+ const confirmedZoneSelected=!!confirmedZone&&selectedZone===confirmedZone;
+ if(confirmedZoneSelected&&selectedZone?.kind==="OB")confirmations.push("Qualified unmitigated order block");
+ if(confirmedZoneSelected&&selectedZone?.kind==="FVG")confirmations.push("Qualified unfilled fair value gap");
+ if(confirmedZoneSelected&&selectedZone?.kind==="BREAKER")confirmations.push("Qualified active breaker");
+ if(confirmedZoneSelected&&selectedZone?.linked&&zoneCausal)confirmations.push("Zone linked to current post-sweep structure leg");
  if((direction==="bullish"&&pd==="Discount")||(direction==="bearish"&&pd==="Premium"))confirmations.push("Premium/discount aligned");
  if(Math.abs(last.close-last.open)>=a*.5)confirmations.push("Displacement");
  const rawScore=35+confirmations.length*10+(events.at(-1)?.strength==="displacement"?10:0)+(equalHighs.length+equalLows.length>0?5:0);
