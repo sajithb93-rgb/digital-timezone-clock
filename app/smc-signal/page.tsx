@@ -11,7 +11,9 @@ const refreshIntervals: Record<(typeof intervals)[number], number> = {
   "1h": 180_000,
   "4h": 300_000,
 };
-const SCAN_CONCURRENCY = 6;
+const SCAN_CONCURRENCY = 10;
+const MAX_RETRIES = 2;
+const RETRY_BASE_MS = 700;
 const KLINE_LIMIT = 160;
 
 type PairSignal = SMCSignal & { symbol: string; lastPrice: number };
@@ -32,10 +34,22 @@ function toCandles(rows: unknown[]): Candle[] {
     .filter(c => [c.time, c.open, c.high, c.low, c.close, c.volume].every(Number.isFinite));
 }
 
-async function fetchJson(url: string) {
+async function fetchJson(url: string, attempt = 0): Promise<any> {
   const res = await fetch(url, { cache: "no-store" });
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || "Binance request failed");
+  if (res.status === 429 && attempt < MAX_RETRIES) {
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const delay = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 5000)
+      : RETRY_BASE_MS * (attempt + 1);
+    await new Promise(resolve => window.setTimeout(resolve, delay));
+    return fetchJson(url, attempt + 1);
+  }
+  if (!res.ok) {
+    const error = new Error(data?.error || "Binance request failed");
+    (error as Error & { status?: number }).status = res.status;
+    throw error;
+  }
   return data;
 }
 
@@ -44,6 +58,7 @@ export default function SMCSignalPage() {
   const [signals, setSignals] = useState<PairSignal[]>([]);
   const [pairCount, setPairCount] = useState(0);
   const [scannedCount, setScannedCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [error, setError] = useState("");
   const [scannedAt, setScannedAt] = useState("");
@@ -58,6 +73,7 @@ export default function SMCSignalPage() {
     setSignals([]);
     setSelected(null);
     setScannedCount(0);
+    setFailedCount(0);
 
     try {
       const info = await fetchJson("/api/binance?market=usdm&path=/exchangeInfo");
@@ -109,7 +125,9 @@ export default function SMCSignalPage() {
               });
             }
           } catch {
-            // A failed pair must not abort the complete market scan.
+            // A failed pair must not abort the complete market scan. Count it
+            // explicitly so the UI never presents a partial scan as complete.
+            setFailedCount(n => n + 1);
           } finally {
             setScannedCount(n => n + 1);
           }
@@ -153,7 +171,7 @@ export default function SMCSignalPage() {
             {scanState === "loading" ? "Scanning all pairs…" : "Scan All Binance Pairs"}
           </button>
           <span style={{ alignSelf: "center", opacity: 0.65, fontSize: 13 }}>
-            {pairCount ? `${scannedCount}/${pairCount} pairs` : "Loading pair list…"} · Auto scan {Math.round(refreshIntervals[interval] / 1000)}s
+            {pairCount ? `${scannedCount}/${pairCount} pairs` : "Loading pair list…"}{failedCount ? ` · ${failedCount} failed` : ""} · Auto scan {Math.round(refreshIntervals[interval] / 1000)}s
           </span>
         </section>
 
