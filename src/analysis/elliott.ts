@@ -1,5 +1,5 @@
 // Build verification: duplicate-x declaration removed; live continuation uses the existing X pivot.
-import type { Candle, ElliottResult, Pivot, WaveCount, WavePoint } from "./engine";
+import { inferCandleIntervalMs, type Candle, type ElliottResult, type Pivot, type WaveCount, type WavePoint } from "./engine";
 import { normalizeCandleSeries } from "./candles";
 
 export type ElliottPattern =
@@ -175,7 +175,7 @@ function inferDegree(spanBars:number,totalBars:number):ElliottDegree{
   return "Primary";
 }
 
-const MAX_PRIMARY_AGE_BARS = 144;
+const MAX_PRIMARY_AGE_MS = 12 * 60 * 60 * 1000;
 
 export function isCompletedWaveCountInvalidated(c:Candle[],primary:WaveCount):boolean{
   const origin=primary.points[0]?.price;
@@ -630,6 +630,8 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
   // Normalize the exchange feed before assigning pivot indices. Then stop at
   // the first forming candle so later bars cannot leak into an earlier count.
   const data=normalizeCandleSeries(c,true);
+  const primaryIntervalMs=inferCandleIntervalMs(data);
+  const maxPrimaryAgeBars=Math.max(1,Math.ceil(MAX_PRIMARY_AGE_MS/Math.max(primaryIntervalMs,1)));
   const ps=alternatePivots(swingPivots(data,2));
   const corrections=correctionCandidates(data);
   const action:WaveCount[]=[
@@ -649,7 +651,7 @@ export function analyzeElliottAdvanced(c:Candle[]):AdvancedElliottResult{
     .sort((a,b)=>{
       const ageA=(data.length-1)-(a.points.at(-1)?.index??-1);
       const ageB=(data.length-1)-(b.points.at(-1)?.index??-1);
-      const recentA=ageA<=MAX_PRIMARY_AGE_BARS?8*(1-ageA/MAX_PRIMARY_AGE_BARS):0;
+      const recentA=ageA<=maxPrimaryAgeBars?8*(1-ageA/maxPrimaryAgeBars):0;
       const recentB=ageB<=MAX_PRIMARY_AGE_BARS?8*(1-ageB/MAX_PRIMARY_AGE_BARS):0;
       return (b.quality+recentB)-(a.quality+recentA)
         ||((b.points.at(-1)?.index??-1)-(a.points.at(-1)?.index??-1));
