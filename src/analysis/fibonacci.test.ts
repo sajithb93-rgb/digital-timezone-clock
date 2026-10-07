@@ -83,7 +83,7 @@ describe("strategy-aware auto Fibonacci", () => {
 
   it("does not create a set from an open final candle", () => {
     const openCandles = [...candles.slice(0, -1), {...candles.at(-1)!, closed:false}];
-    const [set] = buildAutoFibonacci(openCandles as any, baseSMC(), baseElliott(), baseOrderFlow(), "smc");
-    expect(set.endIndex).toBeLessThan(openCandles.length);
+    const sets = buildAutoFibonacci(openCandles as any, baseSMC(), baseElliott(), baseOrderFlow(), "smc");
+    expect(sets).toHaveLength(0);
   });
 });
