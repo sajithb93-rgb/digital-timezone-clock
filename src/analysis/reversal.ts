@@ -62,7 +62,7 @@ function clamp(n: number): number {
 
 export function reversalWindowProfile(candles: Candle[]) {
   const intervalMs = inferCandleIntervalMs(candles);
-  const barsFor = (windowMs: number) => Math.max(1, Math.ceil(windowMs / Math.max(intervalMs, 1)));
+  const barsFor = (windowMs: number, minBars = 3) => Math.max(minBars, Math.ceil(windowMs / Math.max(intervalMs, 1)));
   return {
     intervalMs,
     sweepLookbackBars: barsFor(100 * 60_000),
