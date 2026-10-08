@@ -248,7 +248,7 @@ export default function SMCSignalPage() {
               <Card title="Entry" value={formatPrice(selected.entry)} />
               <Card title="Stop Loss" value={formatPrice(selected.stop)} />
               <Card title="TP1" value={formatPrice(selected.targets[0])} />
-              <Card title="TP2" value={formatPrice(selected.targets[1])} />
+              <Card title="TP2" value={selected.targets[1] !== undefined ? formatPrice(selected.targets[1]) : "—"} />
               <Card title="RR" value={selected.rr.toFixed(2) + "R"} />
               <Card title="Confidence" value={selected.confidence + "%"} />
               <Card title="Zone / Location" value={selected.zoneType + " / " + selected.premiumDiscount} />
