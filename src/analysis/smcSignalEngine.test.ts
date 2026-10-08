@@ -277,7 +277,8 @@ describe("SMC signal engine", () => {
     expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 20, 12)).toBeNull();
   });
 
-  it("does not attach distant post-structure FVG or breaker zones", () => {
+  it("does not attach pre-structure FVG or distant POI zones", () => {
+    expect(isEntryZoneCausal(14, 10, 15, "FVG", 12)).toBe(false);
     expect(isEntryZoneCausal(15, 10, 15, "FVG", 12)).toBe(true);
     expect(isEntryZoneCausal(18, 10, 15, "FVG", 12)).toBe(true);
     expect(isEntryZoneCausal(28, 10, 15, "FVG", 12)).toBe(false);
