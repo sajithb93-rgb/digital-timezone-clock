@@ -17,6 +17,7 @@ export type SMCSignal = {
   confirmations: string[];
   sweepIndex: number;
   structureIndex: number;
+  internalIndex: number;
   zoneIndex: number;
   zoneType: "FVG" | "OB" | "BREAKER";
   entryZone: { low: number; high: number };
@@ -121,6 +122,7 @@ export function generateSMCSignal(
     confirmations: [...setup.confirmations],
     sweepIndex: causal.sweepIndex,
     structureIndex: causal.structureIndex,
+    internalIndex: causal.internal.index,
     zoneIndex: zoneIndex ?? result.asOf,
     zoneType,
     entryZone: { low: zone.low, high: zone.high },
@@ -136,14 +138,28 @@ export function isConfirmedSMCSignal(signal: SMCSignal | null): signal is SMCSig
   if (
     !Number.isInteger(signal.sweepIndex) ||
     !Number.isInteger(signal.structureIndex) ||
+    !Number.isInteger(signal.internalIndex) ||
     !Number.isInteger(signal.zoneIndex) ||
     signal.sweepIndex < 0 ||
     signal.structureIndex < 0 ||
+    signal.internalIndex < 0 ||
     signal.zoneIndex < 0 ||
+    signal.sweepIndex >= signal.structureIndex ||
+    signal.structureIndex >= signal.internalIndex ||
+    signal.internalIndex >= signal.asOf ||
+    signal.zoneIndex < signal.sweepIndex ||
     signal.sweepIndex > signal.asOf ||
     signal.structureIndex > signal.asOf ||
+    signal.internalIndex > signal.asOf ||
     signal.zoneIndex > signal.asOf
   ) return false;
+  const causalZone =
+    signal.zoneType === "OB"
+      ? signal.zoneIndex < signal.structureIndex
+      : signal.zoneType === "FVG"
+        ? signal.zoneIndex <= signal.structureIndex + 3
+        : signal.zoneIndex >= signal.structureIndex;
+  if (!causalZone) return false;
   if (
     !finite(signal.entryZone.low) ||
     !finite(signal.entryZone.high) ||
