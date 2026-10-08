@@ -3,7 +3,7 @@
 // Build repair: ensure Vercel deploys the valid EliteWave source.
 
 import { memo, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
-import { analyzeElliott, analyzeMTF, analyzeSMC, Candle } from "../src/analysis/engine";
+import { analyzeElliott, analyzeMTF, analyzeSMC, isValidTradeGeometry, Candle } from "../src/analysis/engine";
 import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from "../src/analysis/advanced";
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 import { analyzeOrderFlow, type OrderFlowResult } from "../src/analysis/orderflow";
@@ -20,14 +20,8 @@ type BinanceSymbol={symbol:string;baseAsset:string;quoteAsset:string;minQty:numb
 type Derivatives={openInterest:string;fundingRate:string;change24h:string}|null;
 type Ticker={symbol:string,priceChangePercent:number,quoteVolume:number};
 const intervals=["1m","5m","15m","1h","4h","1d"] as const;
-const isValidAutoTradeGeometry=(direction:"BUY"|"SELL",entry:number,stop:number,targets:number[],minRR=1.5):boolean=>{
- if(!Number.isFinite(entry)||!Number.isFinite(stop)||entry<=0||stop<=0||entry===stop)return false;
- const risk=Math.abs(entry-stop);
- if(direction==="BUY"&&stop>=entry)return false;
- if(direction==="SELL"&&stop<=entry)return false;
- if(!Array.isArray(targets)||targets.length===0||!targets.every(Number.isFinite))return false;
- return targets.every(t=>(direction==="BUY"?t>entry:t<entry)&&Math.abs(t-entry)/risk>=minRR);
-};
+const isValidAutoTradeGeometry=(direction:"BUY"|"SELL",entry:number,stop:number,targets:number[],minRR=1.5):boolean=>
+ isValidTradeGeometry(direction,entry,stop,targets,minRR);
 
 const mtfIntervals=["4h","1h","15m","5m"];
 const marketConfig:Record<MarketKind,{label:string;rest:string;ws:string;aggRest:string}>={
@@ -768,7 +762,7 @@ export default function Home(){
 
   <section className="terminal-grid"><div className="chart-column">
    <div className="panel-card chart-card"><div className="panel-header"><div><span className="eyebrow">PRICE ACTION</span><h2>{symbol} <small>{interval}</small></h2></div><div className="chart-actions"><span>{candles.length} candles</span><button onClick={reset}>FIT</button></div></div>
-    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef} aria-label="Live Binance candlestick chart" role="img"/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers} autoFib={autoFib} account={account} riskPercent={riskPercent}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
+    <div className="chart-wrap" ref={chartWrapRef}><div className="chart-left-rail" aria-label="Auto-drawn analysis tools"><span title="Manual drawing tools are not enabled">AUTO-DRAW</span><span>SMC</span><span>EW</span><span>FLOW</span><span>REV</span></div><div className="chartarea" ref={chartRef} aria-label="Live Binance candlestick chart" role="img"/>{chartReady&&<MemoizedChartAnnotations chart={chartObj.current} series={seriesRef.current} host={chartWrapRef.current} candles={analysisCandles} smc={smc} elliott={elliott} orderFlow={orderFlow} reversal={reversal} mtfReversal={mtfReversal} mode={mode} tick={viewportTick} layers={layers} autoFib={autoFib} account={account} riskPercent={riskPercent} positionConstraints={selectedPair}/>} {loading&&<div className="chart-loading"><span/>Loading market data…</div>}</div>
     <div className="chart-footer"><span><i className="legend-dot smc-dot"/> SMC</span><span><i className="legend-dot wave-dot"/> Elliott</span><span><i className="legend-dot liq-dot"/> Liquidity</span>{mode==="orderflow"&&<span><i className="legend-dot liq-dot"/> Order Flow</span>}{layers.fibonacci&&autoFib.length>0&&<span><i className="legend-dot fib-dot"/> Auto Fibonacci</span>}<span className="chart-tip">Live Binance {marketConfig[marketType].label.toLowerCase()} data · analysis uses closed candles</span></div>
    </div>
 
@@ -846,7 +840,7 @@ export default function Home(){
  </main>;
 }
 
-function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mtfReversal,mode,tick,layers,autoFib,account,riskPercent}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mtfReversal:any;mode:Mode;tick:number;layers:any;autoFib:AutoFibonacciSet[];account:number;riskPercent:number}){
+function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,reversal,mtfReversal,mode,tick,layers,autoFib,account,riskPercent,positionConstraints}:{chart:any;series:any;host:HTMLElement|null;candles:Candle[];smc:any;elliott:any;orderFlow:OrderFlowResult;reversal:ReversalEngineResult;mtfReversal:any;mode:Mode;tick:number;layers:any;autoFib:AutoFibonacciSet[];account:number;riskPercent:number;positionConstraints:BinanceSymbol|undefined}){
  const width=host?.clientWidth||0,height=host?.clientHeight||0;
  if(!chart||!series||!host||!candles.length)return null;if(!chart||!series||candles.length<2||!width||!height)return null;
  const ts=chart.timeScale(),lastIndex=candles.length-1,xCache=new Map<number,number|null>(),yCache=new Map<number,number|null>();
@@ -929,11 +923,12 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   if(!(riskPerUnit>0&&rewardPerUnit>0))return null;
   if(!isValidAutoTradeGeometry(direction,entry,stop,[target],1.5))return null;
   const riskAmount=Math.max(0,account)*Math.max(0,riskPercent)/100;
+  const sizing=riskPlan(account,riskPercent,entry,stop,positionConstraints,direction);
   return {
     direction,entry,stop,target,source,
     rr:rewardPerUnit/riskPerUnit,
     riskAmount,
-    qty:riskAmount/riskPerUnit,
+    qty:sizing.valid?sizing.positionSize:0,
     slPct:riskPerUnit/Math.abs(entry)*100,
     tpPct:rewardPerUnit/Math.abs(entry)*100
   };
