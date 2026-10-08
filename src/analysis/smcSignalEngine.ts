@@ -122,7 +122,7 @@ export function generateSMCSignal(
     confirmations: [...setup.confirmations],
     sweepIndex: causal.sweepIndex,
     structureIndex: causal.structureIndex,
-    internalIndex: causal.internal.index,
+    internalIndex: causal.internalIndex,
     zoneIndex: zoneIndex ?? result.asOf,
     zoneType,
     entryZone: { low: zone.low, high: zone.high },
