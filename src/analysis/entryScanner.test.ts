@@ -92,6 +92,13 @@ describe("entry scanners",()=>{
     expect(r.state).toBe("WAIT");
   });
 
+  it("requires a strictly valid live Elliott count before confirmation",()=>{
+    const malformed={...baseEW,setupState:"NONE",liveSetup:{...baseEW.liveSetup,strict:undefined}};
+    expect(classifyElliottEntry("BTCUSDT","5m",malformed,102).state).not.toBe("CONFIRMED");
+    const invalidated={...baseEW,setupState:"INVALIDATED"};
+    expect(classifyElliottEntry("BTCUSDT","5m",invalidated,102).state).not.toBe("CONFIRMED");
+  });
+
   it("requires live price to remain between entry and target",()=>{
     expect(classifyElliottEntry("BTCUSDT","5m",baseEW,102).state).toBe("CONFIRMED");
     expect(classifyElliottEntry("BTCUSDT","5m",baseEW,110).state).not.toBe("CONFIRMED");
