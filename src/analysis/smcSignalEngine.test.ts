@@ -7,6 +7,7 @@ import {
   isSetupActive,
   isZoneRetestAfterFormation,
   isValidTradeGeometry,
+  isFreshTargetLevel,
   type Candle,
   type StructureEvent,
   type Sweep,
@@ -275,6 +276,22 @@ describe("SMC signal engine", () => {
     ];
 
     expect(findLatestSMCCausalSequence(sweeps, events, internalEvents, 20, 12)).toBeNull();
+  });
+
+  it("rejects previously consumed target levels", () => {
+    const c = candles([
+      [100, 101, 99, 100],
+      [100, 105, 99, 104],
+      [104, 106, 103, 105],
+      [105, 109, 104, 108],
+      [108, 110, 107, 109],
+    ]);
+
+    expect(isFreshTargetLevel("bullish", 105, 1, c, 4)).toBe(false);
+    expect(isFreshTargetLevel("bullish", 110, 4, c, 4)).toBe(false);
+    expect(isFreshTargetLevel("bullish", 111, 1, c, 4)).toBe(true);
+    expect(isFreshTargetLevel("bearish", 99, 0, c, 4)).toBe(false);
+    expect(isFreshTargetLevel("bearish", 98, 0, c, 4)).toBe(true);
   });
 
   it("does not attach pre-structure FVG or distant POI zones", () => {
