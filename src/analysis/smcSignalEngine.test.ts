@@ -8,6 +8,7 @@ import {
   isZoneRetestAfterFormation,
   isValidTradeGeometry,
   isFreshTargetLevel,
+  setupWindowProfileForInterval,
   type Candle,
   type StructureEvent,
   type Sweep,
@@ -292,6 +293,20 @@ describe("SMC signal engine", () => {
     expect(isFreshTargetLevel("bullish", 111, 1, c, 4)).toBe(true);
     expect(isFreshTargetLevel("bearish", 99, 0, c, 4)).toBe(false);
     expect(isFreshTargetLevel("bearish", 98, 0, c, 4)).toBe(true);
+  });
+
+  it("keeps meaningful minimum causal windows on higher timeframes", () => {
+    const oneHour = setupWindowProfileForInterval("1h");
+    const fourHour = setupWindowProfileForInterval("4h");
+
+    expect(oneHour.sweepLookbackBars).toBeGreaterThanOrEqual(3);
+    expect(oneHour.structureGapBars).toBeGreaterThanOrEqual(3);
+    expect(oneHour.obAgeBars).toBeGreaterThanOrEqual(3);
+    expect(oneHour.zoneAgeBars).toBeGreaterThanOrEqual(3);
+    expect(fourHour.sweepLookbackBars).toBeGreaterThanOrEqual(3);
+    expect(fourHour.structureGapBars).toBeGreaterThanOrEqual(3);
+    expect(fourHour.obAgeBars).toBeGreaterThanOrEqual(3);
+    expect(fourHour.zoneAgeBars).toBeGreaterThanOrEqual(3);
   });
 
   it("does not attach pre-structure FVG or distant POI zones", () => {
