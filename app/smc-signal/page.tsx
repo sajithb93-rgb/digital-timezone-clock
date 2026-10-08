@@ -64,7 +64,8 @@ export default function SMCSignalPage() {
   const [scannedAt, setScannedAt] = useState("");
   const [selected, setSelected] = useState<PairSignal | null>(null);
   const requestInFlight = useRef(false);
-  const scanAbortRef = useRef<AbortController | null>(null);\n  const scanGenerationRef = useRef(0);
+  const scanAbortRef = useRef<AbortController | null>(null);
+  const scanGenerationRef = useRef(0);
 
   const scanAllPairs = useCallback(async () => {
     if (requestInFlight.current) return;
