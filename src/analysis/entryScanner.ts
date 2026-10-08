@@ -1,4 +1,4 @@
-import { isValidTradeGeometry, setupWindowProfileForInterval, type SMCResult, type ElliottResult } from "./engine";
+import { isValidTradeGeometry, type SMCResult, type ElliottResult } from "./engine";
 
 export type EntryScanState="CONFIRMED"|"SETUP"|"WATCH"|"WAIT";
 export type EntryScanRow={symbol:string;timeframe:string;state:EntryScanState;direction:"BUY"|"SELL"|"NONE";score:number;price:number|null;entry:number|null;stop:number|null;target:number|null;rr:number|null;reason:string};
@@ -113,7 +113,13 @@ export function classifyElliottEntry(symbol:string,timeframe:string,r:ElliottRes
      : (currentPrice!=null&&currentPrice<=live.entry&&currentPrice<live.invalidation&&currentPrice>target)
  );
  const score=Math.min(100,Math.round((r.confidence||live.quality||0)+(live.strict?5:0)));
- const confirmed=live.strict!==false&&trigger&&target!=null&&rr!=null&&rr>=1.5;
+ const confirmed=r.setupState!=="INVALIDATED"
+  &&!!r.primary
+  &&live.strict===true
+  &&trigger
+  &&target!=null
+  &&rr!=null
+  &&rr>=1.5;
 
  if(confirmed){
    return make(symbol,timeframe,"CONFIRMED",direction,score,currentPrice??null,live.entry,live.invalidation,target,rr,
