@@ -11,7 +11,7 @@ const refreshIntervals: Record<(typeof intervals)[number], number> = {
   "1h": 180_000,
   "4h": 300_000,
 };
-const SCAN_CONCURRENCY = 6;
+const SCAN_CONCURRENCY = 4;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 700;
 const KLINE_LIMIT = 160;
