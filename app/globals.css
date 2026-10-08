@@ -50,7 +50,7 @@
 .orderflow-diagnostic{margin-top:10px;padding:9px 10px;border:1px solid #2b3a4a;border-radius:6px;background:#091016}.diagnostic-head{display:flex;justify-content:space-between;align-items:center;gap:8px;font:900 8px "JetBrains Mono",monospace;letter-spacing:.6px;color:#8fa0b3}.diagnostic-head b{color:#e7bd63}.diagnostic-reason{margin:6px 0 8px;padding:6px 7px;border-radius:5px;background:#0d1821;color:#d7e3ee;font:800 8px/1.4 "JetBrains Mono",monospace}.diagnostic-grid{display:grid;gap:4px;max-height:320px;overflow:auto;padding-right:2px}.diagnostic-grid>div{display:grid;grid-template-columns:16px 1fr;gap:5px;align-items:start;padding:4px 5px;border-radius:4px;font-size:8px}.diagnostic-grid>div.diag-pass{background:rgba(54,224,160,.05)}.diagnostic-grid>div.diag-fail{background:rgba(255,104,124,.06)}.diagnostic-grid b{font:900 9px "JetBrains Mono",monospace}.diag-pass>b{color:var(--green)}.diag-fail>b{color:var(--red)}.diagnostic-grid span{display:flex;flex-direction:column;gap:2px;min-width:0}.diagnostic-grid strong{color:#d9e4ef;font-size:8px;font-weight:800}.diagnostic-grid small{color:#8f9dad;font-size:7px;line-height:1.3;overflow-wrap:anywhere}.theme-cyber .orderflow-diagnostic{border-color:#4b3b65;background:#090716}.theme-cyber .diagnostic-reason{background:#120e1d}
 .entry-scanner-card{margin-top:10px}.entry-scanner-card .section-title{display:flex;justify-content:space-between;gap:8px}.entry-scanner-card .section-title span{font-size:7px;color:#8795a6}.entry-scanner-card .scanner-live-confirmed{margin-top:8px}.entry-scanner-card .scanner-confirmed-row{grid-template-columns:1.25fr 1fr auto}.entry-scanner-card .scanner-confirmed-row>span{display:flex;flex-direction:column;gap:2px}.entry-scanner-card .scanner-confirmed-row small{font-size:7px;color:#8290a0}.entry-scanner-card .scanner-confirmed-row>b{font-size:8px}.entry-scanner-card .scanner-start-btn,.entry-scanner-card .scanner-stop-btn{min-width:58px}.theme-cyber .entry-scanner-card{border-color:#4b3b65}
 
-.auto-long-position-layer,.position-forecast-layer{pointer-events:none}
+.auto-position-layer,.position-forecast-layer{pointer-events:none}
 .position-profit-zone{fill:rgba(54,224,160,.09);stroke:rgba(54,224,160,.34);stroke-width:1}
 .position-loss-zone{fill:rgba(255,104,124,.09);stroke:rgba(255,104,124,.34);stroke-width:1}
 .position-entry-line{stroke:#55d7ff;stroke-width:1.8;stroke-dasharray:5 3}
@@ -65,3 +65,14 @@
 .forecast-label{fill:#d6c2ff}
 .theme-cyber .position-profit-zone{fill:rgba(64,255,196,.11);stroke:rgba(64,255,196,.38)}
 .theme-cyber .position-loss-zone{fill:rgba(255,85,125,.11);stroke:rgba(255,85,125,.38)}
+
+/* Direction-aware TradingView-style position overlay. Profit is always entry→TP1;
+   loss is always entry→SL. The arrow makes BUY/SELL orientation unambiguous. */
+.auto-position-layer.position-buy .position-profit-zone{fill:rgba(54,224,160,.10)}
+.auto-position-layer.position-sell .position-profit-zone{fill:rgba(54,224,160,.10)}
+.auto-position-layer.position-buy .position-loss-zone{fill:rgba(255,104,124,.10)}
+.auto-position-layer.position-sell .position-loss-zone{fill:rgba(255,104,124,.10)}
+.position-current-line{stroke:#d6c2ff;stroke-width:1.2;stroke-dasharray:3 3;opacity:.8}
+.position-current-label{fill:#d6c2ff}
+.position-buy-marker{fill:#36e0a0;stroke:#071019;stroke-width:2;filter:drop-shadow(0 0 6px rgba(54,224,160,.6))}
+.position-sell-marker{fill:#ff687c;stroke:#071019;stroke-width:2;filter:drop-shadow(0 0 6px rgba(255,104,124,.6))}
