@@ -34,8 +34,8 @@ function toCandles(rows: unknown[]): Candle[] {
     .filter(c => [c.time, c.open, c.high, c.low, c.close, c.volume].every(Number.isFinite));
 }
 
-async function fetchJson(url: string, attempt = 0): Promise<any> {
-  const res = await fetch(url, { cache: "no-store" });
+async function fetchJson(url: string, attempt = 0, signal?: AbortSignal): Promise<any> {
+  const res = await fetch(url, { cache: "no-store", signal });
   const data = await res.json();
   if (res.status === 429 && attempt < MAX_RETRIES) {
     const retryAfter = Number(res.headers.get("retry-after"));
@@ -63,11 +63,15 @@ export default function SMCSignalPage() {
   const [error, setError] = useState("");
   const [scannedAt, setScannedAt] = useState("");
   const [selected, setSelected] = useState<PairSignal | null>(null);
-  const requestInFlight = useRef(false);\n  const scanAbortRef = useRef<AbortController | null>(null);\n  const scanGenerationRef = useRef(0);
+  const requestInFlight = useRef(false);
+  const scanAbortRef = useRef<AbortController | null>(null);\n  const scanGenerationRef = useRef(0);
 
   const scanAllPairs = useCallback(async () => {
     if (requestInFlight.current) return;
     requestInFlight.current = true;
+    const generation = ++scanGenerationRef.current;
+    const controller = new AbortController();
+    scanAbortRef.current = controller;
     setScanState("loading");
     setError("");
     setSignals([]);
@@ -96,8 +100,9 @@ export default function SMCSignalPage() {
       const found: PairSignal[] = [];
       let cursor = 0;
 
-      const worker = async () => {\n        if (generation !== scanGenerationRef.current || controller.signal.aborted) return;
+      const worker = async () => {
         while (true) {
+          if (generation !== scanGenerationRef.current || controller.signal.aborted) return;
           const index = cursor++;
           if (index >= uniqueSymbols.length) return;
           const symbol = uniqueSymbols[index];
@@ -114,7 +119,7 @@ export default function SMCSignalPage() {
             if (!Array.isArray(data)) throw new Error("Invalid kline response");
 
             const candles = toCandles(data);
-            if (candles.length < 60) return;
+            if (candles.length < 60) throw new Error("Insufficient candle history");
 
             const signal = generateSMCSignal(candles, candles.length - 1, interval);
             if (signal) {
@@ -125,26 +130,35 @@ export default function SMCSignalPage() {
               });
             }
           } catch {
-            // A failed pair must not abort the complete market scan. Count it
-            // explicitly so the UI never presents a partial scan as complete.
+            if (controller.signal.aborted || generation !== scanGenerationRef.current) return;
             setFailedCount(n => n + 1);
           } finally {
-            setScannedCount(n => n + 1);
+            if (generation === scanGenerationRef.current) setScannedCount(n => n + 1);
           }
         }
       };
 
-      await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, uniqueSymbols.length) }, () => worker()));
+      await Promise.all(
+        Array.from(
+          { length: Math.min(SCAN_CONCURRENCY, uniqueSymbols.length) },
+          () => worker(),
+        ),
+      );
 
-      found.sort((a, b) => b.confidence - a.confidence || b.rr - a.rr);
-      setSignals(found);
-      setSelected(found[0] ?? null);
+      if (generation !== scanGenerationRef.current || controller.signal.aborted) return;
+
+      const deduped = [...new Map(found.map(signal => [signal.symbol, signal])).values()];
+      deduped.sort((a, b) => b.confidence - a.confidence || b.rr - a.rr);
+      setSignals(deduped);
+      setSelected(deduped[0] ?? null);
       setScannedAt(new Date().toLocaleTimeString());
       setScanState("done");
     } catch (e) {
+      if (generation !== scanGenerationRef.current || controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : "Failed to scan Binance Futures pairs");
       setScanState("idle");
     } finally {
+      if (scanAbortRef.current === controller) scanAbortRef.current = null;
       requestInFlight.current = false;
     }
   }, [interval]);
@@ -152,7 +166,11 @@ export default function SMCSignalPage() {
   useEffect(() => {
     void scanAllPairs();
     const timer = window.setInterval(() => void scanAllPairs(), refreshIntervals[interval]);
-    return () => {\n      window.clearInterval(timer);\n      scanGenerationRef.current += 1;\n      scanAbortRef.current?.abort();\n    };
+    return () => {
+      window.clearInterval(timer);
+      scanGenerationRef.current += 1;
+      scanAbortRef.current?.abort();
+    };
   }, [scanAllPairs, interval]);
 
   return (
