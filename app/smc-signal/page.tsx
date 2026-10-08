@@ -245,7 +245,7 @@ export default function SMCSignalPage() {
               <strong>Confirmations:</strong> {selected.confirmations.join(" · ")}
             </div>
             <div style={{ marginTop: 8, opacity: 0.55, fontSize: 13 }}>
-              Causal sweep → structure → internal confirmation: {selected.sweepIndex} → {selected.structureIndex} → confirmed candle {selected.asOf}
+              Causal sweep → structure → internal confirmation: {selected.sweepIndex} → {selected.structureIndex} → {selected.internalIndex} → confirmed candle {selected.asOf}
             </div>
           </section>
         )}
