@@ -157,8 +157,8 @@ export function isConfirmedSMCSignal(signal: SMCSignal | null): signal is SMCSig
     signal.zoneType === "OB"
       ? signal.zoneIndex < signal.structureIndex
       : signal.zoneType === "FVG"
-        ? signal.zoneIndex <= signal.structureIndex + 3
-        : signal.zoneIndex >= signal.structureIndex;
+        ? signal.zoneIndex >= signal.structureIndex && signal.zoneIndex <= signal.internalIndex
+        : signal.zoneIndex >= signal.structureIndex && signal.zoneIndex <= signal.internalIndex;
   if (!causalZone) return false;
   if (
     !finite(signal.entryZone.low) ||
