@@ -15,7 +15,7 @@ const SCAN_CONCURRENCY = 4;
 const REQUEST_SPACING_MS = 80;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 700;
-const KLINE_LIMIT = 160;
+const KLINE_LIMIT = 300;
 
 type PairSignal = SMCSignal & { symbol: string; lastPrice: number };
 type ScanState = "idle" | "loading" | "done";
