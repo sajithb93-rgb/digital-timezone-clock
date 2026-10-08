@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
   try {
     let lastStatus: number | null = null;
     let lastBody = "";
+    let sawGeoBlock = false;
 
     for (const target of targets) {
       const controller = new AbortController();
@@ -115,7 +116,11 @@ export async function GET(request: NextRequest) {
             },
           });
         }
-        if (upstream.status === 451 || upstream.status >= 500) continue;
+        if (upstream.status === 451) {
+          sawGeoBlock = true;
+          continue;
+        }
+        if (upstream.status >= 500) continue;
 
         return new NextResponse(body, {
           status: upstream.status,
@@ -131,7 +136,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (lastStatus === 451) {
+    if (sawGeoBlock) {
       return NextResponse.json(
         {
           error: "Binance blocked all official Futures endpoints from this server region (HTTP 451)",
