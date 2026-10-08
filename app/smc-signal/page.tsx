@@ -12,6 +12,7 @@ const refreshIntervals: Record<(typeof intervals)[number], number> = {
   "4h": 300_000,
 };
 const SCAN_CONCURRENCY = 4;
+const REQUEST_SPACING_MS = 80;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 700;
 const KLINE_LIMIT = 160;
@@ -78,6 +79,7 @@ export default function SMCSignalPage() {
   const requestInFlight = useRef(false);
   const scanAbortRef = useRef<AbortController | null>(null);
   const scanGenerationRef = useRef(0);
+  const nextRequestAtRef = useRef(0);
 
   const scanAllPairs = useCallback(async () => {
     // An interval change aborts the previous scan. In that case the new scan
@@ -124,6 +126,10 @@ export default function SMCSignalPage() {
           const symbol: string = uniqueSymbols[index];
 
           try {
+            const now = Date.now();
+            const waitMs = Math.max(0, nextRequestAtRef.current - now);
+            nextRequestAtRef.current = Math.max(now, nextRequestAtRef.current) + REQUEST_SPACING_MS;
+            if (waitMs > 0) await new Promise(resolve => window.setTimeout(resolve, waitMs));
             const q = new URLSearchParams({
               market: "usdm",
               path: "/klines",
