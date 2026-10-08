@@ -105,12 +105,13 @@ export async function GET(request: NextRequest) {
         // Do not fan a single 429 into five more Binance requests. The caller
         // has bounded retry/backoff logic and can safely retry this response.
         if (upstream.status === 429) {
+          const retryAfter = upstream.headers.get("retry-after") ?? "1";
           return new NextResponse(body, {
             status: 429,
             headers: {
               "content-type": upstream.headers.get("content-type") ?? "application/json",
               "cache-control": "no-store, max-age=0",
-              "retry-after": upstream.headers.get("retry-after") ?? "1",
+              "retry-after": retryAfter,
             },
           });
         }
