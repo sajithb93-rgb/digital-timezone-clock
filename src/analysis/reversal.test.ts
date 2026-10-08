@@ -57,6 +57,21 @@ describe("reversal timeframe windows", () => {
 });
 
 describe("reversal engine",()=>{
+  it("keeps higher-timeframe reversal windows at a usable minimum",()=>{
+    const oneHour=Array.from({length:40},(_,i)=>candle(i*60*60*1000,100,101,99,100));
+    const fourHour=Array.from({length:40},(_,i)=>candle(i*4*60*60*1000,100,101,99,100));
+    const h1=reversalWindowProfile(oneHour);
+    const h4=reversalWindowProfile(fourHour);
+    expect(h1.sweepLookbackBars).toBeGreaterThanOrEqual(3);
+    expect(h1.structureGapBars).toBeGreaterThanOrEqual(3);
+    expect(h1.fvgGapBars).toBeGreaterThanOrEqual(3);
+    expect(h1.orderBlockGapBars).toBeGreaterThanOrEqual(3);
+    expect(h4.sweepLookbackBars).toBeGreaterThanOrEqual(3);
+    expect(h4.structureGapBars).toBeGreaterThanOrEqual(3);
+    expect(h4.fvgGapBars).toBeGreaterThanOrEqual(3);
+    expect(h4.orderBlockGapBars).toBeGreaterThanOrEqual(3);
+  });
+
   it("confirms a bullish reversal after sweep, opposite structure, CHOCH, displacement and order flow",()=>{
     const candles = Array.from({length:35},(_,i)=>candle(i,100,101,99,100));
     candles[20]=candle(20,100,160,99,100);
