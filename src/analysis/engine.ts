@@ -755,21 +755,56 @@ function chooseEntryZone(
  });
  return candidates[0];
 }
-function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:Candle,obs:OB[],fvgs:FVG[],asOf:number,atrValue:number,windows=setupWindowProfile([])){
- const levels:number[]=[];
+export function isFreshTargetLevel(
+ direction:"bullish"|"bearish",
+ level:number,
+ sourceIndex:number,
+ c:Candle[],
+ asOf=c.length-1
+):boolean{
+ if(
+  !Number.isFinite(level) ||
+  level<=0 ||
+  !Number.isInteger(sourceIndex) ||
+  sourceIndex<0 ||
+  sourceIndex>=c.length ||
+  !Number.isInteger(asOf) ||
+  asOf<=sourceIndex
+ )return false;
+ let end=Math.min(asOf,c.length-1);
+ const firstUnclosed=c.slice(0,end+1).findIndex(x=>x.closed===false);
+ if(firstUnclosed>=0)end=firstUnclosed-1;
+ if(end<=sourceIndex)return false;
+ for(let i=sourceIndex+1;i<=end;i++){
+  const candle=c[i];
+  if(candle.closed===false)continue;
+  if(!Number.isFinite(candle.high)||!Number.isFinite(candle.low)||candle.high<candle.low)return false;
+  if(direction==="bullish" ? candle.high>=level : candle.low<=level)return false;
+ }
+ return true;
+}
+
+function recentOpposingTargets(direction:"bullish"|"bearish",entry:number,last:Candle,obs:OB[],fvgs:FVG[],c:Candle[],asOf:number,atrValue:number,windows=setupWindowProfile([])){
+ const levels:Array<{price:number;sourceIndex:number}>=[];
  const opposite=direction==="bullish"?"bearish":"bullish";
  for(const o of obs){
   if(o.type!==opposite||o.mitigated||asOf-o.index>windows.obAgeBars)continue;
   const mid=(o.low+o.high)/2;
-  if(direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8)levels.push(mid);
-  if(direction==="bearish"&&mid<Math.min(entry,last.low)&&mid>=last.low-atrValue*8)levels.push(mid);
+  if(
+   isFreshTargetLevel(direction,mid,o.index,c,asOf) &&
+   ((direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8) ||
+    (direction==="bearish"&&mid<Math.min(entry,last.low)&&mid>=last.low-atrValue*8))
+  )levels.push({price:mid,sourceIndex:o.index});
  }
  for(const f of fvgs){
   if(f.type!==opposite||f.filled||asOf-f.to>windows.zoneAgeBars)continue;
   const mid=(f.low+f.high)/2;
-  // A target already touched by the latest signal candle is not a future objective.
-  if(direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8)levels.push(mid);
-  if(direction==="bearish"&&mid<Math.min(entry,last.low)&&mid>=last.low-atrValue*8)levels.push(mid);
+  // A partial touch of the opposing FVG consumes its midpoint as a fresh target.
+  if(
+   isFreshTargetLevel(direction,mid,f.to,c,asOf) &&
+   ((direction==="bullish"&&mid>Math.max(entry,last.high)&&mid<=last.high+atrValue*8) ||
+    (direction==="bearish"&&mid<Math.min(entry,last.low)&&mid>=last.low-atrValue*8))
+  )levels.push({price:mid,sourceIndex:f.to});
  }
  return levels;
 }
@@ -936,14 +971,23 @@ export function analyzeSMC(c:Candle[]):SMCResult{
     :null
   :null;
  const risk=entry!==null&&stop!==null?Math.abs(entry-stop):0;
- const structuralTargets=direction==="bullish"
-  ?[...liquidityHighs,...highs].map(p=>p.price).filter(p=>entry!==null&&p>Math.max(entry,last.high)).sort((a,b)=>a-b)
-  :direction==="bearish"
-   ?[...liquidityLows,...lows].map(p=>p.price).filter(p=>entry!==null&&p<Math.min(entry,last.low)).sort((a,b)=>b-a)
-   :[];
- const opposingTargets=direction&&entry!==null?recentOpposingTargets(direction,entry,last,obs,fvgs,asOf,a,windows):[];
- const uniqueTargets=[...structuralTargets,...opposingTargets].sort((x,y)=>direction==="bullish"?x-y:y-x)
-  .filter((p,i,arr)=>i===0||Math.abs(p-arr[i-1])>Math.max(Math.abs(p)*0.0005,.0000001));
+ const structuralTargetCandidates: Array<{price:number;sourceIndex:number}> =
+  direction==="bullish"
+   ?[...liquidityHighs,...highs]
+      .map(p=>({price:p.price,sourceIndex:p.index}))
+      .filter(p=>entry!==null&&p.price>Math.max(entry,last.high)&&isFreshTargetLevel(direction,p.price,p.sourceIndex,data,asOf))
+      .sort((x,y)=>x.price-y.price)
+   :direction==="bearish"
+    ?[...liquidityLows,...lows]
+       .map(p=>({price:p.price,sourceIndex:p.index}))
+       .filter(p=>entry!==null&&p.price<Math.min(entry,last.low)&&isFreshTargetLevel(direction,p.price,p.sourceIndex,data,asOf))
+       .sort((x,y)=>y.price-x.price)
+    :[];
+ const opposingTargets=direction&&entry!==null?recentOpposingTargets(direction,entry,last,obs,fvgs,data,asOf,a,windows):[];
+ const targetCandidates=[...structuralTargetCandidates,...opposingTargets].sort((x,y)=>direction==="bullish"?x.price-y.price:y.price-x.price);
+ const uniqueTargets=targetCandidates
+  .filter((p,i,arr)=>i===0||Math.abs(p.price-arr[i-1].price)>Math.max(Math.abs(p.price)*0.0005,.0000001))
+  .map(p=>p.price);
  const targets=entry!==null&&risk
   ?uniqueTargets.filter(p=>Math.abs(p-entry)/risk>=MIN_SETUP_RR).slice(0,4)
   :[];
