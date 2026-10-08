@@ -11,7 +11,7 @@ const refreshIntervals: Record<(typeof intervals)[number], number> = {
   "1h": 180_000,
   "4h": 300_000,
 };
-const SCAN_CONCURRENCY = 10;
+const SCAN_CONCURRENCY = 6;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 700;
 const KLINE_LIMIT = 160;
@@ -43,7 +43,7 @@ async function fetchJson(url: string, attempt = 0): Promise<any> {
       ? Math.min(retryAfter * 1000, 5000)
       : RETRY_BASE_MS * (attempt + 1);
     await new Promise(resolve => window.setTimeout(resolve, delay));
-    return fetchJson(url, attempt + 1);
+    return fetchJson(url, attempt + 1, signal);
   }
   if (!res.ok) {
     const error = new Error(data?.error || "Binance request failed");
@@ -63,7 +63,7 @@ export default function SMCSignalPage() {
   const [error, setError] = useState("");
   const [scannedAt, setScannedAt] = useState("");
   const [selected, setSelected] = useState<PairSignal | null>(null);
-  const requestInFlight = useRef(false);
+  const requestInFlight = useRef(false);\n  const scanAbortRef = useRef<AbortController | null>(null);\n  const scanGenerationRef = useRef(0);
 
   const scanAllPairs = useCallback(async () => {
     if (requestInFlight.current) return;
@@ -76,7 +76,7 @@ export default function SMCSignalPage() {
     setFailedCount(0);
 
     try {
-      const info = await fetchJson("/api/binance?market=usdm&path=/exchangeInfo");
+      const info = await fetchJson("/api/binance?market=usdm&path=/exchangeInfo", 0, controller.signal);
       const symbols = Array.isArray(info?.symbols)
         ? info.symbols
             .filter((x: any) =>
@@ -96,7 +96,7 @@ export default function SMCSignalPage() {
       const found: PairSignal[] = [];
       let cursor = 0;
 
-      const worker = async () => {
+      const worker = async () => {\n        if (generation !== scanGenerationRef.current || controller.signal.aborted) return;
         while (true) {
           const index = cursor++;
           if (index >= uniqueSymbols.length) return;
@@ -110,7 +110,7 @@ export default function SMCSignalPage() {
               interval,
               limit: String(KLINE_LIMIT),
             });
-            const data = await fetchJson("/api/binance?" + q.toString());
+            const data = await fetchJson("/api/binance?" + q.toString(), 0, controller.signal);
             if (!Array.isArray(data)) throw new Error("Invalid kline response");
 
             const candles = toCandles(data);
@@ -152,7 +152,7 @@ export default function SMCSignalPage() {
   useEffect(() => {
     void scanAllPairs();
     const timer = window.setInterval(() => void scanAllPairs(), refreshIntervals[interval]);
-    return () => window.clearInterval(timer);
+    return () => {\n      window.clearInterval(timer);\n      scanGenerationRef.current += 1;\n      scanAbortRef.current?.abort();\n    };
   }, [scanAllPairs, interval]);
 
   return (
