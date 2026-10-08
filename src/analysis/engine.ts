@@ -271,10 +271,10 @@ export function isEntryZoneCausal(zoneOrigin:number,sweepIndex:number,structureI
   // break, but it must belong to the same post-sweep leg.
   return zoneOrigin>=sweepIndex&&zoneOrigin<structureIndex&&structureIndex-zoneOrigin<=maxGap;
  }
- // The FVG should belong to the displacement/early continuation leg. Keeping
- // the post-structure window tight prevents an unrelated later FVG becoming
- // the confirmation POI for an older BOS/CHOCH.
- return zoneOrigin>=sweepIndex&&zoneOrigin<=structureIndex+Math.min(maxGap,3);
+ // FVG is the post-structure displacement POI. Requiring formation on/after
+ // the swing break prevents a pre-break gap from being promoted to the POI
+ // for a later structure confirmation.
+ return zoneOrigin>=structureIndex&&zoneOrigin<=structureIndex+Math.min(maxGap,3);
 }
 function range(c:Candle[],asOf=c.length-1){
  const end=Math.min(asOf,c.length-1);
@@ -898,8 +898,9 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  );
  const analyticalZone=chooseAnalyticalEntryZone(rawDirection,obs,fvgs,breakers,last,a,asOf,windows);
  const selectedZone=confirmedZone??analyticalZone;
- const zoneCausal=!!confirmedZone&&!!sweep&&!!latestDirectionalEvent
-  &&isEntryZoneCausal(confirmedZone.origin,sweep.index,latestDirectionalEvent.index,confirmedZone.kind,windows.structureGapBars);
+ const zoneCausal=!!confirmedZone&&!!sweep&&!!latestDirectionalEvent&&!!latestInternalDirectionalEvent
+  &&isEntryZoneCausal(confirmedZone.origin,sweep.index,latestDirectionalEvent.index,confirmedZone.kind,windows.structureGapBars)
+  &&(confirmedZone.kind==="OB" || confirmedZone.origin<=latestInternalDirectionalEvent.index);
  const zone=confirmedZone&&confirmedZone.linked&&causalSequence&&zoneCausal
   ?{
      low:confirmedZone.low,
