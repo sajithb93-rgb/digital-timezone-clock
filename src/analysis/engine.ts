@@ -845,16 +845,18 @@ function buildSetupWindowProfile(intervalMs:number):SMCSetupWindowProfile{
  // All setup windows are time-based first, then converted to bars. This keeps
  // the same elapsed-market-time logic across 1m/5m/15m/1h/4h/1d while still
  // enforcing a small minimum sample for structural confirmation.
- const barsFor=(windowMs:number,minBars=1,maxBars=400)=>Math.max(
+ const barsFor=(windowMs:number,minBars:number,maxBars=400)=>Math.max(
   minBars,
   Math.min(maxBars,Math.ceil(windowMs/safeInterval))
  );
  return{
   intervalMs:safeInterval,
-  sweepLookbackBars:barsFor(100*60_000),
-  structureGapBars:barsFor(60*60_000),
-  obAgeBars:barsFor(250*60_000),
-  zoneAgeBars:barsFor(200*60_000)
+  // Keep enough closed candles for a meaningful causal chain on higher
+  // timeframes; the elapsed-time window remains the primary constraint.
+  sweepLookbackBars:barsFor(100*60_000,3),
+  structureGapBars:barsFor(60*60_000,3),
+  obAgeBars:barsFor(250*60_000,3),
+  zoneAgeBars:barsFor(200*60_000,3)
  };
 }
 
