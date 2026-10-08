@@ -85,18 +85,18 @@ export default function SMCSignalPage() {
 
     try {
       const info = await fetchJson("/api/binance?market=usdm&path=/exchangeInfo", 0, controller.signal);
-      const symbols = Array.isArray(info?.symbols)
+      const symbols: string[] = Array.isArray(info?.symbols)
         ? info.symbols
             .filter((x: any) =>
               x?.status === "TRADING" &&
               x?.contractType === "PERPETUAL" &&
               x?.quoteAsset === "USDT"
             )
-            .map((x: any) => String(x.symbol).toUpperCase())
+            .map((x: any): string => String(x.symbol).toUpperCase())
             .filter((x: string) => /^[A-Z0-9]+$/.test(x))
         : [];
 
-      const uniqueSymbols = [...new Set(symbols)];
+      const uniqueSymbols: string[] = Array.from(new Set<string>(symbols));
       if (!uniqueSymbols.length) throw new Error("No active Binance USDⓈ-M USDT perpetual pairs returned");
 
       setPairCount(uniqueSymbols.length);
@@ -109,7 +109,7 @@ export default function SMCSignalPage() {
           if (generation !== scanGenerationRef.current || controller.signal.aborted) return;
           const index = cursor++;
           if (index >= uniqueSymbols.length) return;
-          const symbol = uniqueSymbols[index];
+          const symbol: string = uniqueSymbols[index];
 
           try {
             const q = new URLSearchParams({
