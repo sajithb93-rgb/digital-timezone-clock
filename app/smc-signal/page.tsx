@@ -68,7 +68,10 @@ export default function SMCSignalPage() {
   const scanGenerationRef = useRef(0);
 
   const scanAllPairs = useCallback(async () => {
-    if (requestInFlight.current) return;
+    // An interval change aborts the previous scan. In that case the new scan
+    // must start immediately rather than being blocked by the old promise's
+    // finally() handler.
+    if (requestInFlight.current && !scanAbortRef.current?.signal.aborted) return;
     requestInFlight.current = true;
     const generation = ++scanGenerationRef.current;
     const controller = new AbortController();
@@ -159,8 +162,10 @@ export default function SMCSignalPage() {
       setError(e instanceof Error ? e.message : "Failed to scan Binance Futures pairs");
       setScanState("idle");
     } finally {
-      if (scanAbortRef.current === controller) scanAbortRef.current = null;
-      requestInFlight.current = false;
+      if (scanAbortRef.current === controller) {
+        scanAbortRef.current = null;
+        requestInFlight.current = false;
+      }
     }
   }, [interval]);
 
