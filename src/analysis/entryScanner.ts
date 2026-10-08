@@ -18,12 +18,28 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  // reconstruct "latest sweep + latest event" here, because that can disagree
  // with the engine's exact causal-chain selection and downgrade a genuine
  // ACTIVE setup to SETUP/WATCH.
+ const causal=r.causalSequence;
+ const activeCausalityValid=!!causal
+  &&Number.isInteger(causal.sweepIndex)&&Number.isInteger(causal.structureIndex)&&Number.isInteger(causal.internalIndex)
+  &&causal.sweepIndex<causal.structureIndex
+  &&causal.structureIndex<causal.internalIndex
+  &&causal.internalIndex<=r.asOf;
+ const zone=r.entryZone;
+ const zoneMetadataValid=!!zone
+  &&(zone.sourceKind==="OB"||zone.sourceKind==="FVG"||zone.sourceKind==="BREAKER")
+  &&Number.isInteger(zone.originIndex)
+  &&zone.originIndex!<r.asOf;
+ const pdAligned=(s.direction==="BUY"&&r.premiumDiscount==="Discount")
+  ||(s.direction==="SELL"&&r.premiumDiscount==="Premium");
  const geometryValid=(
   s.direction==="BUY"||s.direction==="SELL"
  )&&s.entry!=null&&s.stop!=null&&s.targets.length>0
   &&isValidTradeGeometry(s.direction,s.entry,s.stop,s.targets,1.5);
  if(
   s.status==="ACTIVE"&&
+  activeCausalityValid&&
+  zoneMetadataValid&&
+  pdAligned&&
   (s.direction==="BUY"||s.direction==="SELL")&&
   s.entry!=null&&
   s.stop!=null&&
@@ -46,7 +62,7 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
   );
  }
 
- const analyticalEntry=r.entryZone?(r.entryZone.low+r.entryZone.high)/2:null;
+ const analyticalEntry=zone?(zone.low+zone.high)/2:null;
  const checks=[
   direction==="BUY"?r.trend==="Bullish":direction==="SELL"?r.trend==="Bearish":false,
   !!r.events.find(e=>e.direction===(direction==="BUY"?"bullish":direction==="SELL"?"bearish":"none")),
