@@ -65,7 +65,7 @@ export function generateSMCSignal(
     (setup.direction !== "BUY" && setup.direction !== "SELL") ||
     setup.entry === null ||
     setup.stop === null ||
-    setup.targets.length < 2 ||
+    setup.targets.length < 1 ||
     !result.entryZone
   ) {
     return null;
@@ -77,7 +77,7 @@ export function generateSMCSignal(
   if (
     !finite(entry) ||
     !finite(stop) ||
-    targets.length < 2 ||
+    targets.length < 1 ||
     !isValidTradeGeometry(setup.direction, entry, stop, targets, 1.5)
   ) {
     return null;
@@ -182,7 +182,7 @@ export function isConfirmedSMCSignal(signal: SMCSignal | null): signal is SMCSig
 
   const validDirection =
     signal.direction === "BUY" ? signal.stop < signal.entry : signal.stop > signal.entry;
-  if (!validDirection || signal.targets.length < 2) return false;
+  if (!validDirection || signal.targets.length < 1) return false;
 
   const geometryRR = Math.abs(signal.targets[0] - signal.entry) / Math.abs(signal.entry - signal.stop);
   if (!finite(geometryRR) || Math.abs(geometryRR - signal.rr) > Math.max(1e-9, signal.rr * 1e-6)) return false;
