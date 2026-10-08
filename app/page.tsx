@@ -13,6 +13,7 @@ import { FootprintBook, normalizeAggTrade, type AggTrade, type FootprintSnapshot
 import { analyzeReversal, analyzeReversalMTF, type ReversalEngineResult } from "../src/analysis/reversal";
 import { normalizeCandleSeries } from "../src/analysis/candles";
 import { buildAutoFibonacci, type AutoFibonacciSet } from "../src/analysis/fibonacci";
+import { getPositionExecutionState, isValidPositionGeometry, type PositionExecutionState } from "../src/analysis/position";
 
 type Mode="smc"|"elliott"|"combined"|"orderflow";
 type MarketKind="spot"|"usdm"|"coinm";
@@ -870,9 +871,8 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
  const eliteTrade=showElliott&&layers.trade&&liveElite&&liveElite.entry!=null&&liveElite.invalidation!=null?<>{(()=>{const p2=liveElite.points.find((p:any)=>p.label==="B") ?? liveElite.points.find((p:any)=>p.label==="2"),xe=p2?xOf(p2.index):null,ye=yOf(liveElite.entry);return ye==null?null:<g>{xe!=null&&<circle cx={xe} cy={ye} r="5" className="elite-entry-marker"/>}<line x1={x0} x2={xLast} y1={ye} y2={ye} className="elite-entry-line"/>{text(xLast-132,ye,"EW LIVE ENTRY "+liveElite.entry.toFixed(4),"elite-entry-label")}</g>})()}{(()=>{const y=yOf(liveElite.invalidation);return y==null?null:<g><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-sl-line"/>{text(xLast-132,y,"EW INVALIDATION "+liveElite.invalidation.toFixed(4),"elite-sl-label")}</g>})()}{(liveElite.targets||[]).slice(0,3).map((p:number,i:number)=>{const y=yOf(p);return y==null?null:<g key={"ewtp"+i}><line x1={x0} x2={xLast} y1={y} y2={y} className="elite-tp-line"/>{text(xLast-84,y,"EW TP"+(i+1),"elite-tp-label")}</g>})}</>:null;
  const drawWave=(points:any[],keyPrefix:string,labelClass="wave-label")=><>{points.map((p:any,i:number)=>{const x=xOf(p.index),y=yOf(p.price),n=points[i+1],nx=n?xOf(n.index):null,ny=n?yOf(n.price):null;return x==null||y==null?null:<g key={keyPrefix+i}>{nx!=null&&ny!=null&&<line x1={x} y1={y} x2={nx} y2={ny} className="wave-line"/>}{p.label&&text(x,y,p.label,labelClass)}</g>})}</>;
  const positionModel = (() => {
-  // Auto-position is a presentation layer only. It may consume a setup after
-  // the strategy itself has reached its confirmed/active gate, but it must
-  // never create a new signal or bypass any strategy confirmation.
+  // Presentation/execution layer only. Strategy confirmation remains owned by
+  // SMC, Orderflow and Elliott engines; this layer never creates a signal.
   let direction:"BUY"|"SELL"|null=null,entry:number|null=null,stop:number|null=null,target:number|null=null,source="";
   const currentPrice=candles.at(-1)?.close??null;
 
@@ -889,7 +889,8 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     &&orderFlow.entry!=null&&orderFlow.stop!=null&&orderFlow.targets?.length===3
     &&orderFlow.diagnostics.some(d=>d.key==="trade_geometry"&&d.passed)
     &&orderFlow.diagnostics.some(d=>d.key==="target_quality"&&d.passed)
-    &&orderFlow.source==="BINANCE_FOOTPRINT"    &&isValidAutoTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
+    &&orderFlow.source==="BINANCE_FOOTPRINT"
+    &&isValidAutoTradeGeometry(orderFlow.direction,orderFlow.entry,orderFlow.stop,orderFlow.targets,1.5)){
     direction=orderFlow.direction;
     entry=orderFlow.entry;
     stop=orderFlow.stop;
@@ -919,13 +920,17 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   }
 
   if(!direction||entry==null||stop==null||target==null)return null;
+  if(!isValidPositionGeometry(direction,entry,stop,target,1.5))return null;
+
   const riskPerUnit=Math.abs(entry-stop),rewardPerUnit=Math.abs(target-entry);
   if(!(riskPerUnit>0&&rewardPerUnit>0))return null;
-  if(!isValidAutoTradeGeometry(direction,entry,stop,[target],1.5))return null;
   const riskAmount=Math.max(0,account)*Math.max(0,riskPercent)/100;
   const sizing=riskPlan(account,riskPercent,entry,stop,positionConstraints,direction);
+  const state:PositionExecutionState=currentPrice==null
+    ?"PENDING"
+    :getPositionExecutionState(direction,currentPrice,entry,stop,target);
   return {
-    direction,entry,stop,target,source,
+    direction,entry,stop,target,source,state,currentPrice,
     rr:rewardPerUnit/riskPerUnit,
     riskAmount,
     qty:sizing.valid?sizing.positionSize:0,
@@ -937,17 +942,27 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   const p=positionModel,yEntry=yOf(p.entry),yStop=yOf(p.stop),yTarget=yOf(p.target);
   if(yEntry==null||yStop==null||yTarget==null)return null;
   const stat=(y:number,label:string,value:string,cls:string)=><g><line x1={x0} x2={xLast} y1={y} y2={y} className={cls}/>{text(Math.max(8,xLast-155),y,label+" "+value,cls+"-label")}</g>;
-  return <g className="auto-long-position-layer">
+  const isLong=p.direction==="BUY";
+  const stateLabel=p.state==="TP1_HIT"?"TP1 HIT":p.state==="STOP_HIT"?"STOP HIT":p.state==="ACTIVE"?"ACTIVE":"PENDING";
+  const positionLabel=isLong?"LONG POSITION":"SHORT POSITION";
+  return <g className={`auto-position-layer position-${p.direction.toLowerCase()}`} data-position-state={p.state}>
     <rect x={Math.max(0,x0)} y={Math.min(yEntry,yTarget)} width={Math.max(2,xLast-x0)} height={Math.max(2,Math.abs(yEntry-yTarget))} className="position-profit-zone"/>
     <rect x={Math.max(0,x0)} y={Math.min(yEntry,yStop)} width={Math.max(2,xLast-x0)} height={Math.max(2,Math.abs(yEntry-yStop))} className="position-loss-zone"/>
     {stat(yEntry,"ENTRY",p.entry.toFixed(6),"position-entry-line")}
     {stat(yStop,"SL",p.stop.toFixed(6),"position-stop-line")}
     {stat(yTarget,"TP1",p.target.toFixed(6),"position-target-line")}
-    {text(Math.max(8,xLast-205),Math.max(22,Math.min(height-30,Math.min(yStop,yTarget)+16)),p.source+" · R:R "+p.rr.toFixed(2)+":1","position-stat-label")}
+    {text(Math.max(8,xLast-205),Math.max(22,Math.min(height-30,Math.min(yStop,yTarget)+16)),positionLabel+" · "+stateLabel+" · R:R "+p.rr.toFixed(2)+":1","position-stat-label")}
     {text(Math.max(8,xLast-205),Math.min(height-20,Math.max(yStop,yTarget)+18),"RISK "+riskPercent.toFixed(2)+"% · QTY "+p.qty.toFixed(4),"position-stat-label")}
-    {text(Math.max(8,xLast-205),Math.min(height-4,(yTarget+yEntry)/2),"TP +"+p.tpPct.toFixed(2)+"% · P&L +"+(p.riskAmount*p.rr).toFixed(2),"position-profit-label")}
+    {text(Math.max(8,xLast-205),Math.min(height-4,(yTarget+yEntry)/2),isLong?"TP +":"TP +"+p.tpPct.toFixed(2)+"% · P&L "+(isLong?"+":"+")+(p.riskAmount*p.rr).toFixed(2),"position-profit-label")}
     {text(Math.max(8,xLast-205),Math.max(12,(yStop+yEntry)/2),"SL -"+p.slPct.toFixed(2)+"% · P&L -"+p.riskAmount.toFixed(2),"position-loss-label")}
-    <circle cx={xLast} cy={yEntry} r="5" className={p.direction==="BUY"?"position-buy-marker":"position-sell-marker"}/>
+    {p.currentPrice!=null&&(()=>{const cy=yOf(p.currentPrice);return cy==null?null:<g>
+      <line x1={Math.max(0,xLast-90)} x2={xLast} y1={cy} y2={cy} className="position-current-line"/>
+      {text(Math.max(8,xLast-145),cy,"NOW "+p.currentPrice.toFixed(6),"position-current-label")}
+    </g>})()}
+    <path d={isLong
+      ? `M ${xLast-7} ${yEntry+6} L ${xLast} ${yEntry-6} L ${xLast+7} ${yEntry+6} Z`
+      : `M ${xLast-7} ${yEntry-6} L ${xLast} ${yEntry+6} L ${xLast+7} ${yEntry-6} Z`}
+      className={isLong?"position-buy-marker":"position-sell-marker"}/>
   </g>;
  })() : null;
  const forecast = layers.forecast&&positionModel ? (() => {
