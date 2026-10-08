@@ -23,6 +23,7 @@ const baseSMC:any={
   sweeps:[{index:8,type:"low",confirmed:true,displacement:true,displacementIndex:9}],
   premiumDiscount:"Discount",
   targets:[104],
+  causalSequence:{direction:"bullish",sweepIndex:8,structureIndex:10,internalIndex:11},
 };
 
 const baseEW:any={
@@ -64,6 +65,18 @@ describe("entry scanners",()=>{
     });
     expect(r.state).not.toBe("CONFIRMED");
     expect(r.direction).toBe("BUY");
+  });
+
+  it("rejects an ACTIVE SMC row when causal or zone evidence is missing",()=>{
+    const missingCausal=classifySMCEntry("BTCUSDT","5m",{...baseSMC,causalSequence:null});
+    expect(missingCausal.state).not.toBe("CONFIRMED");
+    const missingZoneMetadata=classifySMCEntry("BTCUSDT","5m",{
+      ...baseSMC,
+      entryZone:{low:99,high:101,type:"entry"},
+    });
+    expect(missingZoneMetadata.state).not.toBe("CONFIRMED");
+    const wrongLocation=classifySMCEntry("BTCUSDT","5m",{...baseSMC,premiumDiscount:"Premium"});
+    expect(wrongLocation.state).not.toBe("CONFIRMED");
   });
 
   it("does not confirm SMC when entry geometry is invalid",()=>{
