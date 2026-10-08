@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           payload=$(node -e 'const fs=require("fs"); const m=fs.readFileSync("/tmp/typecheck.log","utf8"); const first=(m.match(/error TS[0-9]+:.*/)||[])[0] || m.trim().split("\n").slice(-3).join(" "); console.log(JSON.stringify({state:"failure",context:"Typecheck Diagnostic",description:first.slice(0,140),target_url:process.env.GITHUB_SERVER_URL+"/"+process.env.GITHUB_REPOSITORY+"/actions/runs/"+process.env.GITHUB_RUN_ID}));')
-          curl -fsS -X POST             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
+          curl -fsS -X POST -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
 
       - name: Run tests
         id: tests
@@ -61,7 +61,7 @@ jobs:
         shell: bash
         run: |
           payload=$(node -e 'const fs=require("fs"); const m=fs.readFileSync("/tmp/test.log","utf8"); const lines=m.split("\n").filter(Boolean); const first=lines.find(x=>/FAIL|AssertionError|Error:|expected/.test(x)) || lines.slice(-5).join(" "); console.log(JSON.stringify({state:"failure",context:"Test Diagnostic",description:first.slice(0,140),target_url:process.env.GITHUB_SERVER_URL+"/"+process.env.GITHUB_REPOSITORY+"/actions/runs/"+process.env.GITHUB_RUN_ID}));')
-          curl -fsS -X POST             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
+          curl -fsS -X POST -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
 
       - name: Run npm audit
         id: audit
@@ -81,7 +81,7 @@ jobs:
         shell: bash
         run: |
           payload=$(node -e 'const fs=require("fs"); const m=fs.readFileSync("/tmp/audit.log","utf8"); const lines=m.split("\n").filter(Boolean); const first=lines.slice(-8).join(" "); console.log(JSON.stringify({state:"failure",context:"Audit Diagnostic",description:first.slice(0,140),target_url:process.env.GITHUB_SERVER_URL+"/"+process.env.GITHUB_REPOSITORY+"/actions/runs/"+process.env.GITHUB_RUN_ID}));')
-          curl -fsS -X POST             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
+          curl -fsS -X POST -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
 
       - name: Run production build
         id: production_build
@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           payload=$(node -e 'const fs=require("fs"); const m=fs.readFileSync("/tmp/build.log","utf8"); const lines=m.split("\n").filter(Boolean); const hits=lines.filter(x=>/Failed to compile|Error:|Type error:|Expected unicode escape|Module not found|Build failed/.test(x)); const first=hits[0] || lines.slice(-6).join(" "); console.log(JSON.stringify({state:"failure",context:"Build Diagnostic",description:first.slice(0,140),target_url:process.env.GITHUB_SERVER_URL+"/"+process.env.GITHUB_REPOSITORY+"/actions/runs/"+process.env.GITHUB_RUN_ID}));')
-          curl -fsS -X POST             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
+          curl -fsS -X POST -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GITHUB_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"             -d "${payload}"
 
       - name: Enforce CI
         if: always()
