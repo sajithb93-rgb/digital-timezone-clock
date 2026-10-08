@@ -953,7 +953,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
     {stat(yTarget,"TP1",p.target.toFixed(6),"position-target-line")}
     {text(Math.max(8,xLast-205),Math.max(22,Math.min(height-30,Math.min(yStop,yTarget)+16)),positionLabel+" · "+stateLabel+" · R:R "+p.rr.toFixed(2)+":1","position-stat-label")}
     {text(Math.max(8,xLast-205),Math.min(height-20,Math.max(yStop,yTarget)+18),"RISK "+riskPercent.toFixed(2)+"% · QTY "+p.qty.toFixed(4),"position-stat-label")}
-    {text(Math.max(8,xLast-205),Math.min(height-4,(yTarget+yEntry)/2),isLong?"TP +":"TP +"+p.tpPct.toFixed(2)+"% · P&L "+(isLong?"+":"+")+(p.riskAmount*p.rr).toFixed(2),"position-profit-label")}
+    {text(Math.max(8,xLast-205),Math.min(height-4,(yTarget+yEntry)/2),"TP +"+p.tpPct.toFixed(2)+"% · P&L +"+(p.riskAmount*p.rr).toFixed(2),"position-profit-label")}
     {text(Math.max(8,xLast-205),Math.max(12,(yStop+yEntry)/2),"SL -"+p.slPct.toFixed(2)+"% · P&L -"+p.riskAmount.toFixed(2),"position-loss-label")}
     {p.currentPrice!=null&&(()=>{const cy=yOf(p.currentPrice);return cy==null?null:<g>
       <line x1={Math.max(0,xLast-90)} x2={xLast} y1={cy} y2={cy} className="position-current-line"/>
