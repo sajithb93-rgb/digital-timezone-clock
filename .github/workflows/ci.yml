@@ -34,7 +34,7 @@ jobs:
           exit 0
 
       - name: Publish typecheck diagnostic
-        if: steps.typecheck.outputs.exit_code != '0'
+        if: steps.typecheck.outcome == 'failure'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -52,7 +52,7 @@ jobs:
             -d "${payload}"
 
       - name: Enforce typecheck
-        if: steps.typecheck.outputs.exit_code != '0'
+        if: steps.typecheck.outcome == 'failure'
         run: exit 1
 
       - name: Run tests
@@ -67,7 +67,7 @@ jobs:
           exit 0
 
       - name: Publish test diagnostic
-        if: steps.tests.outputs.exit_code != '0'
+        if: steps.tests.outcome == 'failure'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -85,7 +85,7 @@ jobs:
             -d "${payload}"
 
       - name: Enforce tests
-        if: steps.tests.outputs.exit_code != '0'
+        if: steps.tests.outcome == 'failure'
         run: exit 1
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
