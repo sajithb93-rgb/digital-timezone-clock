@@ -36,7 +36,15 @@ function toCandles(rows: unknown[]): Candle[] {
 
 async function fetchJson(url: string, attempt = 0, signal?: AbortSignal): Promise<any> {
   const res = await fetch(url, { cache: "no-store", signal });
-  const data = await res.json();
+  const raw = await res.text();
+  let data: any = null;
+  if (raw.trim()) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+  }
   if (res.status === 429 && attempt < MAX_RETRIES) {
     const retryAfter = Number(res.headers.get("retry-after"));
     const delay = Number.isFinite(retryAfter) && retryAfter > 0
@@ -46,10 +54,14 @@ async function fetchJson(url: string, attempt = 0, signal?: AbortSignal): Promis
     return fetchJson(url, attempt + 1, signal);
   }
   if (!res.ok) {
-    const error = new Error(data?.error || "Binance request failed");
+    const message = typeof data?.error === "string"
+      ? data.error
+      : "Binance request failed " + res.status;
+    const error = new Error(message);
     (error as Error & { status?: number }).status = res.status;
     throw error;
   }
+  if (data === null) throw new Error("Binance returned invalid JSON");
   return data;
 }
 
