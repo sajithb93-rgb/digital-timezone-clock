@@ -61,6 +61,44 @@ describe("SMC signal engine", () => {
     expect(isConfirmedSMCSignal(invalid)).toBe(false);
   });
 
+  it("requires the POI to form before internal confirmation", () => {
+    const base = {
+      status: "ACTIVE" as const,
+      direction: "BUY" as const,
+      entry: 100,
+      stop: 95,
+      targets: [110, 120],
+      rr: 2,
+      confidence: 90,
+      asOf: 50,
+      confirmations: ["confirmed"],
+      sweepIndex: 10,
+      structureIndex: 12,
+      internalIndex: 14,
+      zoneIndex: 13,
+      zoneType: "FVG" as const,
+      entryZone: { low: 99, high: 101 },
+      premiumDiscount: "Discount" as const,
+    };
+
+    expect(isConfirmedSMCSignal(base)).toBe(true);
+    expect(isConfirmedSMCSignal({ ...base, zoneIndex: 15 })).toBe(false);
+    expect(
+      isConfirmedSMCSignal({
+        ...base,
+        zoneType: "BREAKER" as const,
+        zoneIndex: 15,
+      }),
+    ).toBe(false);
+    expect(
+      isConfirmedSMCSignal({
+        ...base,
+        zoneType: "OB" as const,
+        zoneIndex: 11,
+      }),
+    ).toBe(true);
+  });
+
   it("requires direction-consistent premium or discount classification", () => {
     const buy = {
       status: "ACTIVE" as const,
