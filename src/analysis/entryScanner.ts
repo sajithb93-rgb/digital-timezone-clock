@@ -31,15 +31,18 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
    "SMC ACTIVE · "+(s.confirmations.slice(0,3).join(" · ")||"all entry conditions passed"));
  }
  const analyticalEntry=r.entryZone?(r.entryZone.low+r.entryZone.high)/2:null;
+ const activeGate=s.status==="ACTIVE"&&s.direction!=="WAIT"&&s.entry!=null&&s.stop!=null&&s.targets[0]!=null&&s.rr!=null&&activeCausal;
  const checks=[
   direction==="BUY"?r.trend==="Bullish":direction==="SELL"?r.trend==="Bearish":false,
   !!latestEvent&&((direction==="BUY"&&latestEvent.direction==="bullish")||(direction==="SELL"&&latestEvent.direction==="bearish")),
   !!r.entryZone,
   causalSequence,
   direction==="BUY"?r.premiumDiscount==="Discount":direction==="SELL"?r.premiumDiscount==="Premium":false,
-  r.targets.length>0
+  r.targets.length>0,
+  activeGate
  ];
  const passed=checks.filter(Boolean).length;
+ // A setup that has not passed the executable ACTIVE gate cannot receive 100.
  const score=Math.round(passed/checks.length*100);
  const state:EntryScanState=score>=83?"SETUP":score>=66?"WATCH":"WAIT";
  const reason=state==="SETUP"
