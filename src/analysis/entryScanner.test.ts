@@ -15,6 +15,8 @@ describe("entry scanners",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,direction:"WAIT",status:"WAIT"}});
    expect(r.state).not.toBe("CONFIRMED");
    expect(r.direction).toBe("BUY");
+   expect(r.score).toBeLessThan(100);
+   expect(r.score).toBeGreaterThan(0);
  });
  it("does not depend on confirmation-string wording for an ACTIVE SMC setup",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,confirmations:["Custom structured evidence"]}});
