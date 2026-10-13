@@ -30,8 +30,8 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  const executableGeometry=executableDirection!==null&&s.entry!=null&&s.stop!=null&&s.targets.length>0
   &&isValidTradeGeometry(executableDirection,s.entry,s.stop,s.targets,1.5)
   &&s.rr!=null&&Number.isFinite(s.rr)&&s.rr>=1.5;
- if(s.status==="ACTIVE"&&executableGeometry&&activeCausal){
-  return make(symbol,timeframe,"CONFIRMED",s.direction,s.confidence,null,s.entry,s.stop,s.targets[0],s.rr,
+ if(s.status==="ACTIVE"&&executableDirection!==null&&executableGeometry&&activeCausal){
+  return make(symbol,timeframe,"CONFIRMED",executableDirection,s.confidence,null,s.entry,s.stop,s.targets[0],s.rr,
    "SMC ACTIVE · "+(s.confirmations.slice(0,3).join(" · ")||"all entry conditions passed"));
  }
  const analyticalEntry=r.entryZone?(r.entryZone.low+r.entryZone.high)/2:null;
