@@ -26,8 +26,9 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  const sweepAligned=direction==="BUY"?latestSweep?.type==="low":direction==="SELL"?latestSweep?.type==="high":false;
  const causalSequence=!!latestEvent&&!!latestSweep&&latestSweep.index<latestEvent.index&&sweepRecent&&sweepAligned;
  const activeCausal=causalSequence&&(latestEvent?.type==="BOS"||latestEvent?.type==="CHOCH");
- const executableGeometry=s.direction!=="WAIT"&&s.entry!=null&&s.stop!=null&&s.targets.length>0
-  &&isValidTradeGeometry(s.direction,s.entry,s.stop,s.targets,1.5)
+ const executableDirection=s.direction==="BUY"||s.direction==="SELL"?s.direction:null;
+ const executableGeometry=executableDirection!==null&&s.entry!=null&&s.stop!=null&&s.targets.length>0
+  &&isValidTradeGeometry(executableDirection,s.entry,s.stop,s.targets,1.5)
   &&s.rr!=null&&Number.isFinite(s.rr)&&s.rr>=1.5;
  if(s.status==="ACTIVE"&&executableGeometry&&activeCausal){
   return make(symbol,timeframe,"CONFIRMED",s.direction,s.confidence,null,s.entry,s.stop,s.targets[0],s.rr,
