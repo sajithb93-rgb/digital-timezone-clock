@@ -798,7 +798,7 @@ export default function Home(){
        <div className="scanner-controls"><div className="scanner-buttons"><button type="button" className="scanner-start-btn" onClick={()=>{setSmcEntryError("");setSmcEntryScanner([]);setSmcEntryProgress("");setSmcEntryEnabled(true)}} disabled={smcEntryEnabled}>START</button><button type="button" className="scanner-stop-btn" onClick={()=>{setSmcEntryEnabled(false);setSmcEntryBusy(false);setSmcEntryProgress("Stopped")}} disabled={!smcEntryEnabled&&!smcEntryBusy}>STOP</button></div><select value={smcEntryTf} onChange={e=>setSmcEntryTf(e.target.value)}>{(["1m","5m","15m","1h","4h","1d"] as const).map(tf=><option key={tf}>{tf}</option>)}</select><small>{smcEntryBusy?"Scanning "+smcEntryProgress:smcEntryProgress||"Ready"} · ALL eligible pairs · closed candles</small></div>
        {!smcEntryEnabled&&<div className="setup-empty">Scanner STOPPED — START to scan SMC entry setups.</div>}
        {smcEntryEnabled&&smcEntryError&&<div className="setup-empty">Scanner error: {smcEntryError}</div>}
-       {smcEntryEnabled&&smcEntryScanner.length>0&&<div className="scanner-live-confirmed"><div className="scanner-live-title"><span>SMC ACTIVE / CONFIRMED</span><small>{smcEntryBusy?"LIVE":"SCAN COMPLETE"}</small></div>{smcEntryScanner.map(x=><div className="scanner-row scanner-confirmed-row" key={"smc-"+x.symbol+"-"+x.timeframe}><span><b>{x.symbol}</b><small>{x.timeframe} · {x.state}</small></span><b className={x.direction==="BUY"?"positive":"negative"}>{x.direction} · {x.score}/100</b><small>{x.rr?x.rr.toFixed(2)+":1":"—"}</small></div>)}</div>}
+       {smcEntryEnabled&&smcEntryScanner.length>0&&<div className="scanner-live-confirmed"><div className="scanner-live-title"><span>SMC ACTIVE / CONFIRMED</span><small>{smcEntryBusy?"LIVE":"SCAN COMPLETE"}</small></div>{smcEntryScanner.map(x=><div className="scanner-row scanner-confirmed-row" key={"smc-"+x.symbol+"-"+x.timeframe}><span><b>{x.symbol}</b><small>{x.timeframe} · {x.state}</small></span><b className={x.direction==="BUY"?"positive":"negative"}>{x.direction}</b><small>Quality {x.score}/100</small><small>{x.rr?x.rr.toFixed(2)+":1":"—"}</small></div>)}</div>}
        {smcEntryEnabled&&!smcEntryScanner.length&&!smcEntryBusy&&!smcEntryError&&<div className="setup-empty">No SMC entry setups found.</div>}
       </div>
 
@@ -1069,7 +1069,7 @@ function ChartAnnotations({chart,series,host,candles,smc,elliott,orderFlow,rever
   <div className={`setup-panel smc-setup-panel ${smc.setup.direction.toLowerCase()}`}>
    <div className="setup-head"><span>SMC SETUP LEVELS</span><strong className={smc.setup.status==="ACTIVE"?"setup-active":"setup-wait"}>{smc.setup.status==="ACTIVE"?"ACTIVE":smc.setup.direction==="WAIT"?"WAIT":"WAIT · "+smc.setup.direction}</strong></div>
    <div className="setup-grid">
-    <span>Trend<b>{smc.trend}</b></span><span>Score<b>{smc.setup.confidence}/100</b></span>
+    <span>Trend<b>{smc.trend}</b></span><span>Entry Quality Score<b>{smc.setup.confidence}/100</b></span>
     <span>Entry<b>{smc.setup.entry!=null?smc.setup.entry.toFixed(4):smc.entryZone?((smc.entryZone.low+smc.entryZone.high)/2).toFixed(4):"—"}</b></span>
     <span>SL<b>{smc.stop!=null?smc.stop.toFixed(4):"—"}</b></span>
     <span>TP1<b>{smc.targets?.[0]?.toFixed(4)||"—"}</b></span><span>TP2<b>{smc.targets?.[1]?.toFixed(4)||"—"}</b></span><span>TP3<b>{smc.targets?.[2]?.toFixed(4)||"—"}</b></span><span>R:R<b>{smc.setup.rr?smc.setup.rr.toFixed(2)+":1":"—"}</b></span>
