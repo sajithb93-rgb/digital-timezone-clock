@@ -11,6 +11,12 @@ const baseEW:any={
 
 describe("entry scanners",()=>{
  it("confirms an active SMC setup",()=>{const r=classifySMCEntry("BTCUSDT","5m",baseSMC);expect(r.state).toBe("CONFIRMED");expect(r.direction).toBe("BUY");expect(r.entry).toBe(100)});
+ it("rejects an ACTIVE SMC setup with invalid stop/target geometry",()=>{
+   const invalidStop=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,stop:101}});
+   const insufficientRR=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,targets:[101],rr:0.5}});
+   expect(invalidStop.state).not.toBe("CONFIRMED");
+   expect(insufficientRR.state).not.toBe("CONFIRMED");
+ });
  it("never returns CONFIRMED when executable SMC setup direction is WAIT",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,direction:"WAIT",status:"WAIT"}});
    expect(r.state).not.toBe("CONFIRMED");
