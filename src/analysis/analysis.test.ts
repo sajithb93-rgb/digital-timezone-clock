@@ -737,7 +737,8 @@ describe("analysis regression",()=>{
     expect(expanding.expanding).toBe(true);
   });
 
-  it("does not use the X anchor as a triangle boundary",()=>    const v=validateTriangle([100,120,105,115,110,112],true);
+  it("does not use the X anchor as a triangle boundary",()=>{
+    const v=validateTriangle([100,120,105,115,110,112],true);
     expect(v.alternating).toBe(true);
     expect(v.contracting).toBe(true);
     expect(v.valid).toBe(true);
