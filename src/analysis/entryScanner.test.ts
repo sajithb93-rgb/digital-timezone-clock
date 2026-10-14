@@ -49,6 +49,23 @@ describe("entry scanners",()=>{
  it("does not confirm SMC when the engine is not ACTIVE",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT"}});expect(r.state).not.toBe("CONFIRMED") });
  it("does not confirm SMC when active entry is missing",()=>{const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,setup:{...baseSMC.setup,status:"WAIT",entry:null,stop:null,targets:[],rr:null}});expect(r.state).not.toBe("CONFIRMED")});
  it("rejects Elliott setup with invalid target geometry",()=>{const r=classifyElliottEntry("BTCUSDT","5m",{...baseEW,liveSetup:{...baseEW.liveSetup,targets:[99]}},102);expect(r.state).toBe("WAIT")});
+ it("does not emit a new entry for terminal Elliott setups",()=>{
+   for (const status of ["TARGET_HIT","INVALIDATED","AMBIGUOUS"] as const) {
+     const r=classifyElliottEntry("BTCUSDT","5m",{
+       ...baseEW,
+       liveSetup:{...baseEW.liveSetup,setupStatus:status}
+     },102);
+     expect(r.state).toBe("WAIT");
+     expect(r.direction).toBe("NONE");
+     expect(r.reason).toContain(status==="TARGET_HIT"?"Target already reached":status==="INVALIDATED"?"invalidation already crossed":"outcome is ambiguous");
+   }
+ });
+ it("keeps an already-triggered active Elliott setup visible during a valid retest",()=>{
+   const r=classifyElliottEntry("BTCUSDT","5m",baseEW,99);
+   expect(r.state).toBe("CONFIRMED");
+   expect(r.direction).toBe("BUY");
+   expect(r.entry).toBe(100);
+ });
  it("requires live price to remain between entry and target",()=>{
   expect(classifyElliottEntry("BTCUSDT","5m",baseEW,102).state).toBe("CONFIRMED");
   expect(classifyElliottEntry("BTCUSDT","5m",baseEW,110).state).not.toBe("CONFIRMED");

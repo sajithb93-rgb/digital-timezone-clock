@@ -63,6 +63,16 @@ export function classifyElliottEntry(symbol:string,timeframe:string,r:ElliottRes
    return make(symbol,timeframe,"WAIT","NONE",0,currentPrice??null,null,null,null,null,
      "No live Elliott continuation setup · historical Wave 1–5 counts are not entry signals");
  }
+ const liveState=live.setupStatus??"ACTIVE";
+ if(liveState!=="ACTIVE"){
+   const terminalReason=liveState==="TARGET_HIT"
+     ?"Target already reached"
+     :liveState==="INVALIDATED"
+       ?"Wave-C stop/invalidation already crossed"
+       :"Stop and target touched on the same candle; outcome is ambiguous";
+   return make(symbol,timeframe,"WAIT","NONE",0,currentPrice??null,null,null,null,null,
+     "Elliott continuation closed · "+terminalReason);
+ }
 
  const direction=live.direction==="bullish"?"BUY":"SELL";
  const target=live.targets?.[0]??null;
@@ -71,10 +81,13 @@ export function classifyElliottEntry(symbol:string,timeframe:string,r:ElliottRes
  const geometryValid=live.direction==="bullish"
    ? live.invalidation<live.entry&&target>live.entry
    : live.invalidation>live.entry&&target<live.entry;
+ // The trigger is stored from the first qualifying closed candle. Do not
+ // erase a still-open setup just because price retests below/above the entry;
+ // the trade remains live until stop/target resolution on later closed candles.
  const trigger=geometryValid&&(
    live.direction==="bullish"
-     ? (currentPrice!=null&&currentPrice>=live.entry&&currentPrice>live.invalidation&&currentPrice<target)
-     : (currentPrice!=null&&currentPrice<=live.entry&&currentPrice<live.invalidation&&currentPrice>target)
+     ? (currentPrice!=null&&currentPrice>live.invalidation&&currentPrice<target)
+     : (currentPrice!=null&&currentPrice<live.invalidation&&currentPrice>target)
  );
  const score=Math.min(100,Math.round((r.confidence||live.quality||0)+(live.strict?5:0)));
  const confirmed=live.strict!==false&&trigger&&target!=null&&rr!=null&&rr>=1.5;

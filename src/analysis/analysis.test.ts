@@ -537,17 +537,24 @@ describe("analysis regression",()=>{
     expect(v.valid).toBe(true);
   });
 
-  it("allows a deeper Wave-4 diagonal overlap beyond the Wave-2 endpoint",()=>{
+  it("rejects a diagonal when Wave 4 passes the end of Wave 2",()=>{
     const v=validateDiagonalWave([100,130,115,135,110,125],true);
     expect(v.w4OverlapsW1).toBe(true);
     expect(v.w4DoesNotPassW2).toBe(false);
-    expect(v.valid).toBe(true);
+    expect(v.valid).toBe(false);
   });
 
-  it("recognizes diagonal overlap without weakening the Wave 3 rule",()=>{
+  it("accepts coherent expanding diagonals in both directions",()=>{
+    expect(validateDiagonalWave([100,110,105,120,108,125],true).valid).toBe(true);
+    expect(validateDiagonalWave([200,190,195,180,192,175],false).valid).toBe(true);
+  });
+
+  it("rejects a diagonal with mixed, non-contracting/non-expanding geometry",()=>{
     const v=validateDiagonalWave([100,120,110,150,118,155],true);
     expect(v.w4OverlapsW1).toBe(true);
-    expect(v.valid).toBe(true);
+    expect(v.contracting).toBe(false);
+    expect(v.expanding).toBe(false);
+    expect(v.valid).toBe(false);
     expect(validateDiagonalWave([100,120,110,125,118,150],true).valid).toBe(false);
     expect(validateDiagonalWave([100,140,120,150,130,160],true).valid).toBe(false);
   });
@@ -692,10 +699,14 @@ describe("analysis regression",()=>{
     expect(validateNestedImpulse([200,180,190,150,165,130],false).valid).toBe(true);
   });
 
-  it("distinguishes regular, expanded and running flats",()=>{
-    const regular=validateFlat([100,80,99,85],false);
+  it("distinguishes regular, expanded and running flats and enforces C-wave geometry",()=>{
+    const regular=validateFlat([100,80,99,79],false);
     expect(regular.valid).toBe(true);
     expect(regular.subtype).toBe("Regular Flat");
+    const regularBAtX=validateFlat([100,80,100,79],false);
+    expect(regularBAtX.valid).toBe(true);
+    expect(regularBAtX.subtype).toBe("Regular Flat");
+    expect(validateFlat([100,80,99,85],false).valid).toBe(false);
 
     const expanded=validateFlat([100,80,105,70],false);
     expect(expanded.valid).toBe(true);
@@ -714,8 +725,19 @@ describe("analysis regression",()=>{
     expect(v.valid).toBe(false);
   });
 
-  it("does not use the X anchor as a triangle boundary",()=>{
-    const v=validateTriangle([100,120,105,115,110,112],true);
+  it("classifies bearish triangles with mirrored upper/lower boundaries",()=>{
+    const contracting=validateTriangle([100,90,96,92,94,93],false);
+    expect(contracting.valid).toBe(true);
+    expect(contracting.contracting).toBe(true);
+    const barrier=validateTriangle([100,90,96,89.7,94,90.2],false);
+    expect(barrier.valid).toBe(true);
+    expect(barrier.barrier).toBe(true);
+    const expanding=validateTriangle([100,90,105,75,120,70],false);
+    expect(expanding.valid).toBe(true);
+    expect(expanding.expanding).toBe(true);
+  });
+
+  it("does not use the X anchor as a triangle boundary",()=>    const v=validateTriangle([100,120,105,115,110,112],true);
     expect(v.alternating).toBe(true);
     expect(v.contracting).toBe(true);
     expect(v.valid).toBe(true);
@@ -746,14 +768,56 @@ describe("analysis regression",()=>{
     const values=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,145,146,147,148,149];
     const pre=[100,105,110,120,130,140,150,155,160,164,165];
     const c=[...pre,...values].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
-    const live=buildLiveContinuationSetup(c,primary);
+    // Geometry alone must not emit a live entry before a closed candle breaks B.
+    expect(buildLiveContinuationSetup(c,primary)).toBeNull();
+
+    const triggeredValues=[...values,151,154,157,159];
+    const triggeredCandles=[...pre,...triggeredValues].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
+    const live=buildLiveContinuationSetup(triggeredCandles,primary);
     expect(live?.points[0].index).toBe(10);
     expect(live?.points[0].price).toBe(165);
     expect(live?.points.map(p=>p.label)).toEqual(["X","A","B","C"]);
+    expect(live?.setupStatus).toBe("ACTIVE");
+    expect(live?.triggeredAtIndex).toBe(triggeredCandles.length-1);
 
-    const invalidValues=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,95,96,97,98,99];
-    const invalidC=[...pre,...invalidValues].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
-    expect(buildLiveContinuationSetup(invalidC,primary)).toBeNull();
+    // A retest below B but above C is not a new signal and must not erase the
+    // already-triggered setup.
+    const retestCandles=[...triggeredCandles,
+      ...[155,152].map((p,k)=>({time:triggeredCandles.length+k,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}))];
+    const retested=buildLiveContinuationSetup(retestCandles,primary);
+    expect(retested?.setupStatus).toBe("ACTIVE");
+    expect(retested?.triggeredAtIndex).toBe(live?.triggeredAtIndex);
+
+    // If target is wicked before the trigger candle closes, no retroactive
+    // entry is emitted at that candle's close.
+    const finalTrigger=triggeredCandles[triggeredCandles.length-1];
+    const missedTrigger=[...triggeredCandles.slice(0,-1),{
+      ...finalTrigger,
+      high:(live?.targets?.[0]??200)+1,
+      low:(live?.entry??158)+0.1
+    }];
+    expect(buildLiveContinuationSetup(missedTrigger,primary)).toBeNull();
+
+    // OHLC cannot order same-candle stop and target touches, so status must
+    // be AMBIGUOUS instead of guessing which one came first.
+    const ambiguousCandles=[...triggeredCandles,{
+      time:triggeredCandles.length,
+      open:live?.entry??158,
+      high:(live?.targets?.[0]??200)+1,
+      low:(live?.invalidation??145)-1,
+      close:live?.entry??158,
+      volume:100,
+      closed:true
+    }];
+    expect(buildLiveContinuationSetup(ambiguousCandles,primary)?.setupStatus).toBe("AMBIGUOUS");
+
+    const targetCandles=[...triggeredCandles,
+      ...[175,180].map((p,k)=>({time:triggeredCandles.length+k,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}))];
+    expect(buildLiveContinuationSetup(targetCandles,primary)?.setupStatus).toBe("TARGET_HIT");
+
+    const invalidC=[...triggeredCandles,
+      {time:triggeredCandles.length,open:140,high:140.05,low:139.95,close:140,volume:100,closed:true}];
+    expect(buildLiveContinuationSetup(invalidC,primary)?.setupStatus).toBe("INVALIDATED");
   });
   it("invalidates an Elliott live continuation after price reaches its target",()=>{
     const primary={
@@ -767,10 +831,10 @@ describe("analysis regression",()=>{
       rules:[],
       strict:true
     };
-    const values=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,145,146,147,148,200];
+    const values=[160,155,152,151,150,152,154,156,157,158,156,153,149,146,145,146,147,148,149,151,154,157,159,175,180];
     const pre=[100,105,110,120,130,140,150,155,160,164,165];
     const c=[...pre,...values].map((p,i)=>({time:i,open:p,high:p+0.05,low:p-0.05,close:p,volume:100,closed:true}));
-    expect(buildLiveContinuationSetup(c,primary)).toBeNull();
+    expect(buildLiveContinuationSetup(c,primary)?.setupStatus).toBe("TARGET_HIT");
   });
 
   it("keeps corrective structures separate from the primary impulse count",()=>{

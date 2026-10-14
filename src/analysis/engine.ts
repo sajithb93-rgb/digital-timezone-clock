@@ -32,7 +32,7 @@ export type SMCResult={
  vwap:number; volumeRatio:number; displacement:number; entryZone:Zone|null; stop:number|null; targets:number[]; score:number; setup:Setup;
 };
 export type WavePoint={index:number;price:number;label:string};
-export type WaveCount={points:WavePoint[];kind:"Impulse"|"Diagonal"|"Correction";direction:"bullish"|"bearish";invalidation:number;entry:number|null;targets:number[];quality:number;rules:string[];truncated?:boolean;strict?:boolean;};
+export type WaveCount={points:WavePoint[];kind:"Impulse"|"Diagonal"|"Correction";direction:"bullish"|"bearish";invalidation:number;entry:number|null;targets:number[];quality:number;rules:string[];truncated?:boolean;strict?:boolean;setupStatus?:"ACTIVE"|"TARGET_HIT"|"INVALIDATED"|"AMBIGUOUS";setupReason?:string;triggeredAtIndex?:number;terminalAtIndex?:number;};
 export type ElliottResult={
  primary:WaveCount|null;alternative:WaveCount|null;correction:WaveCount|null;
  fib:{w2:number;w3:number;w4:number;w5:number}|null;
@@ -905,14 +905,14 @@ export function validateDiagonalWave(prices:number[],bull:boolean):DiagonalValid
  const w3BeyondW1=bull?p3>p1:p3<p1;
  const w3NotShortest=w3>Math.min(w1,w5);
  const w4OverlapsW1=bull?p4<=p1&&p4>p0:p4>=p1&&p4<p0;
- // Retain this as diagnostic information, but do not use it as a hard
- // validity gate. Valid diagonals can have deeper Wave-4 retracements.
+ // A diagonal allows Wave-4/Wave-1 overlap, but Wave 4 cannot pass
+ // the end of Wave 2; this is a hard structural rule.
  const w4DoesNotPassW2=bull?p4>p2:p4<p2;
  const w5DirectionValid=bull?p5>p4:p5<p4;
  const w5BeyondW3=bull?p5>p3:p5<p3;
  const contracting=w3<w1&&w4<w2&&w5<w3;
  const expanding=w3>w1&&w4>w2&&w5>w3;
- return{w2Valid,w3BeyondW1,w3NotShortest,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:positiveLengths&&w2Valid&&w3BeyondW1&&w3NotShortest&&w4OverlapsW1&&w5DirectionValid};
+ return{w2Valid,w3BeyondW1,w3NotShortest,w4OverlapsW1,w4DoesNotPassW2,w5DirectionValid,w5BeyondW3,contracting,expanding,valid:positiveLengths&&w2Valid&&w3BeyondW1&&w3NotShortest&&w4OverlapsW1&&w4DoesNotPassW2&&w5DirectionValid&&(contracting||expanding)};
 }
 
 export function analyzeElliott(c:Candle[]):AdvancedElliottResult{

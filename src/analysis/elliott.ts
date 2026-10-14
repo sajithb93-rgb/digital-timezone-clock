@@ -297,20 +297,22 @@ export function validateFlat(prices:number[],bullishCorrection:boolean):FlatVali
   const bRetracement=ab/xa;
   const cProjection=bc/ab;
   const direction=aUp?"bullish":"bearish";
-  const bInXA=aUp?b>x&&b<a:b<x&&b>a;
+  // A regular flat B wave may end exactly at X (a 100% retracement).
+  // Expanded/running flats require B to pass X strictly.
+  const bInXA=aUp?b>=x&&b<a:b<=x&&b>a;
   const cReversesA=aUp?c>b:c<b;
-  const bExceedsX=aUp?b<=x:b>=x;
+  const bBeyondX=aUp?b<x:b>x;
   const cBeyondA=aUp?c>a:c<a;
   const cFailsA=aUp?c<a:c>a;
   if(direction!==(bullishCorrection?"bullish":"bearish")||!cReversesA)return{valid:false,subtype:"None",bRetracement,cProjection};
 
-  const regular=bInXA&&bRetracement>=.90&&bRetracement<=1.00&&cProjection>=.618&&cProjection<=1.618;
-  const expanded=bExceedsX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cBeyondA;
+  const regular=bInXA&&bRetracement>=.90&&bRetracement<=1.00&&cProjection>=.618&&cProjection<=1.618&&cBeyondA;
+  const expanded=bBeyondX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cBeyondA;
   // A running flat has a deep B wave (typically at least 90% of A) that can
   // exceed X, while C fails to travel beyond A. Requiring B to exceed X is
   // important; requiring B to exceed 100% is not—the distinction is C's
   // failure to fully retrace A.
-  const running=bExceedsX&&bRetracement>=.90&&bRetracement<=1.618&&cProjection>=.618&&cFailsA;
+  const running=bBeyondX&&bRetracement>1.00&&bRetracement<=1.618&&cProjection>=.618&&cFailsA;
 
   const subtype=expanded?"Expanded Flat":running?"Running Flat":regular?"Regular Flat":"None";
   return{valid:subtype!=="None",subtype,bRetracement,cProjection};
@@ -326,46 +328,38 @@ export type TriangleValidation={
 };
 
 export function validateTriangle(prices:number[],bullish:boolean):TriangleValidation{
-  // A triangle is X-A-B-C-D-E: five alternating subwaves after the
-  // correction's X anchor. The old implementation stopped at D and then
-  // mislabeled D as E, allowing incomplete triangles to qualify.
+  // A triangle is X-A-B-C-D-E with five alternating subwaves.
   if(prices.length<6)return{valid:false,contracting:false,expanding:false,barrier:false,converging:false,alternating:false};
   const [x,a,b,c,d,e]=prices;
   const swings=[Math.abs(a-x),Math.abs(b-a),Math.abs(c-b),Math.abs(d-c),Math.abs(e-d)];
   if(swings.some(v=>v<=0))return{valid:false,contracting:false,expanding:false,barrier:false,converging:false,alternating:false};
-
-  const alternating=bullish
-    ? a>x&&b<a&&c>b&&d<c&&e>d
-    : a<x&&b>a&&c<b&&d>c&&e<d;
+  const alternating=bullish ? a>x&&b<a&&c>b&&d<c&&e>d : a<x&&b>a&&c<b&&d>c&&e<d;
   if(!alternating)return{valid:false,contracting:false,expanding:false,barrier:false,converging:false,alternating:false};
-
-  // Triangle boundaries are A-C-E (upper) and B-D (lower). X is the
-  // correction anchor and must not be used as a boundary point.
-  // Contracting/expanding classification compares successive confirmed
-  // boundary extremes, not arbitrary wave-length shrinkage.
-  const highA=a,highC=c,highE=e;
-  const lowB=b,lowD=d;
-  const upperContracting=highC<highA&&highE<highC;
-  const lowerContracting=lowD>lowB;
-  const upperExpanding=highC>highA&&highE>highC;
-  const lowerExpanding=lowD<lowB;
+  // Bullish triangles use upper A-C-E and lower B-D boundaries.
+  // Bearish triangles mirror this: upper B-D and lower A-C-E.
+  const upperValues=bullish?[a,c,e]:[b,d];
+  const lowerValues=bullish?[b,d]:[a,c,e];
+  const movesDown=(v:number[])=>v.length===3?v[1]<v[0]&&v[2]<v[1]:v[1]<v[0];
+  const movesUp=(v:number[])=>v.length===3?v[1]>v[0]&&v[2]>v[1]:v[1]>v[0];
+  const upperContracting=movesDown(upperValues);
+  const lowerContracting=movesUp(lowerValues);
+  const upperExpanding=movesUp(upperValues);
+  const lowerExpanding=movesDown(lowerValues);
   const contracting=upperContracting&&lowerContracting;
   const expanding=upperExpanding&&lowerExpanding;
-  // A barrier triangle has one approximately horizontal boundary and an
-  // opposite boundary that continues to contract toward that horizontal side.
-  // Use a range-relative tolerance so a single tiny subwave does not make the
-  // horizontal test impossibly strict.
+  // A barrier has one approximately horizontal boundary and an opposing
+  // boundary that contracts. Tolerance is relative to the observed structure.
   const triangleRange=Math.max(...prices)-Math.min(...prices);
   const horizontalTol=Math.max(triangleRange*0.03,1e-12);
-  const upperBarrier=Math.abs(highC-highA)<=horizontalTol&&Math.abs(highE-highA)<=horizontalTol&&lowerContracting;
-  const lowerBarrier=Math.abs(lowD-lowB)<=horizontalTol&&upperContracting;
+  const isHorizontal=(v:number[])=>v.slice(1).every(price=>Math.abs(price-v[0])<=horizontalTol);
+  const upperBarrier=isHorizontal(upperValues)&&lowerContracting;
+  const lowerBarrier=isHorizontal(lowerValues)&&upperContracting;
   const barrier=upperBarrier||lowerBarrier;
   const initialWidth=Math.abs(a-b);
   const finalWidth=Math.abs(e-d);
   const converging=initialWidth>0&&finalWidth<initialWidth;
   return{valid:contracting||expanding||barrier,contracting,expanding,barrier,converging,alternating};
 }
-
 export function validateDoubleZigzag(prices:number[],bullishCorrection:boolean){
   if(prices.length<8)return{valid:false,firstValid:false,secondValid:false,connectorValid:false};
   // W-X-Y is two separate zigzags joined at X:
@@ -419,7 +413,7 @@ function correctionCandidates(c:Candle[]){
     if(z.valid)out.push({
       points:sequencePoints(q).map((x,j)=>({...x,label:["X","A","B","C"][j]})),
       kind:"Correction",direction,invalidation:q[0].price,entry:null,targets:[q[3].price],
-      quality:80,rules:["X-A-B-C zigzag geometry","B retraces 38.2–78.6% of X-A","C extends beyond A"],
+      quality:80,rules:["X-A-B-C zigzag geometry",z.bRetracement>=.382&&z.bRetracement<=.786?"B retracement is within the common 38.2–78.6% guideline":"B is inside X-A but outside the common Fibonacci guideline","C extends beyond A"],
       strict:false,pattern:"Zigzag"
     });
     else if(f.valid)out.push({
@@ -476,15 +470,15 @@ function diagonalCandidates(c:Candle[],bull:boolean){
     const positiveLengths=w1>0&&w2>0&&w3>0&&w4>0&&w5>0;
     const w2Valid=bull?p2>p0&&p2<p1:p2<p0&&p2>p1;
     const w3BeyondW1=bull?p3>p1:p3<p1;
-    // For a diagonal, Wave 4 must enter Wave-1 price territory. It is not
-    // required to remain beyond the Wave-2 endpoint; imposing that extra
-    // restriction rejects valid deeper diagonal corrections.
+    // Diagonals allow Wave-4/Wave-1 overlap, but Wave 4 cannot pass the
+    // end of Wave 2.
     const overlap=bull?p4<=p1&&p4>p0:p4>=p1&&p4<p0;
+    const w4DoesNotPassW2=bull?p4>p2:p4<p2;
     const w5Direction=bull?p5>p4:p5<p4;
     // Elliott's Wave 3 may not be the shortest of Waves 1, 3 and 5.
     // Compare against both actionary waves, not just the smaller one.
     const w3NotShortest=w3>Math.min(w1,w5);
-    if(!(positiveLengths&&w2Valid&&w3BeyondW1&&overlap&&w3NotShortest&&w5Direction))continue;
+    if(!(positiveLengths&&w2Valid&&w3BeyondW1&&overlap&&w4DoesNotPassW2&&w3NotShortest&&w5Direction))continue;
     const contracting=w3<w1&&w4<w2&&w5<w3,expanding=w3>w1&&w4>w2&&w5>w3;
     // A diagonal still needs a coherent contracting or expanding structure.
     // Allowing "mixed" geometry to qualify creates false positives that only
@@ -514,89 +508,84 @@ export function buildLiveContinuationSetup(c:Candle[],primary:WaveCount):WaveCou
   const bull=primary.direction==="bullish";
   const data=normalizeCandleSeries(c,true);
   const ps=alternatePivots(swingPivots(data,2)).filter(p=>p.index>endIndex);
-  // Wave 5 end is the X anchor. The correction must then be the next
-  // three confirmed pivots A-B-C; never substitute a later pivot for X.
   if(ps.length<3)return null;
-
-  const originPivot:Pivot={index:endIndex,price:xPoint.price,type:bull?"H":"L",confirmedAt:endIndex};
-  let best:{q:Pivot[];correction:ReturnType<typeof validateZigzag>;flat:ReturnType<typeof validateFlat>}|null=null;
+  const originPivot:Pivot={index:endIndex,price:xPoint.price,type:bull?"H":"L",strength:0,confirmedAt:endIndex};
+  type Candidate={q:Pivot[];correction:ReturnType<typeof validateZigzag>;flat:FlatValidation;entry:number;invalidation:number;target:number;quality:number;triggeredAtIndex:number;terminalAtIndex?:number;setupStatus:"ACTIVE"|"TARGET_HIT"|"INVALIDATED"|"AMBIGUOUS"};
+  const candidates:Candidate[]=[];
   const expected=bull?["L","H","L"]:["H","L","H"];
-  const parentOrigin=primary.points[0].price;
+  const parentOrigin=primary.points[0]?.price;
+  if(!Number.isFinite(parentOrigin))return null;
   for(let i=0;i<=ps.length-3;i++){
     const q=[originPivot,...ps.slice(i,i+3)];
     if(q.slice(1).some((p,j)=>p.type!==expected[j]))continue;
     const prices=q.map(p=>p.price);
-    const correction=bull
-      ? validateZigzag(prices,false)
-      : validateZigzag(prices,true);
-    const flat=bull
-      ? validateFlat(prices,false)
-      : validateFlat(prices,true);
+    const correction=bull?validateZigzag(prices,false):validateZigzag(prices,true);
+    const flat=bull?validateFlat(prices,false):validateFlat(prices,true);
     if(!correction.valid&&!flat.valid)continue;
-    // Reject only this candidate if C violates the parent Wave-1 origin;
-    // continue searching so an earlier valid ABC is not discarded merely
-    // because a later pivot forms an invalid alternate correction.
     const cPoint=prices[3];
-    const nonInvalidatingC=bull?cPoint>parentOrigin:cPoint<parentOrigin;
-    if(!nonInvalidatingC)continue;
-    if(!best||q[3].index>best.q[3].index)best={q,correction,flat};
+    const cRespectsParentOrigin=bull?cPoint>parentOrigin:cPoint<parentOrigin;
+    if(!cRespectsParentOrigin)continue;
+    const entry=prices[2];
+    const invalidation=cPoint;
+    const risk=abs(entry-invalidation);
+    if(!(Number.isFinite(entry)&&Number.isFinite(invalidation)&&risk>0))continue;
+    const dir=bull?1:-1;
+    const extension=Math.max(abs(prices[2]-prices[1]),risk)*1.618;
+    const target=entry+dir*extension;
+    const geometryValid=bull?invalidation<entry&&target>entry:invalidation>entry&&target<entry;
+    if(!geometryValid||!Number.isFinite(target))continue;
+    const cConfirmedAt=q[3].confirmedAt??q[3].index+2;
+    if(cConfirmedAt>=data.length)continue;
+    let triggeredAtIndex=-1;
+    let rejectedBeforeTrigger=false;
+    for(let j=cConfirmedAt;j<data.length;j++){
+      const bar=data[j];
+      if(bar.closed===false)break;
+      const stopTouchedBeforeEntry=bull?bar.low<=invalidation:bar.high>=invalidation;
+      if(stopTouchedBeforeEntry){rejectedBeforeTrigger=true;break;}
+      const trigger=bull?bar.close>=entry:bar.close<=entry;
+      if(!trigger)continue;
+      const closeAlreadyPastTarget=bull?bar.close>=target:bar.close<=target;
+      const targetTouchedBeforeEntry=bull?bar.high>=target:bar.low<=target;
+      if(closeAlreadyPastTarget||targetTouchedBeforeEntry)rejectedBeforeTrigger=true;
+      else triggeredAtIndex=j;
+      break;
+    }
+    if(rejectedBeforeTrigger||triggeredAtIndex<0)continue;
+    let setupStatus:Candidate["setupStatus"]="ACTIVE";
+    let terminalAtIndex:number|undefined;
+    for(let j=triggeredAtIndex+1;j<data.length;j++){
+      const bar=data[j];
+      if(bar.closed===false)break;
+      const stopHit=bull?bar.low<=invalidation:bar.high>=invalidation;
+      const targetHit=bull?bar.high>=target:bar.low<=target;
+      if(stopHit&&targetHit){setupStatus="AMBIGUOUS";terminalAtIndex=j;break;}
+      if(stopHit){setupStatus="INVALIDATED";terminalAtIndex=j;break;}
+      if(targetHit){setupStatus="TARGET_HIT";terminalAtIndex=j;break;}
+    }
+    candidates.push({q,correction,flat,entry,invalidation,target,quality:clamp(82+(correction.valid?8:4)+(flat.valid?0:2)),triggeredAtIndex,terminalAtIndex,setupStatus});
   }
-  if(!best)return null;
-
-  const q=best.q;
-  const correction=best.correction;
-  const flat=best.flat;
-  const prices=q.map(p=>p.price);
-
-  const [,a,b,cPoint]=prices;
-
-  // Entry is the B trigger after C completes; C is the invalidation point.
-  const entry=b;
-  const invalidation=cPoint;
-  const risk=abs(entry-invalidation);
-  if(risk<=0)return null;
-
-  const dir=bull?1:-1;
-  const extension=Math.max(abs(b-a),risk)*1.618;
-  const target=entry+dir*extension;
-  const lastClosed=data.at(-1);
-  if(!lastClosed)return null;
-  const lastClose=lastClosed.close;
-  // A live continuation is only actionable while price is still inside the
-  // correction-invalidated-to-target window. Reclaims after invalidation, or
-  // moves that already reached/passed the target, do not revive the old setup.
-  // The live continuation remains invalid only while the latest closed
-  // candle has not crossed the C invalidation level. Use the candle extreme
-  // rather than close so a wick breach cannot revive an invalid count.
-  const lastCandle=lastClosed;
-  const liveNotInvalidated=bull?lastCandle.low>invalidation:lastCandle.high<invalidation;
-  const liveBeforeTarget=bull?lastCandle.high<target:lastCandle.low>target;
-  if(!liveNotInvalidated||!liveBeforeTarget)return null;
-  const triggered=bull?lastClose>=entry:lastClose<=entry;
-  // A continuation is an executable/live setup only after a CLOSED candle
-  // confirms the Wave-B trigger. Keeping pre-trigger ABC geometry in
-  // liveSetup would make the chart/scanner treat a pending setup as active.
-  if(!triggered)return null;
-  const quality=clamp(82+(correction.valid?8:4)+(flat.valid?0:2));
-
+  if(!candidates.length)return null;
+  candidates.sort((a,b)=>{
+    const activeA=a.setupStatus==="ACTIVE"?1:0;
+    const activeB=b.setupStatus==="ACTIVE"?1:0;
+    return activeB-activeA||b.triggeredAtIndex-a.triggeredAtIndex||(b.q[3].index-a.q[3].index);
+  });
+  const best=candidates[0];
+  const reason=best.setupStatus==="ACTIVE"
+    ?"Wave-B trigger confirmed on a closed candle; stop and target remain untouched"
+    :best.setupStatus==="TARGET_HIT"
+      ?"Wave-B trigger was confirmed; target was reached on a later closed candle"
+      :best.setupStatus==="INVALIDATED"
+        ?"Wave-B trigger was confirmed; a later closed candle crossed the Wave-C invalidation"
+        :"Wave-B trigger was confirmed; stop and target were both touched in the same candle";
   return{
-    points:sequencePoints(q).map((x,i)=>({...x,label:["X","A","B","C"][i]})),
-    kind:"Correction",
-    direction:bull?"bullish":"bearish",
-    invalidation,
-    entry,
-    targets:[target],
-    quality,
-    rules:[
-      correction.valid?"X-A-B-C zigzag correction confirmed":"X-A-B-C flat correction confirmed",
-      "Wave C completed after the prior Wave 5",
-      triggered?"Price reclaimed/crossed the Wave B trigger":"Waiting for Wave B trigger break",
-      "Stop invalidates the correction at Wave C"
-    ],
-    strict:true
+    points:sequencePoints(best.q).map((x,i)=>({...x,label:["X","A","B","C"][i]})),
+    kind:"Correction",direction:bull?"bullish":"bearish",invalidation:best.invalidation,entry:best.entry,targets:[best.target],quality:best.quality,
+    rules:[best.correction.valid?"X-A-B-C zigzag correction confirmed":"X-A-B-C flat correction confirmed","Wave C pivot confirmed before the Wave-B trigger","Trigger and outcome reconstructed from closed candles only",reason],
+    strict:true,setupStatus:best.setupStatus,setupReason:reason,triggeredAtIndex:best.triggeredAtIndex,terminalAtIndex:best.terminalAtIndex
   };
 }
-
 function buildFib(prices:number[],bull:boolean){
   if(prices.length<6)return[];
   const [p0,p1,p2,p3,p4,p5]=prices;
