@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySMCEntry, classifyElliottEntry } from "./entryScanner";
+import { classifySMCEntry, classifyElliottEntry, classifySMCEmptyScanOutcome } from "./entryScanner";
 
 const baseSMC:any={trend:"Bullish",asOf:12,setup:{direction:"BUY",status:"ACTIVE",entry:100,stop:98,targets:[104],rr:2,confidence:85,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned","Internal structure aligned"]},events:[{index:10,direction:"bullish",type:"BOS"}],entryZone:{low:99,high:101},sweeps:[{index:8,type:"low"}],premiumDiscount:"Discount",targets:[104]};
 
@@ -8,6 +8,19 @@ const baseEW:any={
   liveSetup:{direction:"bullish",entry:100,invalidation:98,targets:[104],strict:true,quality:80,kind:"Correction"},
   confidence:85,setupState:"HISTORICAL"
 };
+
+describe("SMC scanner empty-result diagnostics",()=>{
+ it("does not call an empty pair list a no-signal market scan",()=>{
+  expect(classifySMCEmptyScanOutcome(0,0)).toBe("NO_ELIGIBLE_PAIRS");
+ });
+ it("distinguishes a total data/API failure from a valid no-setup scan",()=>{
+  expect(classifySMCEmptyScanOutcome(20,20)).toBe("ALL_PAIRS_FAILED");
+  expect(classifySMCEmptyScanOutcome(20,0)).toBe("NO_CONFIRMED_SETUP");
+ });
+ it("marks a scan with failed symbols as partial rather than definitive",()=>{
+  expect(classifySMCEmptyScanOutcome(20,3)).toBe("PARTIAL_FAILURE");
+ });
+});
 
 describe("entry scanners",()=>{
  it("confirms an active SMC setup",()=>{const r=classifySMCEntry("BTCUSDT","5m",baseSMC);expect(r.state).toBe("CONFIRMED");expect(r.direction).toBe("BUY");expect(r.entry).toBe(100)});
