@@ -46,7 +46,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const market = request.nextUrl.searchParams.get("market") as Market | null;
   const path = request.nextUrl.searchParams.get("path");
-  if (!market || !(market in BASES) || !path || !ALLOWED_ENDPOINTS.has(path)) {
+  if (!market || !Object.prototype.hasOwnProperty.call(BASES, market) || !path || !ALLOWED_ENDPOINTS.has(path)) {
     return NextResponse.json({ error: "Invalid Binance proxy request" }, { status: 400 });
   }
 
