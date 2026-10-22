@@ -36,9 +36,11 @@ export function classifySMCEntry(symbol:string,timeframe:string,r:SMCResult):Ent
  const asOf=r.asOf??0;
  const windows=setupWindowProfileForInterval(timeframe);
  const sweepLookback=windows.sweepLookbackBars;
+ const structureGap=windows.structureGapBars;
  const sweepRecent=!!latestSweep&&latestSweep.index>=Math.max(0,asOf-sweepLookback);
  const sweepAligned=direction==="BUY"?latestSweep?.type==="low":direction==="SELL"?latestSweep?.type==="high":false;
- const causalSequence=!!latestEvent&&!!latestSweep&&latestSweep.index<latestEvent.index&&sweepRecent&&sweepAligned;
+ const causalSequence=!!latestEvent&&!!latestSweep&&latestSweep.index<latestEvent.index
+  &&latestEvent.index-latestSweep.index<=structureGap&&sweepRecent&&sweepAligned;
  const activeCausal=causalSequence&&(latestEvent?.type==="BOS"||latestEvent?.type==="CHOCH");
  const executableDirection=s.direction==="BUY"||s.direction==="SELL"?s.direction:null;
  const executableGeometry=executableDirection!==null&&s.entry!=null&&s.stop!=null&&s.targets.length>0
