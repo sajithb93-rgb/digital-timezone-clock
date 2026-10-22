@@ -9,6 +9,16 @@ export type OB={index:number;low:number;high:number;type:"bullish"|"bearish";mit
 export type Breaker={index:number;low:number;high:number;type:"bullish"|"bearish";active:boolean};
 export type StructureEvent={index:number;price:number;type:"BOS"|"CHOCH";direction:"bullish"|"bearish";strength:"normal"|"displacement"};
 export type Sweep={index:number;price:number;type:"high"|"low";confirmed:boolean;displacement?:boolean};
+
+// Preserve recent liquidity sweeps from both sides independently. A single
+// global tail slice is order-biased because high and low pools are enumerated
+// in separate groups, and can silently discard valid high-side sweeps.
+export function retainRecentSweepsBySide(sweeps:Sweep[],perSide=5):Sweep[]{
+ const limit=Number.isFinite(perSide)?Math.max(1,Math.floor(perSide)):5;
+ const highs=sweeps.filter(s=>s.type==="high").sort((a,b)=>a.index-b.index).slice(-limit);
+ const lows=sweeps.filter(s=>s.type==="low").sort((a,b)=>a.index-b.index).slice(-limit);
+ return [...highs,...lows].sort((a,b)=>a.index-b.index||(a.type==="high"?-1:1));
+}
 export type Zone={low:number;high:number;type:"entry"|"stop"|"target"};
 export type Setup={direction:"BUY"|"SELL"|"WAIT";status:"WAIT"|"ACTIVE";entry:number|null;stop:number|null;targets:number[];rr:number|null;confidence:number;confirmations:string[]};
 export function isValidTradeGeometry(direction:"BUY"|"SELL",entry:number,stop:number,targets:number[],minRR=1.5):boolean{
@@ -852,7 +862,7 @@ export function analyzeSMC(c:Candle[]):SMCResult{
  const plannedDirection=direction==="bullish"?"BUY":direction==="bearish"?"SELL":"WAIT";
  const status:Setup["status"]=usable&&confirmedGate&&isSetupActive(zone,last)?"ACTIVE":"WAIT";
  const setup:Setup={direction:usable?plannedDirection:"WAIT",status,entry:usable?entry:null,stop:usable?stop:null,targets:usable?targets:[],rr:usable?rr:null,confidence:usable&&confirmedGate?score:0,confirmations:usable?confirmations:[]};
- return{trend,asOf,asOfTime:data[asOf]?.time??0,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:sweeps.slice(-10),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(data,asOf),entryZone:levelZone,stop,targets,score,setup};
+ return{trend,asOf,asOfTime:data[asOf]?.time??0,pivots:ps.slice(-18),internalPivots:internal.slice(-24),events:events.slice(-12),fvgs:fvgs.slice(-14),orderBlocks:obs.slice(-10),breakers:breakers.slice(-8),liquidityHighs:liquidityHighs.slice(-8),liquidityLows:liquidityLows.slice(-8),equalHighs:equalHighs.slice(-8),equalLows:equalLows.slice(-8),sweeps:retainRecentSweepsBySide(sweeps,5),premiumDiscount:pd,premiumDiscountRange:{high:r.hi,low:r.lo,mid},vwap,volumeRatio,displacement:displacementAt(data,asOf),entryZone:levelZone,stop,targets,score,setup};
 }
 
 export type ImpulseMetrics={w1:number;w2:number;w3:number;w4:number;w5:number;r2:number;r3:number;r4:number;r5:number};
