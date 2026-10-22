@@ -8,7 +8,7 @@ import { confluence, detectRegime, flowSnapshot, riskPlan, runSMCBacktest } from
 import { fetchNewsEvents, getNewsRisk, type NewsEvent, type NewsRisk } from "../src/analysis/news";
 import { analyzeOrderFlow, type OrderFlowResult } from "../src/analysis/orderflow";
 import { classifySMCEntry, classifyElliottEntry, classifySMCEmptyScanOutcome, classifyMTFConfluence, isEntryScanDataSufficient, isSMCScanDataSufficient, type EntryScanRow } from "../src/analysis/entryScanner";
-import { classifyOrderFlowSetup, orderFlowPrefilterScore, type OrderFlowScanRow } from "../src/analysis/orderflowScanner";
+import { classifyOrderFlowSetup, orderFlowPrefilterScore, selectRotatingCandidates, type OrderFlowScanRow } from "../src/analysis/orderflowScanner";
 import { FootprintBook, normalizeAggTrade, type AggTrade, type FootprintSnapshot } from "../src/analysis/footprint";
 import { analyzeReversal, analyzeReversalMTF, type ReversalEngineResult } from "../src/analysis/reversal";
 import { normalizeCandleSeries } from "../src/analysis/candles";
@@ -210,7 +210,7 @@ export default function Home(){
  const [connected,setConnected]=useState(false),[restConnected,setRestConnected]=useState(false),[footprintConnected,setFootprintConnected]=useState(false),[footprintVersion,setFootprintVersion]=useState(0),[footprintHistoryReady,setFootprintHistoryReady]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[derivatives,setDerivatives]=useState<Derivatives>(null);
  const [chartReady,setChartReady]=useState(false),[chartDataRevision,setChartDataRevision]=useState(0),[viewportTick,setViewportTick]=useState(0),[layers,setLayers]=useState({structure:true,zones:true,liquidity:true,trade:true,position:true,forecast:true,reversal:true,fibonacci:true});
  const [account,setAccount]=useState(1000),[riskPercent,setRiskPercent]=useState(1),[feeBps,setFeeBps]=useState(0),[slippageBps,setSlippageBps]=useState(0),[riskR,setRiskR]=useState(1),[maxHoldingCandles,setMaxHoldingCandles]=useState(30),[backtest,setBacktest]=useState<any>(null),[scanner,setScanner]=useState<Ticker[]>([]),[orderFlowScanner,setOrderFlowScanner]=useState<OrderFlowScanRow[]>([]),[orderFlowScanTf,setOrderFlowScanTf]=useState<string>("5m"),[orderFlowScannerEnabled,setOrderFlowScannerEnabled]=useState(false),[orderFlowScanBusy,setOrderFlowScanBusy]=useState(false),[orderFlowScanUpdated,setOrderFlowScanUpdated]=useState(0),[orderFlowScanProgress,setOrderFlowScanProgress]=useState(""),[orderFlowScanError,setOrderFlowScanError]=useState(""),[smcEntryScanner,setSmcEntryScanner]=useState<EntryScanRow[]>([]),[elliottEntryScanner,setElliottEntryScanner]=useState<EntryScanRow[]>([]),[smcEntryTf,setSmcEntryTf]=useState("5m"),[elliottEntryTf,setElliottEntryTf]=useState("5m"),[smcEntryEnabled,setSmcEntryEnabled]=useState(false),[elliottEntryEnabled,setElliottEntryEnabled]=useState(false),[smcEntryBusy,setSmcEntryBusy]=useState(false),[elliottEntryBusy,setElliottEntryBusy]=useState(false),[smcEntryProgress,setSmcEntryProgress]=useState(""),[elliottEntryProgress,setElliottEntryProgress]=useState(""),[smcEntryUpdated,setSmcEntryUpdated]=useState(0),[elliottEntryUpdated,setElliottEntryUpdated]=useState(0),[smcEntryError,setSmcEntryError]=useState(""),[smcEntryScanStats,setSmcEntryScanStats]=useState<{eligible:number;failed:number}|null>(null),[elliottEntryError,setElliottEntryError]=useState("");
- const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);
+ const chartRef=useRef<HTMLDivElement>(null),chartWrapRef=useRef<HTMLDivElement>(null),chartObj=useRef<any>(null),seriesRef=useRef<any>(null),footprintBookRef=useRef<FootprintBook|null>(null),orderFlowScanRunRef=useRef(0),orderFlowDeepOffsetRef=useRef(0),smcEntryRunRef=useRef(0),elliottEntryRunRef=useRef(0);
  const orderFlowScanInFlightRef=useRef(false);
  const scannerRef=useRef<Ticker[]>([]);
 
@@ -289,8 +289,10 @@ export default function Home(){
 
     prefiltered.sort((a,b)=>b.score-a.score||b.candidate.volume-a.candidate.volume||a.candidate.pair.symbol.localeCompare(b.candidate.pair.symbol));
     const deepLimit=Math.min(24,prefiltered.length);
-    const deepCandidates=prefiltered.slice(0,deepLimit);
-    setOrderFlowScanProgress(`PREFILTER DONE · ${total} pairs · ${deepLimit} footprint candidates`);
+    const rotation=selectRotatingCandidates(prefiltered,deepLimit,orderFlowDeepOffsetRef.current);
+    const deepCandidates=rotation.selected;
+    orderFlowDeepOffsetRef.current=rotation.nextOffset;
+    setOrderFlowScanProgress(`PREFILTER DONE · ${total} pairs checked · footprint ${deepLimit}/${prefiltered.length} eligible candidates this cycle`);
 
     const rows:OrderFlowScanRow[]=[];
     let deepCursor=0,deepDone=0;
@@ -330,7 +332,7 @@ export default function Home(){
       const confirmed=rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);
       setOrderFlowScanner(confirmed);
       setOrderFlowScanUpdated(Date.now());
-      setOrderFlowScanProgress(`DONE · ${total} pairs scanned · ${deepLimit} footprint confirmed · ${confirmed.length} confirmed`);
+      setOrderFlowScanProgress(`DONE · prefilter ${total} pairs · footprint ${deepDone}/${prefiltered.length} candidates in rotation · ${confirmed.length} confirmed`);
     }   }catch(e){if(isCurrent())setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
    finally{orderFlowScanInFlightRef.current=false;if(isCurrent())setOrderFlowScanBusy(false)}
   };
