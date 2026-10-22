@@ -3,7 +3,7 @@ on:
   push:
     branches: [trading-analysis-dashboard, feature/elitewave-autodraw]
   pull_request:
-    branches: [trading-analysis-dashboard]
+    branches: [trading-analysis-dashboard, feature/elitewave-autodraw]
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
