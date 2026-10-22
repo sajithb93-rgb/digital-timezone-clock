@@ -799,7 +799,7 @@ export default function Home(){
        {!smcEntryEnabled&&<div className="setup-empty">Scanner STOPPED — START to scan SMC entry setups.</div>}
        {smcEntryEnabled&&smcEntryError&&<div className="setup-empty">Scanner error: {smcEntryError}</div>}
        {smcEntryEnabled&&smcEntryScanner.length>0&&<div className="scanner-live-confirmed"><div className="scanner-live-title"><span>SMC ACTIVE / CONFIRMED</span><small>{smcEntryBusy?"LIVE":"SCAN COMPLETE"}</small></div>{smcEntryScanner.map(x=><div className="scanner-row scanner-confirmed-row" key={"smc-"+x.symbol+"-"+x.timeframe}><span><b>{x.symbol}</b><small>{x.timeframe} · {x.state}</small></span><b className={x.direction==="BUY"?"positive":"negative"}>{x.direction}</b><small>Quality {x.score}/100</small><small>{x.rr?x.rr.toFixed(2)+":1":"—"}</small></div>)}</div>}
-       {smcEntryEnabled&&!smcEntryScanner.length&&!smcEntryBusy&&!smcEntryError&&<div className="setup-empty">No SMC entry setups found.</div>}
+       {smcEntryEnabled&&!smcEntryScanner.length&&!smcEntryBusy&&!smcEntryError&&<div className="setup-empty">No SMC ACTIVE/CONFIRMED setups found in this scan. Strict confirmation filters remain enabled; the scanner automatically rescans after 3 minutes.</div>}
       </div>
 
       <div className="panel-card mtf-card entry-scanner-card">
