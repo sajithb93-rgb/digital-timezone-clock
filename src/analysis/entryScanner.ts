@@ -1,5 +1,10 @@
 import { isValidTradeGeometry, setupWindowProfileForInterval, type SMCResult, type ElliottResult } from "./engine";
 
+export const MIN_SMC_SCAN_CANDLES=25;
+export function isSMCScanDataSufficient(closedCandleCount:number):boolean{
+ return Number.isInteger(closedCandleCount)&&closedCandleCount>=MIN_SMC_SCAN_CANDLES;
+}
+
 export type SMCEmptyScanOutcome="NO_ELIGIBLE_PAIRS"|"ALL_PAIRS_FAILED"|"PARTIAL_FAILURE"|"NO_CONFIRMED_SETUP";
 
 export function classifySMCEmptyScanOutcome(eligiblePairs:number,failedPairs:number):SMCEmptyScanOutcome{
