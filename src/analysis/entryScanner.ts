@@ -1,5 +1,14 @@
 import { isValidTradeGeometry, setupWindowProfileForInterval, type SMCResult, type ElliottResult } from "./engine";
 
+export type SMCEmptyScanOutcome="NO_ELIGIBLE_PAIRS"|"ALL_PAIRS_FAILED"|"PARTIAL_FAILURE"|"NO_CONFIRMED_SETUP";
+
+export function classifySMCEmptyScanOutcome(eligiblePairs:number,failedPairs:number):SMCEmptyScanOutcome{
+ if(!Number.isFinite(eligiblePairs)||eligiblePairs<=0)return "NO_ELIGIBLE_PAIRS";
+ if(!Number.isFinite(failedPairs)||failedPairs>=eligiblePairs)return "ALL_PAIRS_FAILED";
+ if(failedPairs>0)return "PARTIAL_FAILURE";
+ return "NO_CONFIRMED_SETUP";
+}
+
 export type EntryScanState="CONFIRMED"|"SETUP"|"WATCH"|"WAIT";
 export type EntryScanRow={symbol:string;timeframe:string;state:EntryScanState;direction:"BUY"|"SELL"|"NONE";score:number;price:number|null;entry:number|null;stop:number|null;target:number|null;rr:number|null;reason:string};
 
