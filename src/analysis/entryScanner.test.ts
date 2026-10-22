@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySMCEntry, classifyElliottEntry, classifySMCEmptyScanOutcome, isSMCScanDataSufficient } from "./entryScanner";
+import { classifySMCEntry, classifyElliottEntry, classifySMCEmptyScanOutcome, classifyMTFConfluence, isSMCScanDataSufficient } from "./entryScanner";
 
 const baseSMC:any={trend:"Bullish",asOf:12,setup:{direction:"BUY",status:"ACTIVE",entry:100,stop:98,targets:[104],rr:2,confidence:85,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned","Internal structure aligned"]},events:[{index:10,direction:"bullish",type:"BOS"}],entryZone:{low:99,high:101},sweeps:[{index:8,type:"low"}],premiumDiscount:"Discount",targets:[104]};
 
@@ -29,6 +29,21 @@ describe("SMC scanner empty-result diagnostics",()=>{
  });
  it("marks a scan with failed symbols as partial rather than definitive",()=>{
   expect(classifySMCEmptyScanOutcome(20,3)).toBe("PARTIAL_FAILURE");
+ });
+});
+
+describe("candidate MTF confluence",()=>{
+ it("marks unavailable when no higher-timeframe data is usable",()=>{
+  expect(classifyMTFConfluence("BUY",[{available:false,trend:"Neutral"}])).toBe("UNAVAILABLE");
+  expect(classifyMTFConfluence("NONE",[{available:true,trend:"Bullish"}])).toBe("UNAVAILABLE");
+ });
+ it("separates aligned, conflicting, and mixed higher-timeframe context",()=>{
+  expect(classifyMTFConfluence("BUY",[{available:true,trend:"Bullish"},{available:true,trend:"Neutral"}])).toBe("ALIGNED");
+  expect(classifyMTFConfluence("SELL",[{available:true,trend:"Bullish"}])).toBe("CONFLICTING");
+  expect(classifyMTFConfluence("BUY",[{available:true,trend:"Bullish"},{available:true,trend:"Bearish"}])).toBe("MIXED");
+ });
+ it("ignores unavailable frames rather than treating them as bearish or bullish evidence",()=>{
+  expect(classifyMTFConfluence("BUY",[{available:false,trend:"Bearish"},{available:true,trend:"Bullish"}])).toBe("ALIGNED");
  });
 });
 
