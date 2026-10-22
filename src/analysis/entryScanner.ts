@@ -15,7 +15,21 @@ export function classifySMCEmptyScanOutcome(eligiblePairs:number,failedPairs:num
 }
 
 export type EntryScanState="CONFIRMED"|"SETUP"|"WATCH"|"WAIT";
-export type EntryScanRow={symbol:string;timeframe:string;state:EntryScanState;direction:"BUY"|"SELL"|"NONE";score:number;price:number|null;entry:number|null;stop:number|null;target:number|null;rr:number|null;reason:string};
+export type MTFConfluence="ALIGNED"|"MIXED"|"CONFLICTING"|"UNAVAILABLE";
+export type MTFFrameContext={available:boolean;trend:"Bullish"|"Bearish"|"Neutral"};
+export function classifyMTFConfluence(direction:"BUY"|"SELL"|"NONE",frames:MTFFrameContext[]):MTFConfluence{
+ const usable=frames.filter(frame=>frame.available);
+ if(direction==="NONE"||usable.length===0)return "UNAVAILABLE";
+ const wanted=direction==="BUY"?"Bullish":"Bearish";
+ const opposing=direction==="BUY"?"Bearish":"Bullish";
+ const aligned=usable.some(frame=>frame.trend===wanted);
+ const conflicting=usable.some(frame=>frame.trend===opposing);
+ if(aligned&&conflicting)return "MIXED";
+ if(conflicting)return "CONFLICTING";
+ if(aligned)return "ALIGNED";
+ return "MIXED";
+}
+export type EntryScanRow={symbol:string;timeframe:string;state:EntryScanState;direction:"BUY"|"SELL"|"NONE";score:number;price:number|null;entry:number|null;stop:number|null;target:number|null;rr:number|null;reason:string;mtfConfluence?:MTFConfluence};
 
 const make=(symbol:string,timeframe:string,state:EntryScanState,direction:"BUY"|"SELL"|"NONE",score:number,price:number|null,entry:number|null,stop:number|null,target:number|null,rr:number|null,reason:string):EntryScanRow=>({symbol,timeframe,state,direction,score,price,entry,stop,target,rr,reason});
 
