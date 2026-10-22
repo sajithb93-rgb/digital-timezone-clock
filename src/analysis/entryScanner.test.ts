@@ -64,6 +64,10 @@ describe("entry scanners",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,asOf:30,events:[{index:24,direction:"bullish",type:"BOS"}],sweeps:[{index:8,type:"low"}]});
    expect(r.state).not.toBe("CONFIRMED");
  });
+ it("rejects a sweep that is recent overall but too far before the structure break",()=>{
+   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,asOf:30,events:[{index:25,direction:"bullish",type:"BOS"}],sweeps:[{index:10,type:"low"}]});
+   expect(r.state).not.toBe("CONFIRMED");
+ });
  it("uses the selected timeframe's sweep recency window",()=>{
    const recent={...baseSMC,asOf:20,events:[{index:19,direction:"bullish",type:"BOS"}],sweeps:[{index:14,type:"low"}]};
    expect(classifySMCEntry("BTCUSDT","5m",recent).state).toBe("CONFIRMED");
