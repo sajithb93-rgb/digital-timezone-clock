@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyOrderFlowSetup, orderFlowPrefilterScore } from "./orderflowScanner";
+import { classifyOrderFlowSetup, orderFlowPrefilterScore, selectRotatingCandidates } from "./orderflowScanner";
 import type { OrderFlowResult } from "./orderflow";
 
 const base: OrderFlowResult = {
@@ -31,6 +31,22 @@ const base: OrderFlowResult = {
     {key:"trade_geometry",label:"Entry / SL / TP geometry",passed:true,detail:"Valid"}
   ]
 };
+
+describe("Order Flow rotating footprint candidate selection",()=>{
+ it("covers candidates beyond the first batch over successive cycles",()=>{
+  const candidates=Array.from({length:50},(_,i)=>i);
+  const first=selectRotatingCandidates(candidates,24,0);
+  const second=selectRotatingCandidates(candidates,24,first.nextOffset);
+  const third=selectRotatingCandidates(candidates,24,second.nextOffset);
+  expect(first.selected).toEqual(Array.from({length:24},(_,i)=>i));
+  expect(second.selected).toEqual(Array.from({length:24},(_,i)=>i+24));
+  expect(third.selected).toEqual([48,49,...Array.from({length:22},(_,i)=>i)]);
+ });
+ it("handles empty lists and invalid limits safely",()=>{
+  expect(selectRotatingCandidates([],24,0)).toEqual({selected:[],nextOffset:0});
+  expect(selectRotatingCandidates([1,2,3],0,2)).toEqual({selected:[],nextOffset:0});
+ });
+});
 
 describe("Order Flow pair scanner", () => {
   it("detects a confirmed pair", () => {

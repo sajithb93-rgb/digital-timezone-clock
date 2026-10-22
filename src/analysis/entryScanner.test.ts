@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySMCEntry, classifyElliottEntry } from "./entryScanner";
+import { classifySMCEntry, classifyElliottEntry, classifySMCEmptyScanOutcome, classifyMTFConfluence, isEntryScanDataSufficient, isSMCScanDataSufficient } from "./entryScanner";
 
 const baseSMC:any={trend:"Bullish",asOf:12,setup:{direction:"BUY",status:"ACTIVE",entry:100,stop:98,targets:[104],rr:2,confidence:85,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned","Internal structure aligned"]},events:[{index:10,direction:"bullish",type:"BOS"}],entryZone:{low:99,high:101},sweeps:[{index:8,type:"low"}],premiumDiscount:"Discount",targets:[104]};
 
@@ -8,6 +8,54 @@ const baseEW:any={
   liveSetup:{direction:"bullish",entry:100,invalidation:98,targets:[104],strict:true,quality:80,kind:"Correction"},
   confidence:85,setupState:"HISTORICAL"
 };
+
+describe("entry scanner closed-candle sufficiency",()=>{
+ it("rejects short or fractional candle histories for both entry scanners",()=>{
+  expect(isEntryScanDataSufficient(0)).toBe(false);
+  expect(isEntryScanDataSufficient(24)).toBe(false);
+  expect(isEntryScanDataSufficient(25)).toBe(true);
+  expect(isEntryScanDataSufficient(180)).toBe(true);
+  expect(isEntryScanDataSufficient(24.5)).toBe(false);
+ });
+});
+
+describe("SMC scanner data sufficiency",()=>{
+ it("requires at least 25 closed candles before treating a symbol as evaluated",()=>{
+  expect(isSMCScanDataSufficient(0)).toBe(false);
+  expect(isSMCScanDataSufficient(24)).toBe(false);
+  expect(isSMCScanDataSufficient(25)).toBe(true);
+  expect(isSMCScanDataSufficient(300)).toBe(true);
+  expect(isSMCScanDataSufficient(25.5)).toBe(false);
+ });
+});
+
+describe("SMC scanner empty-result diagnostics",()=>{
+ it("does not call an empty pair list a no-signal market scan",()=>{
+  expect(classifySMCEmptyScanOutcome(0,0)).toBe("NO_ELIGIBLE_PAIRS");
+ });
+ it("distinguishes a total data/API failure from a valid no-setup scan",()=>{
+  expect(classifySMCEmptyScanOutcome(20,20)).toBe("ALL_PAIRS_FAILED");
+  expect(classifySMCEmptyScanOutcome(20,0)).toBe("NO_CONFIRMED_SETUP");
+ });
+ it("marks a scan with failed symbols as partial rather than definitive",()=>{
+  expect(classifySMCEmptyScanOutcome(20,3)).toBe("PARTIAL_FAILURE");
+ });
+});
+
+describe("candidate MTF confluence",()=>{
+ it("marks unavailable when no higher-timeframe data is usable",()=>{
+  expect(classifyMTFConfluence("BUY",[{available:false,trend:"Neutral"}])).toBe("UNAVAILABLE");
+  expect(classifyMTFConfluence("NONE",[{available:true,trend:"Bullish"}])).toBe("UNAVAILABLE");
+ });
+ it("separates aligned, conflicting, and mixed higher-timeframe context",()=>{
+  expect(classifyMTFConfluence("BUY",[{available:true,trend:"Bullish"},{available:true,trend:"Neutral"}])).toBe("ALIGNED");
+  expect(classifyMTFConfluence("SELL",[{available:true,trend:"Bullish"}])).toBe("CONFLICTING");
+  expect(classifyMTFConfluence("BUY",[{available:true,trend:"Bullish"},{available:true,trend:"Bearish"}])).toBe("MIXED");
+ });
+ it("ignores unavailable frames rather than treating them as bearish or bullish evidence",()=>{
+  expect(classifyMTFConfluence("BUY",[{available:false,trend:"Bearish"},{available:true,trend:"Bullish"}])).toBe("ALIGNED");
+ });
+});
 
 describe("entry scanners",()=>{
  it("confirms an active SMC setup",()=>{const r=classifySMCEntry("BTCUSDT","5m",baseSMC);expect(r.state).toBe("CONFIRMED");expect(r.direction).toBe("BUY");expect(r.entry).toBe(100)});
@@ -39,6 +87,10 @@ describe("entry scanners",()=>{
  });
  it("does not confirm SMC when the sweep-to-structure gap is stale",()=>{
    const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,asOf:30,events:[{index:24,direction:"bullish",type:"BOS"}],sweeps:[{index:8,type:"low"}]});
+   expect(r.state).not.toBe("CONFIRMED");
+ });
+ it("rejects a sweep that is recent overall but too far before the structure break",()=>{
+   const r=classifySMCEntry("BTCUSDT","5m",{...baseSMC,asOf:30,events:[{index:25,direction:"bullish",type:"BOS"}],sweeps:[{index:10,type:"low"}]});
    expect(r.state).not.toBe("CONFIRMED");
  });
  it("uses the selected timeframe's sweep recency window",()=>{

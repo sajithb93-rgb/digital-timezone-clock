@@ -16,6 +16,15 @@ export type OrderFlowScanRow = {
   reason: string;
 };
 
+export function selectRotatingCandidates<T>(candidates:T[],limit:number,offset:number):{selected:T[];nextOffset:number}{
+ const length=candidates.length;
+ const count=Math.min(length,Math.max(0,Math.floor(limit)));
+ if(length===0||count===0)return{selected:[],nextOffset:0};
+ const start=((Math.floor(offset)%length)+length)%length;
+ const selected=Array.from({length:count},(_,i)=>candidates[(start+i)%length]);
+ return{selected,nextOffset:(start+count)%length};
+}
+
 export function classifyOrderFlowSetup(symbol: string, timeframe: string, result: OrderFlowResult): OrderFlowScanRow {
   const fp = result.footprint;
   if (result.source !== "BINANCE_FOOTPRINT" || !fp) {

@@ -32,6 +32,23 @@ describe("Binance proxy route", () => {
     );
   });
 
+  it("does not multiply Binance rate limits across official endpoints and preserves Retry-After", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: -1003, msg: "Too many requests" }), {
+        status: 429,
+        headers: { "content-type": "application/json", "retry-after": "7" },
+      }),
+    );
+
+    const response = await GET(
+      new NextRequest("https://example.test/api/binance?market=usdm&path=%2Fklines&symbol=BTCUSDT&interval=5m"),
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("7");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects unsupported paths and query parameters before reaching Binance", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 200 }),
@@ -41,6 +58,11 @@ describe("Binance proxy route", () => {
       new NextRequest("https://example.test/api/binance?market=usdm&path=%2Faccount"),
     );
     expect(badPath.status).toBe(400);
+
+    const inheritedMarket = await GET(
+      new NextRequest("https://example.test/api/binance?market=constructor&path=%2Fklines"),
+    );
+    expect(inheritedMarket.status).toBe(400);
 
     const badQuery = await GET(
       new NextRequest("https://example.test/api/binance?market=usdm&path=%2Fklines&symbol=BTCUSDT&evil=1"),
