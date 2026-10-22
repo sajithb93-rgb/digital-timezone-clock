@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeSMC, chooseAnalyticalEntryZone, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, inferCandleIntervalMs, pivots, retainRecentSweepsBySide, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
+import { analyzeSMC, chooseAnalyticalEntryZone, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, inferCandleIntervalMs, pivots, retainRecentSweepsBySide, setupWindowProfileForInterval, isCurrentRetestEligible, isSMCCausalSequence, isEntryZoneCausal, type Candle, type Pivot } from "./engine";
 
 describe("balanced SMC sweep retention",()=>{
  it("keeps the five most recent high and low sweeps independently",()=>{
@@ -147,4 +147,31 @@ describe("timeframe-consistent SMC setup windows", () => {
     expect(oneMinute.zoneAgeBars).toBe(200);
     expect(fiveMinute.zoneAgeBars).toBe(40);
   });
+});
+
+
+describe("SMC retest and causal-sequence guards",()=>{
+ it("allows an OB only when untouched or first mitigated on the current closed bar",()=>{
+  expect(isCurrentRetestEligible("OB",30,{mitigated:false})).toBe(true);
+  expect(isCurrentRetestEligible("OB",30,{mitigated:true,mitigationIndex:30})).toBe(true);
+  expect(isCurrentRetestEligible("OB",30,{mitigated:true,mitigationIndex:29})).toBe(false);
+  expect(isCurrentRetestEligible("OB",30,{mitigated:true})).toBe(false);
+ });
+ it("allows only unfilled FVGs and a partial fill that first occurs on the current bar",()=>{
+  expect(isCurrentRetestEligible("FVG",30,{filled:false})).toBe(true);
+  expect(isCurrentRetestEligible("FVG",30,{filled:false,partial:true,partialFillIndex:30})).toBe(true);
+  expect(isCurrentRetestEligible("FVG",30,{filled:false,partial:true,partialFillIndex:29})).toBe(false);
+  expect(isCurrentRetestEligible("FVG",30,{filled:true,partial:true,partialFillIndex:30})).toBe(false);
+ });
+ it("requires sweep, swing break, and internal confirmation to occur in strict chronological order",()=>{
+  expect(isSMCCausalSequence(10,15,18,12)).toBe(true);
+  expect(isSMCCausalSequence(10,10,18,12)).toBe(false);
+  expect(isSMCCausalSequence(10,15,15,12)).toBe(false);
+  expect(isSMCCausalSequence(10,15,28,12)).toBe(false);
+ });
+ it("does not allow an OB zone to predate its causal sweep or structure break",()=>{
+  expect(isEntryZoneCausal(12,10,18,"OB",12)).toBe(true);
+  expect(isEntryZoneCausal(9,10,18,"OB",12)).toBe(false);
+  expect(isEntryZoneCausal(18,10,18,"OB",12)).toBe(false);
+ });
 });
