@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySMCEntry, classifyElliottEntry, classifySMCEmptyScanOutcome, classifyMTFConfluence, isSMCScanDataSufficient } from "./entryScanner";
+import { classifySMCEntry, classifyElliottEntry, classifySMCEmptyScanOutcome, classifyMTFConfluence, isEntryScanDataSufficient, isSMCScanDataSufficient } from "./entryScanner";
 
 const baseSMC:any={trend:"Bullish",asOf:12,setup:{direction:"BUY",status:"ACTIVE",entry:100,stop:98,targets:[104],rr:2,confidence:85,confirmations:["Liquidity sweep → structure break sequence aligned","Swing structure aligned","Internal structure aligned"]},events:[{index:10,direction:"bullish",type:"BOS"}],entryZone:{low:99,high:101},sweeps:[{index:8,type:"low"}],premiumDiscount:"Discount",targets:[104]};
 
@@ -8,6 +8,16 @@ const baseEW:any={
   liveSetup:{direction:"bullish",entry:100,invalidation:98,targets:[104],strict:true,quality:80,kind:"Correction"},
   confidence:85,setupState:"HISTORICAL"
 };
+
+describe("entry scanner closed-candle sufficiency",()=>{
+ it("rejects short or fractional candle histories for both entry scanners",()=>{
+  expect(isEntryScanDataSufficient(0)).toBe(false);
+  expect(isEntryScanDataSufficient(24)).toBe(false);
+  expect(isEntryScanDataSufficient(25)).toBe(true);
+  expect(isEntryScanDataSufficient(180)).toBe(true);
+  expect(isEntryScanDataSufficient(24.5)).toBe(false);
+ });
+});
 
 describe("SMC scanner data sufficiency",()=>{
  it("requires at least 25 closed candles before treating a symbol as evaluated",()=>{
