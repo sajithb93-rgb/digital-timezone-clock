@@ -42,6 +42,11 @@ describe("Binance proxy route", () => {
     );
     expect(badPath.status).toBe(400);
 
+    const inheritedMarket = await GET(
+      new NextRequest("https://example.test/api/binance?market=constructor&path=%2Fklines"),
+    );
+    expect(inheritedMarket.status).toBe(400);
+
     const badQuery = await GET(
       new NextRequest("https://example.test/api/binance?market=usdm&path=%2Fklines&symbol=BTCUSDT&evil=1"),
     );
