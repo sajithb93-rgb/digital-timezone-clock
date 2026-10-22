@@ -98,17 +98,18 @@ export async function GET(request: NextRequest) {
         lastStatus = upstream.status;
         lastBody = body;
 
-        // Edge-specific geo blocks and transient upstream failures can differ
-        // between Binance's official endpoints. Keep deterministic 4xx
-        // validation errors on the first response, but fail over on 451,
-        // rate-limit, and server-error responses.
-        if (upstream.status === 451 || upstream.status === 429 || upstream.status >= 500) continue;
+        // Edge-specific geo blocks and transient server failures can differ
+        // between Binance's official endpoints. Do not fail over on 429:
+        // rate limits may apply across the same egress IP, and retrying every
+        // hostname multiplies request pressure. Preserve Retry-After for callers.
+        if (upstream.status === 451 || upstream.status >= 500) continue;
 
         return new NextResponse(body, {
           status: upstream.status,
           headers: {
             "content-type": upstream.headers.get("content-type") ?? "application/json",
             "cache-control": "no-store, max-age=0",
+            ...(upstream.headers.get("retry-after") ? { "retry-after": upstream.headers.get("retry-after")! } : {}),
           },
         });
       } catch {
