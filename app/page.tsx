@@ -265,7 +265,7 @@ export default function Home(){
     if(!total){setOrderFlowScanner([]);setOrderFlowScanProgress("DONE · 0 eligible pairs");return}
 
     const prefiltered:{candidate:(typeof candidates)[number];score:number;candles:Candle[]}[]=[];
-    let preCursor=0,preDone=0;
+    let preCursor=0,preDone=0,preFailed=0;
     const preWorkers=Math.min(6,total);
     const prefilterOne=async(c:(typeof candidates)[number])=>{
       try{
@@ -273,9 +273,9 @@ export default function Home(){
         const context=analyzeOrderFlow(candles,[]);
         const score=orderFlowPrefilterScore(context);
         if(score>=2)prefiltered.push({candidate:c,score,candles});
-      }catch{}
+      }catch{preFailed+=1}
       preDone+=1;
-      if(isCurrent())setOrderFlowScanProgress(`${preDone}/${total} · PREFILTER · ${c.pair.symbol}`);
+      if(isCurrent())setOrderFlowScanProgress(`${preDone}/${total} · PREFILTER · ${c.pair.symbol} · ${preFailed} failed`);
     };
     const preWorker=async()=>{
       while(isCurrent()){
@@ -292,7 +292,7 @@ export default function Home(){
     const rotation=selectRotatingCandidates(prefiltered,deepLimit,orderFlowDeepOffsetRef.current);
     const deepCandidates=rotation.selected;
     orderFlowDeepOffsetRef.current=rotation.nextOffset;
-    setOrderFlowScanProgress(`PREFILTER DONE · ${total} pairs checked · footprint ${deepLimit}/${prefiltered.length} eligible candidates this cycle`);
+    setOrderFlowScanProgress(`PREFILTER DONE · ${total} pairs checked · ${preFailed} data failures · footprint ${deepLimit}/${prefiltered.length} eligible candidates this cycle`);
 
     const rows:OrderFlowScanRow[]=[];
     let deepCursor=0,deepDone=0;
@@ -332,7 +332,7 @@ export default function Home(){
       const confirmed=rows.filter(x=>x.state==="CONFIRMED").sort((a,b)=>b.score-a.score);
       setOrderFlowScanner(confirmed);
       setOrderFlowScanUpdated(Date.now());
-      setOrderFlowScanProgress(`DONE · prefilter ${total} pairs · footprint ${deepDone}/${prefiltered.length} candidates in rotation · ${confirmed.length} confirmed`);
+      setOrderFlowScanProgress(`DONE · prefilter ${total} pairs (${preFailed} failed) · footprint ${deepDone}/${prefiltered.length} candidates in rotation · ${confirmed.length} confirmed`);
     }   }catch(e){if(isCurrent())setOrderFlowScanError(e instanceof Error?e.message:"Scanner request failed")}
    finally{orderFlowScanInFlightRef.current=false;if(isCurrent())setOrderFlowScanBusy(false)}
   };
