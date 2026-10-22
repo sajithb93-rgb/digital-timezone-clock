@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { analyzeSMC, chooseAnalyticalEntryZone, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, inferCandleIntervalMs, pivots, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
+import { analyzeSMC, chooseAnalyticalEntryZone, classifyProtectedStructureBreak, detectStructureEvents, equalLevels, inferCandleIntervalMs, pivots, retainRecentSweepsBySide, setupWindowProfileForInterval, type Candle, type Pivot } from "./engine";
+
+describe("balanced SMC sweep retention",()=>{
+ it("keeps the five most recent high and low sweeps independently",()=>{
+  const sweeps=[
+   ...Array.from({length:8},(_,index)=>({index,price:110+index,type:"high" as const,confirmed:true})),
+   ...Array.from({length:8},(_,index)=>({index,price:90-index,type:"low" as const,confirmed:true}))
+  ];
+  const retained=retainRecentSweepsBySide(sweeps,5);
+  expect(retained).toHaveLength(10);
+  expect(retained.filter(x=>x.type==="high").map(x=>x.index)).toEqual([3,4,5,6,7]);
+  expect(retained.filter(x=>x.type==="low").map(x=>x.index)).toEqual([3,4,5,6,7]);
+ });
+});
 
 describe("protected SMC structure breaks", () => {
   it("does not classify a newer unprotected low as CHOCH", () => {
