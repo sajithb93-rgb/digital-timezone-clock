@@ -362,7 +362,10 @@ export default function Home(){
     setMtfCandles(prev=>mtfIntervals.map(tf=>{
      const next=rows.find(x=>x?.interval===tf);
      if(next)return next;
-     return{interval:tf,candles:[]};
+     // A transient failure for one timeframe must not erase its last known
+     // same-symbol snapshot. The effect clears all frames when symbol/market
+     // changes, so retaining here cannot leak context across instruments.
+     return prev.find(x=>x.interval===tf)??{interval:tf,candles:[]};
     }));
    }finally{
     inFlight=false;
